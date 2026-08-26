@@ -1,0 +1,23 @@
+{
+  "name": "Sobra do Mês — controle financeiro",
+  "short_name": "Sobra do Mês",
+  "description": "Quanto sobra no fim do mês: tetos por categoria, fatura que fecha sozinha, gráficos e alertas.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/?fonte=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B0B0C",
+  "theme_color": "#0B0B0C",
+  "categories": ["finance", "productivity", "utilities"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Adicionar gasto", "short_name": "Gasto", "url": "/?aba=lanc", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Gráficos", "short_name": "Gráficos", "url": "/?aba=graficos", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="pt-BR" data-tema="claro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sobra do Mês — controle financeiro</title>
+<meta name="description" content="Quanto sobra no fim do mês: tetos por categoria, fatura que fecha sozinha, gráficos de evolução e alertas de gasto no celular.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sobra do Mês">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="wrap">
+<header>
+  <button class="tema-btn" id="btnTema" aria-label="Alternar tema">🌙</button>
+  <div class="eyebrow">Controle financeiro pessoal</div>
+  <h1>Quanto <em>sobra</em><br>no fim do mês</h1>
+  <p class="sub">Coloque quanto você ganha e quanto quer guardar. O site divide o resto em tetos por categoria, fecha o mês sozinho na data da fatura e guarda o histórico.</p>
+</header>
+
+<div id="instalar">
+  <div style="font-size:26px">📲</div>
+  <div class="it"><b>Instale na tela inicial</b>Abre como aplicativo, funciona sem internet e liga os alertas.</div>
+  <button class="btn" id="btnInstalar" style="font-size:14px;padding:9px 16px">Instalar</button>
+  <button class="btn-x" id="btnInstalarNao" aria-label="Agora não">×</button>
+</div>
+
+<section class="painel">
+  <div class="painel-topo">
+    <div>
+      <div class="rot">Sobra prevista no mês</div>
+      <div class="big num" id="kSobra">R$ 0,00</div>
+      <div id="kTaxa" style="font-size:13px;color:var(--txt-3);margin-top:5px">—</div>
+    </div>
+    <div class="mini">
+      <div class="rot">Entra</div><div class="v num" id="kRenda">R$ 0,00</div>
+      <div class="rot" style="margin-top:9px">Sai do meu bolso</div><div class="v num" id="kGasto">R$ 0,00</div>
+      <div id="kPai" style="font-size:11.5px;color:var(--pai);margin-top:2px;font-weight:600"></div>
+    </div>
+  </div>
+
+  <div class="ciclo">
+    <div class="dias num" id="cDias">—</div>
+    <div class="txt" id="cTxt">—<div class="pista"><i id="cPista" style="width:0%"></i></div></div>
+    <div style="text-align:right">
+      <div class="rot">Fatura deste ciclo</div>
+      <div class="v num" id="cValor" style="font-size:19px;font-weight:600">R$ 0,00</div>
+    </div>
+  </div>
+  <div id="cAviso"></div>
+
+  <div class="regua">
+    <div class="barra" id="barra"></div>
+    <div class="legenda">
+      <span><i style="background:var(--c200)"></i>Essencial</span>
+      <span><i style="background:#8A7B33"></i>Vale a pena</span>
+      <span><i style="background:var(--alerta)"></i>Pode cortar</span>
+      <span><i style="background:var(--verde)"></i>Sobra</span>
+    </div>
+  </div>
+</section>
+
+<div class="abas" role="tablist">
+  <button class="aba" role="tab" aria-selected="true" data-t="renda">Renda</button>
+  <button class="aba" role="tab" aria-selected="false" data-t="tetos">Tetos</button>
+  <button class="aba" role="tab" aria-selected="false" data-t="lanc">Gastos</button>
+  <button class="aba" role="tab" aria-selected="false" data-t="cortes">Cortar</button>
+  <button class="aba" role="tab" aria-selected="false" data-t="objetivos">Metas</button>
+  <button class="aba" role="tab" aria-selected="false" data-t="graficos">Gráficos</button>
+  <button class="aba" role="tab" aria-selected="false" data-t="hist">Meses</button>
+  <button class="aba" role="tab" aria-selected="false" data-t="alertas">Alertas</button>
+  <button class="aba" role="tab" aria-selected="false" data-t="extrato">Importar</button>
+</div>
+
+<div class="painel-aba">
+
+<section id="t-renda">
+  <h3>O que entra por mês</h3>
+  <div class="grade g3">
+    <div><label for="salario">Salário líquido</label><input type="number" id="salario" min="0" step="0.01" placeholder="0,00"></div>
+    <div><label for="extra">Renda variável (vendas, freela)</label><input type="number" id="extra" min="0" step="0.01" placeholder="0,00"></div>
+    <div><label for="diaFech">Dia que a fatura fecha</label><input type="number" id="diaFech" min="1" max="28" step="1" value="5"></div>
+    <div><label for="diaVenc">Dia que a fatura vence</label><input type="number" id="diaVenc" min="1" max="28" step="1" value="5"></div>
+  </div>
+  <p class="ajuda" style="margin-top:8px">Na renda variável use a média dos últimos 3 meses, ou o pior mês se ela oscila muito. No <b>fechamento</b> o site arquiva a fatura e vira o ciclo; o <b>vencimento</b> é só a data do pagamento, que aparece no contador. Se o seu cartão fecha e vence no mesmo dia, deixe os dois iguais.</p>
+
+  <h3>Quanto quero guardar todo mês</h3>
+  <p class="ajuda">Sai da conta <b>antes</b> de você gastar, não é o que sobrar no fim.</p>
+  <div class="grade g2">
+    <div><label for="metaPct">Percentual da renda</label><input type="number" id="metaPct" min="0" max="90" step="1" placeholder="20"></div>
+    <div><label for="metaVal">Ou um valor fixo em R$</label><input type="number" id="metaVal" min="0" step="0.01" placeholder="0,00"></div>
+  </div>
+  <div class="cards" id="cardsMeta"></div>
+  <div id="notaMeta"></div>
+
+</section>
+
+<section id="t-hist" hidden>
+  <h2>Faturas arquivadas</h2>
+  <p class="ajuda">Toda vez que chega o dia do fechamento, a fatura do mês é arquivada inteira aqui — com todos os lançamentos, do jeito que estavam. O que era parcelado continua na fatura seguinte com uma parcela a menos; o que era de uma vez só sai.</p>
+  <div id="listaCiclos"></div>
+  <div style="margin:16px 0"><button class="btn sec" id="fecharAgora">Fechar a fatura agora</button></div>
+  <div id="detalheCiclo"></div>
+</section>
+
+<section id="t-tetos" hidden>
+  <h2>Seu teto de gasto por categoria</h2>
+  <p class="ajuda">Os tetos usam só o que sai do <b>seu</b> bolso — o que a outra pessoa cobre não conta contra você. Essencial também tem teto: mercado é essencial, mercado de R$ 900 num salário de R$ 3.000 não é. Trave qualquer teto na mão e o resto se acomoda.</p>
+  <div class="cards" id="cardsTeto"></div>
+  <div id="tetos"></div>
+  <div style="margin-top:14px"><button class="btn sec" id="resetTetos">Voltar aos tetos sugeridos</button></div>
+  <div id="notaTeto"></div>
+</section>
+
+<section id="t-lanc" hidden>
+  <h3>Adicionar um gasto</h3>
+  <div class="grade g-lanc">
+    <div class="full"><label for="lNome">Descrição</label><input id="lNome" placeholder="Ex.: jaqueta"></div>
+    <div><label for="lValor">Valor da parcela/mês</label><input type="number" id="lValor" min="0" step="0.01" placeholder="0,00"></div>
+    <div><label for="lCat">Categoria</label><select id="lCat"></select></div>
+    <div><label for="lTier">Peso</label><select id="lTier">
+      <option value="1">Essencial</option><option value="2">Vale a pena</option><option value="3">Pode cortar</option></select></div>
+    <div><label for="lPagador">Quem paga</label><select id="lPagador">
+      <option value="eu">Eu, sozinho</option><option value="dividido">Dividido com outra pessoa</option><option value="pai">Outra pessoa paga tudo</option></select></div>
+    <div><label for="lPai">Quanto ele cobre</label><input type="number" id="lPai" min="0" step="0.01" placeholder="0,00"></div>
+    <div><label for="lFonte">Onde caiu</label><input id="lFonte" list="dlFontes" placeholder="Conta"></div>
+    <div><label for="lTipo">Repetição</label><select id="lTipo">
+      <option value="var">Variável (todo mês, valor muda)</option>
+      <option value="fixo">Fixo (mesmo valor todo mês)</option>
+      <option value="parc">Parcelado</option>
+      <option value="unico">Só neste mês (1x)</option></select></div>
+    <div><label for="lParc">Parcelas restantes</label><input type="number" id="lParc" min="0" step="1" placeholder="0"></div>
+    <div><label for="lVenc">Vence dia (opcional)</label><input type="number" id="lVenc" min="1" max="31" step="1" placeholder="—"></div>
+    <div style="display:flex;align-items:flex-end"><button class="btn" id="addLanc" style="width:100%">Adicionar</button></div>
+  </div>
+  <datalist id="dlFontes"></datalist>
+  <p class="ajuda" style="margin-top:10px"><b>Quem paga:</b> se a outra pessoa cobre parte (a jaqueta dividida, a ajuda na mensalidade), escolha “dividido” e ponha o valor dele. O gasto continua inteiro na fatura, mas só a sua parte conta no teto. <b>Repetição:</b> <i>variável</i> (mercado, farmácia, gasolina) continua na lista mas zera o valor a cada fatura, pra você preencher o do mês — o valor anterior fica de referência. <i>Fixo</i> repete igual, <i>parcelado</i> desconta uma parcela, <i>1x</i> some no fechamento.</p>
+
+  <div id="blocoVenc"></div>
+
+  <h3>Gastos do ciclo atual</h3>
+  <div id="cards2"></div>
+  <table><thead><tr><th>Descrição</th><th>Categoria</th><th>Quem paga</th><th style="text-align:right">Na fatura</th><th style="text-align:right">De outro</th><th style="text-align:right">Meu</th><th></th></tr></thead>
+  <tbody id="tbLanc"></tbody></table>
+</section>
+
+<section id="t-cortes" hidden>
+  <h2>O que fazer, em ordem</h2>
+  <p class="ajuda">Categorias que passaram do teto (mesmo essenciais) e itens marcados como cortáveis, do maior pro menor. Só conta a sua parte.</p>
+  <div id="cortes"></div>
+  <div class="cards" id="cardsCorte"></div>
+  <div id="notaCorte"></div>
+</section>
+
+<section id="t-objetivos" hidden>
+  <h3>Reserva de emergência</h3>
+  <p class="ajuda">Antes de qualquer sonho: quantos meses de gastos essenciais seus você quer ter parados e acessíveis.</p>
+  <div class="grade g2">
+    <div><label for="meses">Meses de reserva</label><input type="number" id="meses" min="1" max="24" step="1" value="6"></div>
+    <div><label for="jaTem">Quanto já tem guardado</label><input type="number" id="jaTem" min="0" step="0.01" placeholder="0,00"></div>
+  </div>
+  <div class="cards" id="cardsReserva"></div>
+
+  <h3>Meus objetivos</h3>
+  <p class="ajuda">O que você quer, quanto custa e pra quando. O site calcula o mensal e diz se a meta dá conta.</p>
+  <div class="grade g-obj">
+    <div class="full"><label for="oNome">Objetivo</label><input id="oNome" placeholder="Ex.: viagem, notebook, entrada do carro"></div>
+    <div><label for="oAlvo">Quanto custa</label><input type="number" id="oAlvo" min="0" step="0.01" placeholder="0,00"></div>
+    <div><label for="oTem">Já juntou</label><input type="number" id="oTem" min="0" step="0.01" placeholder="0,00"></div>
+    <div><label for="oPrazo">Em quantos meses</label><input type="number" id="oPrazo" min="1" step="1" placeholder="12"></div>
+    <div><button class="btn" id="addObj">Adicionar</button></div>
+  </div>
+  <table><thead><tr><th>Objetivo</th><th style="text-align:right">Falta</th><th style="text-align:right">Prazo</th><th style="text-align:right">Guardar/mês</th><th></th></tr></thead>
+  <tbody id="tbObj"></tbody></table>
+  <div id="notaObj"></div>
+
+  <h3>Dívidas com juros</h3>
+  <div class="grade g-obj">
+    <div class="full"><label for="dNome">Dívida</label><input id="dNome" placeholder="Ex.: rotativo do cartão"></div>
+    <div><label for="dSaldo">Saldo devedor</label><input type="number" id="dSaldo" min="0" step="0.01" placeholder="0,00"></div>
+    <div><label for="dJuros">Juros % ao mês</label><input type="number" id="dJuros" min="0" step="0.01" placeholder="0,00"></div>
+    <div><label for="dParc">Parcela mensal</label><input type="number" id="dParc" min="0" step="0.01" placeholder="0,00"></div>
+    <div><button class="btn" id="addDiv">Adicionar</button></div>
+  </div>
+  <table><thead><tr><th>#</th><th>Dívida</th><th style="text-align:right">Saldo</th><th style="text-align:right">Juros</th><th style="text-align:right">Custo do juro</th><th></th></tr></thead>
+  <tbody id="tbDiv"></tbody></table>
+  <div id="notaDiv"></div>
+</section>
+
+<section id="t-extrato" hidden>
+  <h2>Importar do banco</h2>
+  <p class="ajuda">Extrato ou fatura em <b>OFX</b> ou <b>CSV</b>. Lido no seu navegador, nada sai daqui.</p>
+  <div style="border:1px dashed var(--sep);background:var(--fill);padding:16px;border-radius:var(--r-s);margin-bottom:16px">
+    <label for="arq">Arquivo do banco (.ofx, .csv, .txt)</label>
+    <input type="file" id="arq" accept=".ofx,.csv,.txt,.qfx" style="background:transparent;border:none;padding:6px 0">
+    <div style="font-size:12.5px;color:var(--txt-3);margin-top:6px" id="arqInfo">No Itaú: Bankline no PC → Conta corrente → Consultar extrato por período → Salvar em outros formatos → OFX / Money 2000.</div>
+  </div>
+  <h3>Ou colar as linhas na mão</h3>
+  <p class="ajuda">Entende datas tipo “22 ago.”, valor em dólar ao lado e “parcela 3 de 10”. <b>Apague antes qualquer número de conta, cartão ou CPF.</b></p>
+  <div style="max-width:320px;margin-bottom:12px"><label for="impFonte">De qual cartão/conta são?</label><input id="impFonte" list="dlFontes" placeholder="Ex.: LATAM"></div>
+  <textarea id="txExtrato" rows="8" placeholder="22 ago.  posto servico dam  R$ 291,53&#10;01 mar.  mp*mercadolivre  R$ 83,99&#10;parcela 7 de 10"></textarea>
+  <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+    <button class="btn" id="lerExtrato">Ler linhas</button>
+    <button class="btn sec" id="limparPrev">Descartar</button>
+  </div>
+  <div id="prev"></div>
+</section>
+
+<section id="t-graficos" hidden>
+  <h2>Como o dinheiro se comporta</h2>
+  <p class="ajuda">Tudo aqui usa <b>só a sua parte</b> — o que outra pessoa cobre fica de fora. O ciclo atual vem dos seus lançamentos; a evolução vem das faturas já arquivadas.</p>
+  <div class="viz">
+    <figure class="viz-fig" id="figDonut"></figure>
+    <figure class="viz-fig" id="figEvol"></figure>
+    <figure class="viz-fig" id="figTeto"></figure>
+    <figure class="viz-fig" id="figProj"></figure>
+  </div>
+</section>
+
+<section id="t-alertas" hidden>
+  <h2>Alertas no celular</h2>
+  <p class="ajuda">O app te avisa quando o gasto foge do plano — no estilo de notificação do sistema, com o app fechado. Funciona melhor <b>instalado na tela inicial</b>. Nada disso passa por servidor: a checagem acontece no seu aparelho.</p>
+
+  <div id="notifEstado"></div>
+  <div class="acoes">
+    <button class="btn" id="btnPermitir">Ligar as notificações</button>
+    <button class="btn sec" id="btnTestar">Enviar uma de teste</button>
+    <button class="btn sec" id="btnChecarAgora">Checar agora</button>
+  </div>
+
+  <h3>Quando me avisar</h3>
+  <div id="listaAlertas"></div>
+
+  <h3>Ajuste fino</h3>
+  <div class="grade g3">
+    <div><label for="aTetoPct">Avisar ao atingir % do teto</label><input type="number" id="aTetoPct" min="50" max="100" step="5" value="85"></div>
+    <div><label for="aDiasFech">Dias antes de fechar a fatura</label><input type="number" id="aDiasFech" min="1" max="15" step="1" value="3"></div>
+    <div><label for="aDiasVenc">Dias antes de vencer</label><input type="number" id="aDiasVenc" min="1" max="15" step="1" value="2"></div>
+  </div>
+  <p class="ajuda" style="margin-top:10px">Cada alerta é enviado <b>uma vez por ciclo</b> — ele não repete o mesmo aviso todo dia. Se a situação se resolver e voltar a estourar no mês seguinte, ele avisa de novo.</p>
+
+  <h3>O que está pendente agora</h3>
+  <div id="pendentes"></div>
+</section>
+
+</div>
+
+<div id="alertaSalvar"></div>
+<details style="background:var(--card);border-radius:var(--r);box-shadow:var(--sombra);padding:14px 18px;margin-top:16px">
+  <summary style="cursor:pointer;font-size:14px;font-weight:600;color:var(--txt-2)">Diagnóstico do salvamento</summary>
+  <div id="diag"></div>
+  <p class="ajuda" style="margin:12px 0 0;font-size:13px">Se todas as linhas estiverem em cinza, este navegador não guarda dados — use os backups. Se pelo menos uma estiver verde, está salvando.</p>
+</details>
+<div class="rodape">
+  <span id="status">—</span>
+  <span style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn sec" id="btnBackup" style="font-size:13px;padding:8px 14px">Baixar backup</button>
+    <button class="btn sec" id="btnCSV" style="font-size:13px;padding:8px 14px">Exportar CSV</button>
+    <button class="btn sec" id="btnRestaurar" style="font-size:13px;padding:8px 14px">Restaurar backup</button>
+    <input type="file" id="arqBackup" accept=".json,application/json" hidden>
+    <button class="btn sec" id="zerar" style="font-size:13px;padding:8px 14px;color:var(--vermelho)">Apagar tudo</button>
+  </span>
+</div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
