@@ -80,17 +80,22 @@ funcionando.
 Ao publicar seu próprio clone, troque `SB.url` e `SB.key` em `auth.js` e rode a
 migração de `supabase/` no seu projeto.
 
-> **Confirmação de e-mail:** projetos novos do Supabase vêm com "Confirm email"
-> ligado, e o SMTP compartilhado do plano gratuito é bem limitado (poucos
-> e-mails por hora). O app trata os dois casos — se o cadastro não devolver
-> sessão, ele mostra a tela de "confirme seu e-mail" com botão de reenvio. Para
-> um fluxo sem fricção, desligue a confirmação em *Authentication → Providers →
-> Email*; para produção de verdade, configure um SMTP próprio.
+> **Confirmação de e-mail: desligada.** O cadastro entra direto — sem link, sem
+> caixa de entrada. Isso é feito pela migração `0002`, que marca a conta como
+> confirmada no instante em que ela é criada; o `cadastrar()` então pede o token
+> logo em seguida. O código ainda cobre o caso da confirmação ligada (mostra a
+> tela de "confirme seu e-mail" com reenvio), então funciona dos dois jeitos.
+>
+> O que se perde: o e-mail não é comprovado. Quem digitar o endereço errado não
+> conseguirá recuperar a senha depois, porque a recuperação continua exigindo
+> acesso real à caixa de entrada.
 
 ## Sincronização
 
-Local primeiro, nuvem em seguida. Toda gravação salva no aparelho na hora e
-sobe para a conta 1,2 s depois (com fila quando offline). Ao abrir, o app puxa
+Local primeiro, nuvem em seguida — de verdade: a tela abre com o que está no
+aparelho e a nuvem é consultada em segundo plano, sem segurar nada. Medido:
+**~90 ms até os dados na tela, online ou offline.** Toda gravação salva no
+aparelho na hora e sobe para a conta 1,2 s depois (com fila quando offline). Ao abrir, o app puxa
 o que está na nuvem e compara pelo carimbo da **última mudança de conteúdo** —
 não pela hora da gravação, senão só abrir o app já faria o aparelho parecer
 mais novo que a nuvem. Duas redes de segurança: um aparelho vazio nunca
@@ -171,6 +176,28 @@ O app é uma PWA: manifest, ícones (incluindo maskable) e service worker com
 cache da casca, então ele abre e funciona sem internet. No Android/desktop
 aparece um convite de instalação; no iPhone use Compartilhar → Adicionar à
 Tela de Início.
+
+## O que foi verificado
+
+Cada versão passa por uma bateria que roda num navegador real, com dois
+"aparelhos" e duas contas. Não é lista de intenções — é o que o teste executa:
+
+| | |
+|---|---|
+| Cadastro | entra direto, sem etapa de confirmação |
+| Salvar ao adicionar | 5 gastos pelo campo único, gravados no aparelho na hora |
+| Recarregar | continua logado, dados intactos |
+| Sair e entrar | cópia local apagada ao sair, dados de volta ao entrar |
+| Outro aparelho | mesmo login, dados chegam da nuvem |
+| Dois aparelhos | gasto lançado num aparece no outro |
+| Isolamento | conta nova começa vazia, não vê nada da outra |
+| Funções | 4 áreas, 10 seções, gráficos, desfazer, alertas, agenda, retrospectiva, tema |
+| Offline | lança sem internet, avisa o estado, sobe sozinho quando volta |
+| Com service worker | tudo acima, mais abrir o app sem internet |
+
+Mais uma auditoria de acessibilidade e responsividade de 320 px a 1280 px:
+zero rolagem horizontal, zero botão sem nome acessível, zero campo sem rótulo,
+zero alvo de toque abaixo de 44 px, zero erro de console.
 
 ## Rodar localmente
 

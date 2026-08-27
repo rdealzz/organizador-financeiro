@@ -54,14 +54,35 @@ self.addEventListener('fetch', e => {
 
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
-      try {
+      const doCache = () => caches.match('/index.html').then(r => r || caches.match('/'));
+
+      // Sem internet, nem tenta a rede: esperar o navegador desistir custa
+      // segundos de tela parada. A cópia salva abre na hora.
+      if (!self.navigator.onLine) {
+        const c = await doCache();
+        if (c) return c;
+      }
+
+      // Com internet, a rede tem 2,5 s para responder. Passou disso, abre pela
+      // cópia salva — melhor um app instantâneo e um pouco antigo do que uma
+      // tela branca no 3G ruim.
+      const daRede = (async () => {
         const pre = await e.preloadResponse;
         const res = pre || await fetch(req);
         guardar(new Request('/index.html'), res);
         return res;
+      })();
+      const relogio = new Promise(r => setTimeout(() => r(null), 2500));
+
+      try {
+        const res = await Promise.race([daRede, relogio]);
+        if (res) return res;
+        const c = await doCache();
+        if (c) { e.waitUntil(daRede.catch(() => {})); return c; }
+        return await daRede;
       } catch (_) {
-        const cache = await caches.match('/index.html') || await caches.match('/');
-        return cache || new Response(
+        const c = await doCache();
+        return c || new Response(
           '<meta charset="utf-8"><p style="font:16px system-ui;padding:24px">Sem conexão e sem cópia salva. Abra o app uma vez com internet.',
           { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
       }

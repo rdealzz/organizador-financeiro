@@ -2107,8 +2107,11 @@ async function abrirApp(recemLogado){
   irPara(ir||'hoje');
   renderAgenda(); renderAlertas(calc()); renderChips(); pintarConta();
 
+  // Local primeiro: o app já está pronto com o que estava no aparelho. A nuvem
+  // é consultada em segundo plano, sem segurar a tela. Se vier algo mais novo,
+  // a tela se atualiza sozinha.
   marcarSinc(navigator.onLine?'enviando':'offline');
-  await puxarDaNuvem(true);
+  puxarDaNuvem(true);
 
   if(avisoCiclo&&S.hist.length&&S.retroVista!==S.hist[0].data){
     S.retroVista=S.hist[0].data; salvar();

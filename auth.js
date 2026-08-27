@@ -120,13 +120,35 @@ async function entrar(email, senha){
   guardarSessao(s);
   return s;
 }
+/* Cadastro sem etapa de confirmação: cria a conta e já entra.
+   No banco há um gatilho que marca a conta como confirmada no instante em que
+   ela é criada, então basta pedir o token em seguida. Três caminhos possíveis:
+     1. o servidor já devolve a sessão      -> pronto;
+     2. devolve só o usuário                -> entramos com o mesmo e-mail/senha;
+     3. falha ao enviar o e-mail de boas-vindas (o SMTP gratuito é limitado)
+        -> a conta costuma existir mesmo assim, então tentamos entrar. */
 async function cadastrar(email, senha){
-  const r = await chamar('/auth/v1/signup',
-    {method:'POST', body:{email:String(email).trim().toLowerCase(), password:senha}});
+  const dados = {email:String(email).trim().toLowerCase(), password:senha};
+  let r = null, falhaDoCadastro = null;
+  try{
+    r = await chamar('/auth/v1/signup', {method:'POST', body:dados});
+  }catch(e){
+    const cru = String(e.codigo || e.message || '').toLowerCase();
+    const eProblemaDeEmail = cru.includes('email') &&
+      (cru.includes('rate') || cru.includes('send') || cru.includes('smtp'));
+    if(!eProblemaDeEmail) throw e;      // e-mail já cadastrado, senha fraca etc.
+    falhaDoCadastro = e;
+  }
+
   const s = montarSessao(r);
   if(s){ guardarSessao(s); return {sessao:s, confirmar:false}; }
-  // Projeto com confirmação de e-mail ligada: a conta existe, falta confirmar.
-  return {sessao:null, confirmar:true};
+
+  try{
+    return {sessao: await entrar(dados.email, senha), confirmar:false};
+  }catch(e){
+    if(falhaDoCadastro) throw falhaDoCadastro;
+    return {sessao:null, confirmar:true};   // confirmação por e-mail exigida
+  }
 }
 async function recuperarSenha(email, redirecionar){
   await chamar('/auth/v1/recover' + (redirecionar ? '?redirect_to='+encodeURIComponent(redirecionar) : ''),
