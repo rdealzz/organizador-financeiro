@@ -225,7 +225,70 @@ td input,td select{padding:7px 9px;font-size:14px;border-radius:var(--r-xs)}
   --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
   --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
 }
-.viz-fig{margin:0 0 26px;position:relative}
+/* ── Análises: resumo antes dos gráficos ────────────────────────────────── */
+.resumo{
+  border:1px solid var(--sep); border-left:3px solid var(--verde);
+  border-radius:var(--r-sm); padding:var(--e5) var(--e5) var(--e4);
+  margin:0 0 var(--e6); background:var(--fill);
+}
+.resumo.passou{border-left-color:var(--vermelho)}
+.resumo-tit{font-size:20px;font-weight:700;letter-spacing:-.02em;line-height:1.25}
+.resumo.ok .resumo-tit b{color:var(--verde-txt)}
+.resumo.passou .resumo-tit b{color:var(--vermelho-txt)}
+.resumo-sub{font-size:14px;color:var(--txt-2);margin-top:var(--e2);line-height:1.45}
+.resumo-alerta{
+  font-size:14px; margin-top:var(--e4); padding-top:var(--e3);
+  border-top:1px solid var(--sep); line-height:1.45;
+}
+.resumo-alerta .link{margin-left:var(--e2)}
+.resumo-vazio{
+  color:var(--txt-2); font-size:14.5px; line-height:1.5;
+  padding:var(--e5); border:1px dashed var(--sep); border-radius:var(--r-sm);
+  margin-bottom:var(--e6);
+}
+
+/* ── Gráfico que abre e fecha ────────────────────────────────────────────
+   O título vira o botão. Fechado, o bloco ocupa uma linha; aberto, o gráfico
+   inteiro. Só o primeiro abre sozinho. */
+.dobra-cab{
+  display:flex; align-items:center; justify-content:space-between; gap:var(--e3);
+  width:100%; padding:var(--e3) 0; margin:0;
+  background:none; border:none; border-top:1px solid var(--sep);
+  color:var(--txt); text-align:left; cursor:pointer; font:inherit;
+  -webkit-user-select:none; user-select:none; touch-action:manipulation;
+}
+.viz-fig:first-child .dobra-cab{border-top:none}
+.dobra-tit{font-size:16px;font-weight:700;letter-spacing:-.015em}
+.dobra-cab:hover .dobra-tit{color:var(--azul-txt)}
+/* .viz svg estica todo SVG para 100% da largura — é o que faz os gráficos
+   caberem. A seta precisa escapar disso, e para vencer aquele seletor tem de
+   ser pelo menos tão específica quanto ele. */
+.viz .dobra-seta{
+  width:20px;height:20px;min-width:20px;flex:none;
+  stroke:var(--txt-3);stroke-width:2;fill:none;
+  stroke-linecap:round;stroke-linejoin:round;
+  transition:transform .22s var(--suave);
+}
+.viz .dobra.aberta .dobra-seta{transform:rotate(180deg)}
+.dobra-corpo{display:none;padding-bottom:var(--e4)}
+.dobra.aberta .dobra-corpo{display:block;animation:dobraAbre .22s var(--suave) both}
+@keyframes dobraAbre{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  .dobra.aberta .dobra-corpo{animation:none}
+  .viz .dobra-seta{transition:none}
+}
+
+/* "O que cortar": só os três primeiros ficam à vista. O resto entra por um
+   toque — a lista vem ordenada do maior pro menor, e os itens do fim valem
+   poucos reais cada. */
+#cortes .corte-extra{display:none}
+#cortes.mostra-tudo .corte-extra{display:flex;animation:dobraAbre .22s var(--suave) both}
+.btn.larg{width:100%;margin-top:var(--e4)}
+@media (prefers-reduced-motion:reduce){
+  #cortes.mostra-tudo .corte-extra{animation:none}
+}
+
+.viz-fig{margin:0 0 var(--e2);position:relative}
 .viz-tit{font-size:16px;font-weight:700;letter-spacing:-.015em;margin:0 0 2px}
 .viz-sub{font-size:13px;color:var(--txt-2);margin:0 0 12px;max-width:60ch}
 .viz svg{display:block;width:100%;height:auto;overflow:visible}
@@ -1466,9 +1529,23 @@ body.fundo-vivo #instalar{
   border:1px solid rgba(255,255,255,.10);
 }
 body.fundo-vivo .tabbar{
-  background:rgba(18,5,16,.86);
+  background:rgba(18,5,16,.94);
   border-top:1px solid rgba(255,255,255,.10);
 }
+/* Superfícies FLUTUANTES são opacas, sempre.
+   Um painel da página pode ser translúcido: o que aparece atrás dele é a
+   esfera, que é escura e uniforme. Um menu ou uma folha, não — atrás deles
+   está o conteúdo do app, e deixar duas camadas de texto se sobrepondo torna
+   as duas ilegíveis. Foi o que aconteceu com o menu do perfil. */
+body.fundo-vivo .menu-perfil,
+body.fundo-vivo .sheet,
+body.fundo-vivo .snack,
+body.fundo-vivo .toast,
+body.fundo-vivo .atualiza{
+  background:#1B0819;
+  border:1px solid rgba(255,255,255,.13);
+}
+body.fundo-vivo .menu-perfil{box-shadow:0 26px 70px -18px rgba(0,0,0,.9)}
 
 @media (prefers-reduced-motion:reduce){
   .capa-frente,.capa-dica span{animation:none}

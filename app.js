@@ -448,8 +448,12 @@ function renderCortes(c){
   lista.sort((a,b)=>b.valor-a.valor);
   const total=lista.reduce((s,x)=>s+x.valor,0), nova=c.sobra+total;
 
-  $('#cortes').innerHTML=lista.length
-    ? lista.map((x,i)=>`<div class="corte">
+  /* A lista sai ordenada do maior pro menor, e os três primeiros resolvem a
+     maior parte. Mostrar os oito de uma vez enterrava esse fato: eram cinco
+     telas de rolagem de coisas cada vez menos relevantes. O resto continua
+     ali, a um toque. */
+  const CORTES_TOPO=3;
+  const linha=(x,i)=>`<div class="corte${i>=CORTES_TOPO?' corte-extra':''}">
        <div class="ord num">${String(i+1).padStart(2,'0')}</div>
        <div class="txt">
          <div class="nome">${esc(x.nome)}</div>
@@ -463,8 +467,30 @@ function renderCortes(c){
        </div>
        <div class="ano">−${brl(x.valor)}<div class="det" style="font-weight:400">por mês</div>
          <div class="det" style="font-weight:600;color:var(--txt)">${brl(x.valor*12)}/ano</div></div>
-      </div>`).join('')
+      </div>`;
+
+  const sobrando=Math.max(lista.length-CORTES_TOPO,0);
+  const juntam=lista.slice(0,CORTES_TOPO).reduce((s,x)=>s+x.valor,0);
+
+  $('#cortes').innerHTML=lista.length
+    ? (c.renda>0
+        ? `<div class="nota">Vá de cima pra baixo e pare quando for suficiente.
+             Só os três primeiros já devolvem <b>${brl(juntam)}</b> por mês.</div>` : '')
+      + lista.map(linha).join('')
+      + (sobrando
+        ? `<button class="btn sec larg" id="verMaisCortes" type="button"
+             aria-expanded="false">Ver mais ${sobrando} ${sobrando===1?'item':'itens'}</button>`
+        : '')
     : '<p class="vazio">Preencha a renda e a meta pra ver o que está fora do teto.</p>';
+
+  const btMais=$('#verMaisCortes');
+  if(btMais) btMais.onclick=()=>{
+    const abrir=btMais.getAttribute('aria-expanded')!=='true';
+    $('#cortes').classList.toggle('mostra-tudo', abrir);
+    btMais.setAttribute('aria-expanded', abrir?'true':'false');
+    btMais.textContent = abrir ? 'Ver menos'
+      : `Ver mais ${sobrando} ${sobrando===1?'item':'itens'}`;
+  };
 
   $('#cardsCorte').innerHTML=`
    <div class="card"><div class="l">Sobra hoje</div><div class="v" style="color:${c.sobra<0?'var(--alerta)':'var(--txt)'}">${brl(c.sobra)}</div></div>
@@ -474,10 +500,12 @@ function renderCortes(c){
 
   const zerar=lista.filter(x=>x.tipo==='zerar').reduce((s,x)=>s+x.valor,0);
   let txt='';
-  if(c.renda>0&&c.meta>0){
-    txt = nova>=c.meta
-      ? `<div class="nota"><b>Plano de ataque.</b> Você não precisa da lista inteira: vá de cima pra baixo até juntar ${brl(c.meta-c.sobra>0?c.meta-c.sobra:0)}. Os três primeiros já resolvem na maioria dos meses.</div>`
-      : `<div class="nota aviso"><b>Mesmo cortando tudo faltam ${brl(c.meta-nova)}.</b> Aqui apertar mais o dia a dia não resolve — o caminho é renda maior ou meta menor. Corte o que dá e ajuste a meta pra um número que você consiga manter.</div>`;
+  /* O antigo "Plano de ataque" dizia o mesmo que a nota do topo da lista, e
+     ainda calculava um valor que dava R$ 0,00 sempre que a meta já estava
+     coberta. Ficou só o aviso que a nota do topo NÃO dá: o caso em que cortar
+     tudo ainda não basta. */
+  if(c.renda>0 && c.meta>0 && nova<c.meta){
+    txt = `<div class="nota aviso"><b>Mesmo cortando tudo faltam ${brl(c.meta-nova)}.</b> Aqui apertar mais o dia a dia não resolve — o caminho é renda maior ou meta menor. Corte o que dá e ajuste a meta pra um número que você consiga manter.</div>`;
   }
   if(zerar>0) txt+=`<div class="nota aviso"><b>Zerando só o que está marcado como “pode cortar”: ${brl(zerar)} por mês, ${brl(zerar*12)} no ano.</b> Não é dinheiro que falta — é dinheiro que já é seu e está indo embora em pedaços pequenos.</div>`;
   $('#notaCorte').innerHTML=txt;
@@ -903,8 +931,11 @@ function grafTetos(c){
   const fig=$('#figTeto');
   const cabeca=`<figcaption><div class="viz-tit">Quanto de cada teto já foi</div>
     <div class="viz-sub">A trilha é o teto do mês; a barra é o que você já gastou. Vermelho é o que passou.</div></figcaption>`;
+  /* Só categorias em que houve gasto. Uma linha "Outros 0%" não informa nada e
+     empurra o resto da tela para baixo — e com dez categorias sempre havia
+     três ou quatro dessas. */
   const its=Object.entries(CATS).map(([k,cat])=>({k,nome:cat.n,g:c.porCat[k]||0,t:c.tetos[k]||0}))
-    .filter(x=>x.g>0||x.t>0).sort((a,b)=>(b.g/(b.t||1))-(a.g/(a.t||1)));
+    .filter(x=>x.g>0.005).sort((a,b)=>(b.g/(b.t||1))-(a.g/(a.t||1)));
   if(!its.length||!c.renda){ fig.innerHTML=cabeca+
     '<div class="viz-vazio">Preencha a renda e a meta na aba Renda pra o site calcular os tetos.</div>'; return; }
   const W=680,lh=34,mt=10,ml=150,mr=96,H=mt+its.length*lh+6;
@@ -967,7 +998,124 @@ function grafProjecao(c){
   ligarTip(fig);
 }
 
-function renderGraficos(c){ grafDonut(c); grafEvolucao(c); grafTetos(c); grafProjecao(c); }
+/* ==========================================================================
+   Análises: a resposta primeiro, o gráfico depois
+
+   A aba tinha quatro gráficos abertos ao mesmo tempo, cada um com um
+   parágrafo de explicação — quase cinco telas de rolagem antes de a pessoa
+   saber se gastou demais ou não. E o número que importa (quatro categorias
+   estouradas) ficava no meio do terceiro gráfico.
+
+   Agora a aba abre com uma frase que responde "e aí, como estou?", e os
+   gráficos ficam dobrados atrás de títulos clicáveis. Quem quiser o detalhe
+   abre; quem só queria saber, já soube.
+   ========================================================================== */
+function renderResumoAnalise(c){
+  const el=$('#resumoAnalise'); if(!el) return;
+
+  if(!S.lanc.length){
+    el.innerHTML=`<div class="resumo-vazio">Lance alguns gastos e este resumo te diz,
+      em uma frase, se o mês está de pé.</div>`;
+    return;
+  }
+  if(!c.renda){
+    el.innerHTML=`<div class="resumo-vazio">Falta dizer quanto você ganha.
+      <button class="link" data-ir="plano:renda">Preencher agora</button></div>`;
+    return;
+  }
+
+  const folga = c.disponivel - c.gasto;
+  const bem = folga >= 0;
+  const estouros = Object.entries(c.excesso).sort((a,b)=>b[1]-a[1]);
+
+  const veredito = bem
+    ? `Sobram <b>${brl(folga)}</b> para gastar neste ciclo`
+    : `Você passou <b>${brl(-folga)}</b> do que dava para gastar`;
+  const conta = `Gastou ${brl(c.gasto)} de ${brl(c.disponivel)} — o que sobra da renda
+     depois de guardar ${brl(c.meta)}.`;
+
+  let alerta = '';
+  if(estouros.length){
+    const [k,v] = estouros[0];
+    const nome = CATS[k] ? CATS[k].n : k;
+    alerta = estouros.length===1
+      ? `<b>${esc(nome)}</b> passou do teto em ${brl(v)}.`
+      : `<b>${estouros.length} categorias</b> passaram do teto. A maior é
+         ${esc(nome)}, ${brl(v)} acima.`;
+  }
+
+  el.innerHTML =
+    `<div class="resumo ${bem?'ok':'passou'}">
+       <div class="resumo-tit">${veredito}</div>
+       <div class="resumo-sub">${conta}</div>
+       ${alerta?`<div class="resumo-alerta">${alerta}
+         <button class="link" data-ir="analise:cortes">ver o que cortar</button></div>`:''}
+     </div>`;
+}
+
+/* Transforma um gráfico num bloco que abre e fecha. Move os nós em vez de
+   reescrever o HTML: os gráficos já têm ouvintes presos neles (a dica que
+   segue o dedo), e reescrever o innerHTML os perderia. */
+const DOBRAS='sobra:dobras';
+function dobrasAbertas(){
+  try{ return JSON.parse(localStorage.getItem('sobra:dobras')||'{}'); }catch(e){ return {}; }
+}
+function dobrarFig(id, padraoAberto){
+  const fig=$('#'+id); if(!fig || fig.dataset.dobrada) return;
+  const cap=fig.querySelector('figcaption'); if(!cap) return;
+  const tit=cap.querySelector('.viz-tit'); if(!tit) return;
+
+  const guardado=dobrasAbertas()[id];
+  const aberto = guardado===undefined ? padraoAberto : guardado;
+
+  const corpo=document.createElement('div');
+  corpo.className='dobra-corpo';
+  while(cap.nextSibling) corpo.appendChild(cap.nextSibling);
+
+  const bt=document.createElement('button');
+  bt.type='button';
+  bt.className='dobra-cab';
+  bt.setAttribute('aria-expanded', aberto?'true':'false');
+  bt.innerHTML=`<span class="dobra-tit"></span>
+    <svg class="dobra-seta" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>`;
+  bt.querySelector('.dobra-tit').textContent=tit.textContent;
+
+  cap.remove();
+  fig.prepend(bt);
+  fig.appendChild(corpo);
+  fig.classList.add('dobra');
+  fig.classList.toggle('aberta', !!aberto);
+  fig.dataset.dobrada='1';
+
+  bt.onclick=()=>{
+    const ab=!fig.classList.contains('aberta');
+    fig.classList.toggle('aberta', ab);
+    bt.setAttribute('aria-expanded', ab?'true':'false');
+    try{ const m=dobrasAbertas(); m[id]=ab; localStorage.setItem(DOBRAS, JSON.stringify(m)); }catch(e){}
+  };
+}
+
+function renderGraficos(c){
+  ['figDonut','figEvol','figTeto','figProj'].forEach(id=>{
+    const f=$('#'+id); if(f){ delete f.dataset.dobrada; f.hidden=false; }
+  });
+  grafDonut(c); grafEvolucao(c); grafTetos(c); grafProjecao(c);
+  renderResumoAnalise(c);
+
+  /* Um gráfico vazio não vira uma caixa cinza ocupando meia tela: ele
+     simplesmente não aparece. O único que fica é o primeiro, para a aba nunca
+     abrir completamente em branco. */
+  ['figEvol','figTeto','figProj'].forEach(id=>{
+    const f=$('#'+id);
+    if(f && f.querySelector('.viz-vazio')) f.hidden=true;
+  });
+
+  // Só o primeiro abre sozinho; o resto fica à mão, sem ocupar a tela.
+  dobrarFig('figDonut', true);
+  dobrarFig('figEvol', false);
+  dobrarFig('figTeto', true);
+  dobrarFig('figProj', false);
+}
 
 /* ---------- contas a vencer (recorrências com dia marcado) ---------- */
 function proximoVenc(dia){

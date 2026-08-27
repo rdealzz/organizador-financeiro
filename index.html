@@ -342,8 +342,10 @@ html[data-tema="escuro"] #splash{background:#000}
   </div>
 
   <section class="bloco" id="t-graficos">
-    <h2>Como o dinheiro se comporta</h2>
-    <p class="ajuda">Tudo aqui usa <b>só a sua parte</b> — o que outra pessoa cobre fica de fora. O ciclo atual vem dos seus lançamentos; a evolução vem das faturas já arquivadas.</p>
+    <!-- A resposta vem antes do gráfico: uma frase dizendo como o mês está.
+         Antes eram quatro gráficos abertos e um parágrafo de explicação em
+         cada um, e o número que importava ficava no meio do terceiro. -->
+    <div id="resumoAnalise"></div>
     <div class="viz">
       <figure class="viz-fig" id="figDonut"></figure>
       <figure class="viz-fig" id="figEvol"></figure>
@@ -354,8 +356,7 @@ html[data-tema="escuro"] #splash{background:#000}
 
   <section class="bloco" id="t-cortes" hidden>
     <h2>O que fazer, em ordem</h2>
-    <p class="ajuda">Categorias que passaram do teto (mesmo essenciais) e itens marcados como cortáveis, do maior pro menor. Só conta a sua parte.</p>
-    <div id="cortes"></div>
+        <div id="cortes"></div>
     <div class="cards" id="cardsCorte"></div>
     <div id="notaCorte"></div>
   </section>
