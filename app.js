@@ -14,6 +14,23 @@ const TIER={1:{n:'Essencial',cl:'t1'},2:{n:'Vale a pena',cl:'t2'},3:{n:'Pode cor
 const KEY_ANTIGA='sobra-do-mes:novo';   // dados de antes do login, neste aparelho
 let KEY=KEY_ANTIGA;
 function usarChaveDe(uid){ KEY = uid ? ('sobra-do-mes:u:'+uid) : KEY_ANTIGA; }
+
+/* Estado da cena de fundo — declarado AQUI, no topo, de propósito.
+
+   A partida do app roda no fim deste arquivo, mas quando já existe sessão
+   salva ela chama abrirApp() na hora, e abrirApp() mexe na cena. Se estas
+   variáveis fossem declaradas junto do resto do código da cena, lá embaixo,
+   elas ainda estariam na zona morta temporal do `let` nesse instante — e ler
+   uma delas lança "Cannot access 'cena' before initialization".
+
+   Era exatamente isso que acontecia ao REABRIR o app já logado: a exceção
+   subia, a partida caía no catch, o login aparecia com "algo saiu do lugar" e
+   a capa continuava por cima dele. Quem entrava pelo formulário nunca via o
+   problema, porque aí o arquivo já tinha terminado de carregar. */
+let cena=null, capaSaindo=false;
+/* Promessa que só resolve quando a capa sai. Quem revela o app espera por ela,
+   senão o app aparece POR TRÁS da capa — era o segundo sintoma do mesmo bug. */
+let capaPronta=Promise.resolve();
 // nome, cat, peso, valor, cartão, parcelas restantes, tipo, quanto o pai cobre
 const SEED=[];
 /* Ajustes → Alertas. O `icone` aqui é um traço do conjunto do app; o emoji
@@ -2278,6 +2295,11 @@ function focarEntrada(){
    Entrar no app depois de autenticado
    ========================================================================== */
 async function abrirApp(recemLogado){
+  /* Espera a capa sair antes de revelar o app. Reabrindo com sessão salva,
+     abrirApp() é chamada na partida, com a capa ainda na tela: sem esta linha
+     o app aparecia atrás dela e as duas telas se sobrepunham. Depois de um
+     login pelo formulário a capa já saiu, e esperar aqui não custa nada. */
+  await capaPronta;
   const u=Auth.usuario();
   usarChaveDe(u&&u.id);
   document.body.classList.remove('sem-barra');
@@ -2557,7 +2579,8 @@ function esconderSplash(){
 }
 (async()=>{
   ligarAuth();
-  const capa=mostrarCapa();          // some ao primeiro toque
+  capaPronta=mostrarCapa();          // some ao primeiro toque
+  const capa=capaPronta;
   try{
     // Voltou do e-mail de recuperação: o token vem no fragmento da URL.
     const frag=new URLSearchParams(location.hash.replace(/^#/,''));
@@ -2582,6 +2605,10 @@ function esconderSplash(){
     if(Auth.logado()) await abrirApp(false);
     else mostrarAuth();
   }catch(e){
+    /* Se a partida falhar, a capa NÃO pode continuar por cima: a pessoa ficaria
+       olhando o texto da abertura sobreposto ao formulário, sem entender nada.
+       Tira a capa da frente antes de mostrar o login e o aviso. */
+    tirarCapaAgora();
     mostrarAuth();
     avisoAuth('Algo saiu do lugar ao abrir o app. Entre de novo, por favor.');
   }finally{
@@ -2751,8 +2778,6 @@ $('#menuPerfil').addEventListener('click',e=>{
    versão final para quem está sem o campo de partículas — offline, aparelho
    antigo ou menos movimento —, então nada fica feio se o canvas não subir.
    ========================================================================== */
-let cena=null, capaSaindo=false;
-
 /* Desmonta a cena e devolve o fundo normal do app. */
 function encerrarCena(){
   document.body.classList.remove('tem-cena','capa-aberta','fundo-vivo');
@@ -2850,6 +2875,16 @@ function mostrarCapa(){
     // A tela inteira é o botão, então é ela que recebe o foco do teclado.
     setTimeout(()=>{ if(!capa.hidden) capa.focus(); },700);
   });
+}
+
+/* Saída de emergência da capa: sem animação, sem esperar clique. Só é usada
+   quando a partida falhou — em uso normal quem tira a capa é o toque. */
+function tirarCapaAgora(){
+  capaSaindo=true;
+  const capa=$('#capa');
+  if(capa){ capa.classList.add('sai'); capa.hidden=true; }
+  document.body.classList.remove('capa-aberta');
+  document.body.style.overflow='';
 }
 
 /* preferência de abertura: por aparelho, não por conta (é gosto de quem usa
