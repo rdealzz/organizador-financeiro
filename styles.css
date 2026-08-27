@@ -919,7 +919,8 @@ body.sem-barra .atualiza{bottom:calc(var(--e4) + env(safe-area-inset-bottom))}
   transition:background .16s,color .16s;
 }
 .at-x svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
-.at-x:hover{background:var(--fill);color:var(--txt)}
+.at-x{background:var(--fill);color:var(--txt-2)}
+.at-x:hover{background:var(--fill-2);color:var(--txt)}
 .at-x:focus-visible{outline:2px solid var(--azul);outline-offset:1px}
 @media (prefers-reduced-motion:reduce){
   .fab{animation:none}
@@ -991,7 +992,8 @@ body.sem-barra .toast{bottom:calc(var(--e4) + env(safe-area-inset-bottom))}
 .passo.feito i{color:var(--verde-txt)}
 
 /* bloco sem moldura: quando o conteúdo já é um card por si só */
-.bloco.sem-moldura{background:transparent;border-color:transparent;box-shadow:none;padding:0}
+.bloco.sem-moldura{background:transparent;border-color:transparent;box-shadow:none;padding:0;margin-bottom:0}
+.bloco.sem-moldura>.vazio-b{margin-bottom:0}
 /* herói no primeiro acesso: convite, não número */
 .hero-v.peq{font-size:var(--t-xl);font-weight:var(--peso-sm);color:var(--txt);
   letter-spacing:-.022em;margin-bottom:var(--e2)}
@@ -1005,3 +1007,98 @@ body.com-snack .fab{transform:translateY(calc(-1 * (var(--e9) + var(--e2))))}
 .aviso-card.ok .av-ic{background:var(--verde-fraco);color:var(--verde-txt)}
 .aviso-card.ruim .av-ic{background:var(--vermelho-fraco);color:var(--vermelho-txt)}
 .aviso-card{display:flex;gap:var(--e3);align-items:flex-start;border-left-width:3px}
+
+/* ==========================================================================
+   v5.1 — navegação: sem seleção de texto, com resposta ao toque,
+   e no desktop ela sobe para o topo, onde faz sentido.
+   ========================================================================== */
+
+/* Nenhum controle deve poder ser "selecionado" como texto. Era isso que
+   pintava os rótulos de azul e fazia a barra parecer quebrada. */
+.tb,.fab,.btn,.chip-s,.sub,.link,.btn-x,.at-x,.tema-btn,.sinc,.sw,.olho,.item .rm{
+  -webkit-user-select:none; user-select:none; touch-action:manipulation;
+}
+
+/* ---------- barra inferior (celular e tablet) ---------- */
+.tabbar{
+  height:var(--barra-h); align-items:stretch;
+  background:color-mix(in srgb,var(--card) 92%,transparent);
+}
+.tb{
+  min-height:0; padding:var(--e2) var(--e1); gap:2px;
+  position:relative; justify-content:center;
+  transition:color .18s;
+}
+.tb span{white-space:nowrap}
+/* alvo de toque generoso sem inchar o desenho */
+.tb::before{content:"";position:absolute;inset:var(--e1) var(--e2);
+  border-radius:var(--r-sm);background:transparent;transition:background .18s;z-index:-1}
+.tb:hover{color:var(--txt-2)}
+.tb:hover::before{background:var(--fill)}
+.tb:active::before{background:var(--fill-2)}
+.tb[aria-selected="true"]{color:var(--azul)}
+.tb[aria-selected="true"]::before{background:var(--azul-fraco)}
+.tb[aria-selected="true"]:hover{color:var(--azul)}
+
+/* ---------- desktop: a navegação vai para o topo ---------- */
+@media(min-width:900px){
+  :root{--barra-h:0px}
+  body{padding-bottom:var(--e8)}
+  .wrap{max-width:1040px;padding-top:var(--e5)}
+
+  /* Fixa no topo, não sticky: a barra vem depois do conteúdo no HTML, então
+     sticky a deixaria no fim da página. */
+  .tabbar{
+    position:fixed; top:var(--e4); bottom:auto; left:50%;
+    transform:translateX(-50%);
+    width:min(1040px, calc(100vw - var(--e7)));
+    height:auto; padding:var(--e1); gap:var(--e1);
+    border:1px solid var(--sep); border-radius:var(--r-md);
+    background:color-mix(in srgb,var(--card) 92%,transparent);
+    box-shadow:var(--s2); z-index:60;
+  }
+  .wrap{padding-top:calc(var(--e10) + var(--e5))}
+  .tb{
+    flex-direction:row; gap:var(--e2); padding:var(--e3) var(--e4);
+    border-radius:var(--r-sm); min-height:44px;
+  }
+  .tb::before{inset:0;border-radius:var(--r-sm)}
+  .tb span{font-size:var(--t-base);font-weight:var(--peso-m)}
+  .tb[aria-selected="true"] span{font-weight:var(--peso-sm)}
+  .tb svg{width:19px;height:19px}
+  .tb[aria-selected="true"] svg{transform:none}
+
+  /* o botão de adicionar acompanha o conteúdo, não fica preso ao rodapé */
+  .fab{bottom:var(--e6);right:calc(50% - 520px + var(--e6))}
+  @media(max-width:1120px){.fab{right:var(--e6)}}
+
+  .snack,.toast,.atualiza{bottom:var(--e6)}
+  body.com-snack .fab{transform:translateY(calc(-1 * (var(--e9) + var(--e2))))}
+}
+/* telas largas de verdade: mais respiro entre as colunas dos cards */
+@media(min-width:1100px){
+  .cards{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+}
+
+/* ---------- pedido de nome para contas antigas ---------- */
+.pede-nome{border-left:3px solid var(--azul)}
+.pn-tx{margin-bottom:var(--e4)}
+.pn-tx b{display:block;font-size:var(--t-base);font-weight:var(--peso-sm);
+  letter-spacing:-.014em;margin-bottom:var(--e1)}
+.pn-tx span{display:block;font-size:var(--t-sm);color:var(--txt-2);line-height:1.5}
+.pede-nome .link{margin-top:var(--e2)}
+
+/* ---------- folha fechada não pode aparecer ----------
+   Ela fica fora da tela por transform, mas 2% da altura sobravam acima da
+   borda inferior no desktop — uma faixa clara no rodapé. */
+.sheet{visibility:hidden;pointer-events:none}
+.sheet.abre{visibility:visible;pointer-events:auto}
+
+/* ---------- leitura confortável em telas largas ---------- */
+.vazio-b .de,.vazio-b .ti{max-width:46ch;margin-left:auto;margin-right:auto}
+.vazio-b .passos{max-width:380px}
+@media(min-width:900px){
+  .hero-sub,.bloco>p.ajuda{max-width:68ch}
+  /* o cartão do primeiro acesso não precisa da largura toda */
+  #blocoUltimos.sem-moldura .vazio-b{max-width:560px;margin-inline:auto}
+}

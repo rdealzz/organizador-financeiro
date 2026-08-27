@@ -1390,7 +1390,7 @@ function renderUltimos(c){
   const el=$('#ultimos');
   if(!S.lanc.length){
     const temRenda=(+S.salario||0)+(+S.extra||0)>0;
-    el.innerHTML=`<div class="bloco vazio-b" style="margin:0">
+    el.innerHTML=`<div class="bloco vazio-b">
       <div class="em">${icone(temRenda?'nota':'raio',32)}</div>
       <div class="ti">${temRenda?'Agora os gastos fixos':'Dois passos e pronto'}</div>
       <div class="de">${temRenda
@@ -2124,6 +2124,7 @@ async function abrirApp(recemLogado){
   preencherCampos();
 
   pintarSaudacao();
+  pedirNomeSeFaltar();
 
   const ir=new URLSearchParams(location.search).get('ir');
   irPara(ir||'hoje');
@@ -2145,6 +2146,43 @@ async function abrirApp(recemLogado){
     toast(estaVazio(S) ? (nome?`Bem-vindo, ${nome}`:'Bem-vindo')
                        : (nome?`Bem-vindo de volta, ${nome}`:'Bem-vindo de volta'));
   }
+}
+
+/* Contas criadas antes de existir o campo de nome ficam sem nome, e a saudação
+   sai seca ("Bom dia"). Em vez de deixar assim para sempre, pedimos uma vez —
+   com um cartão discreto no topo de Hoje, que some assim que for respondido. */
+function pedirNomeSeFaltar(){
+  const alvo=$('#pedirNome');
+  if(!alvo) return;
+  const u=Auth.usuario();
+  if(!u || (u.nome||'').trim() || S.nomeDispensado){ alvo.hidden=true; return; }
+  alvo.hidden=false;
+  alvo.innerHTML=`<div class="bloco pede-nome">
+    <div class="pn-tx">
+      <b>Como podemos te chamar?</b>
+      <span>Sua conta é anterior a esse campo. Escreva seu nome e o app passa a falar com você pelo nome.</span>
+    </div>
+    <div class="linha-campo">
+      <input type="text" id="pnNome" maxlength="40" autocapitalize="words"
+             placeholder="Seu nome ou apelido" aria-label="Seu nome ou apelido">
+      <button class="btn" id="pnSalvar">Salvar</button>
+    </div>
+    <button class="link" id="pnDepois">Agora não</button>
+  </div>`;
+  $('#pnDepois').onclick=()=>{ S.nomeDispensado=true; salvar(); alvo.hidden=true; };
+  $('#pnNome').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#pnSalvar').click(); });
+  $('#pnSalvar').onclick=async e=>{
+    const v=$('#pnNome').value, msg=Auth.validarNome(v);
+    if(msg){ toast(msg,true); $('#pnNome').focus(); return; }
+    await comCarregamento(e.currentTarget, async()=>{
+      try{
+        await Auth.definirNome(v);
+        pintarSaudacao(); pintarConta();
+        alvo.hidden=true;
+        toast('Prazer, '+Auth.primeiroNome());
+      }catch(err){ toast(Auth.mensagemDeErro(err),true); }
+    },'Salvar');
+  };
 }
 
 /* A saudação usa o nome que a pessoa escolheu. Se por algum motivo não houver

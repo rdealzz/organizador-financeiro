@@ -11,8 +11,17 @@ sem internet.
 
 ## As quatro áreas
 
-Barra fixa embaixo, no padrão de app de banco. Botão flutuante (+) sempre visível
-abre a folha de lançamento, de qualquer tela.
+No celular e no tablet, barra fixa embaixo, no padrão de app de banco. **No
+desktop (≥900 px) ela sobe para o topo**, em linha, com ícone e rótulo lado a
+lado — barra de rodapé numa janela larga é desperdício de espaço e fica longe
+do olhar. Os dois formatos usam o mesmo HTML.
+
+Nenhum controle do app pode ser selecionado como texto (`user-select:none`): era
+isso que pintava os rótulos de azul ao arrastar o mouse e fazia a barra parecer
+quebrada.
+
+Botão **Adicionar gasto** sempre visível abre a folha de lançamento, de qualquer
+tela.
 
 | Área | O que tem |
 |---|---|
@@ -64,7 +73,12 @@ parecerem uma coisa só.
 
 No cadastro pedimos **nome, e-mail e senha**. O nome é o que o app usa para
 falar com a pessoa em todo lugar ("Bom dia, Erick") e pode ser trocado em
-*Ajustes → Conta*. O pedaço do e-mail nunca vira identidade.
+*Ajustes → Conta*. O pedaço do e-mail nunca vira identidade — sem nome, o app
+cumprimenta sem nome.
+
+Contas criadas antes de o campo existir ficam sem nome. Nesse caso o app pede
+uma vez, com um cartão discreto no topo de Hoje, que some assim que for
+respondido (ou dispensado).
 
 Autenticação com **Supabase Auth** (e-mail e senha) e isolamento no **Postgres**,
 não no navegador. A tabela `estado` tem a chave primária igual ao `id` do
