@@ -9,10 +9,32 @@ Cada pessoa tem sua conta. Os dados ficam numa linha só dela no banco,
 protegida por Row Level Security — e uma cópia local mantém o app funcionando
 sem internet.
 
+## Abertura animada
+
+Ao abrir o app aparece uma capa: uma nuvem de ~50 000 pontos em blending
+aditivo — núcleo carmim, meio magenta, borda dourada — sobre fundo ameixa com
+labaredas nos cantos e poeira à deriva. Um toque em qualquer lugar mergulha na
+esfera e revela o app.
+
+Adaptações conscientes (a cena de referência era uma página de rolagem):
+
+* **Sem rolagem.** O mergulho acontece no clique de entrar, que é a própria
+  transição para o app, usando os mesmos uniformes de dive/grow/spin.
+* **Contagem por aparelho.** 50 000 pontos com dois passes de bloom derrubam o
+  quadro num celular; lá usamos 14 000 e pulamos os dois composers extras — que
+  nesta cena rendem preto de qualquer forma, porque a câmera não enxerga os
+  pontos naquelas camadas.
+* **Nunca bloqueia.** A biblioteca vem de CDN e carrega sob demanda. Sem WebGL,
+  sem internet ou com "menos movimento" ligado no sistema, fica o degradê — que
+  já é a versão final para esses casos — e o app abre igual.
+* **Desligável** em *Ajustes → Conta*, por aparelho: quem usa todo dia não
+  precisa de abertura toda vez.
+
 ## Perfil e assinatura
 
-No canto superior esquerdo fica o **botão de perfil**: avatar com a inicial e a
-saudação. Clicando, abre um menu com nome, e-mail, plano atual e os atalhos para
+No canto superior esquerdo fica o **botão de perfil**: um ícone de pessoa num
+botão redondo de 44 px, com um ponto verde quando há conta ativa. Clicando,
+abre um menu com nome, e-mail, plano atual e os atalhos para
 *Editar perfil*, *Assinatura*, *Alertas*, *Dados* e **Sair da conta**. Fecha com
 Escape, com clique fora, e as setas do teclado percorrem os itens.
 

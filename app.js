@@ -2085,7 +2085,13 @@ function mostrarAuth(){
   $('#tabbar').hidden=true;
   $('#fab').hidden=true;
   pintarModo();
-  setTimeout(()=>$a('authEmail').focus(),380);
+  // Só busca o foco quando a capa não estiver por cima, senão o teclado do
+  // celular abre atrás dela.
+  setTimeout(()=>{
+    const capa=$('#capa');
+    if(capa && !capa.hidden) return;
+    $a('authEmail').focus();
+  },380);
 }
 
 /* ==========================================================================
@@ -2129,7 +2135,7 @@ async function abrirApp(recemLogado){
   const ir=new URLSearchParams(location.search).get('ir');
   irPara(ir||'hoje');
   renderAgenda(); renderAlertas(calc()); renderChips(); pintarConta();
-  renderAssinatura(); pintarMenuPerfil();
+  renderAssinatura(); pintarMenuPerfil(); pintarSwitchCapa();
 
   // Local primeiro: o app já está pronto com o que estava no aparelho. A nuvem
   // é consultada em segundo plano, sem segurar a tela. Se vier algo mais novo,
@@ -2370,6 +2376,7 @@ function esconderSplash(){
 }
 (async()=>{
   ligarAuth();
+  const capa=mostrarCapa();          // some ao primeiro toque
   try{
     // Voltou do e-mail de recuperação: o token vem no fragmento da URL.
     const frag=new URLSearchParams(location.hash.replace(/^#/,''));
@@ -2398,6 +2405,7 @@ function esconderSplash(){
     avisoAuth('Algo saiu do lugar ao abrir o app. Entre de novo, por favor.');
   }finally{
     esconderSplash();
+    await capa;                      // o app só aparece depois do toque
   }
 })();
 
@@ -2499,7 +2507,7 @@ function pintarMenuPerfil(){
   const u=Auth.usuario(); if(!u) return;
   const nome=Auth.primeiroNome();
   const inicial=(nome||u.email||'?').charAt(0);
-  $('#perfilInicial').textContent=inicial;
+  $('#perfilBtn').classList.add('logado');
   $('#mpAvatar').textContent=inicial;
   $('#mpNome').textContent=(u.nome||'').trim()||'Sem nome ainda';
   $('#mpEmail').textContent=u.email||'—';
@@ -2547,3 +2555,69 @@ $('#menuPerfil').addEventListener('click',e=>{
                  alertas:'ajustes:alertas', dados:'ajustes:dados'}[acao];
   if(destino) irPara(destino);
 });
+
+/* ==========================================================================
+   v5.3 — abertura animada
+   A capa aparece a cada abertura fria. Um toque em qualquer lugar entra.
+   O degradê já é a versão completa para quem não tem WebGL, está offline ou
+   pediu menos movimento: a cena 3D é um bônus que entra por cima se der.
+   ========================================================================== */
+let cena=null, capaSaindo=false;
+
+const CAPA_DESLIGADA='sobra:capa-off';
+/* A chave vai escrita à mão aqui de propósito. Esta função é chamada na
+   partida, que roda ANTES desta linha do arquivo — ler a constante ali dá
+   ReferenceError, o catch engolia e a preferência de quem desligou a abertura
+   era ignorada. Depender de uma const declarada mais abaixo é armadilha. */
+function capaLigada(){
+  try{ return localStorage.getItem('sobra:capa-off')!=='1'; }catch(e){ return true; }
+}
+function mostrarCapa(){
+  if(!capaLigada()) return Promise.resolve();
+  const capa=$('#capa');
+  capa.hidden=false;
+  esconderSplash();               // uma tela de espera de cada vez
+  document.body.style.overflow='hidden';
+  // A cena é pesada e vem de fora: carrega sem segurar nada.
+  import('/intro.js')
+    .then(m=>m.iniciarAbertura($('#capaCena')))
+    .then(c=>{ if(capaSaindo){ c.encerrar(); return; }
+      cena=c; $('#capaCena').classList.add('pronta'); })
+    .catch(()=>{ /* fica o degradê, que já é bonito e sempre funciona */ });
+  return new Promise(resolve=>{
+    const entrar=()=>{
+      if(capaSaindo) return;
+      capaSaindo=true;
+      vibrar(12);
+      const terminar=()=>{
+        capa.classList.add('sai');
+        document.body.style.overflow='';
+        setTimeout(()=>{
+          capa.hidden=true;
+          if(cena){ cena.encerrar(); cena=null; }
+        },760);
+        resolve();
+      };
+      // Com a cena viva, mergulha na esfera e revela o app no meio do caminho.
+      if(cena) cena.mergulhar(terminar);
+      else terminar();
+    };
+    capa.addEventListener('click',entrar);
+    capa.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' ') entrar(); });
+    $('#capaEntrar').addEventListener('click',e=>{ e.stopPropagation(); entrar(); });
+    setTimeout(()=>{ const b=$('#capaEntrar'); if(b) b.focus(); },700);
+  });
+}
+
+/* preferência de abertura: por aparelho, não por conta (é gosto de quem usa
+   aquele celular, e precisa ser lida antes de qualquer login) */
+function pintarSwitchCapa(){
+  const b=$('#swCapa'); if(!b) return;
+  b.setAttribute('aria-checked', capaLigada()?'true':'false');
+}
+$('#swCapa').onclick=()=>{
+  const ligar=!capaLigada();
+  try{ localStorage.setItem(CAPA_DESLIGADA, ligar?'0':'1'); }catch(e){}
+  pintarSwitchCapa();
+  toast(ligar?'Abertura animada ligada':'Abertura animada desligada');
+};

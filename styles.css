@@ -1211,3 +1211,97 @@ body.com-snack .fab{transform:translateY(calc(-1 * (var(--e9) + var(--e2))))}
 .subnav{position:relative;-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 24px),transparent)}
 @media(min-width:900px){.subnav{-webkit-mask-image:none;mask-image:none}}
 .subnav:not(:hover){mask-image:linear-gradient(to right,#000 calc(100% - 24px),transparent)}
+
+/* ==========================================================================
+   v5.3 — cabeçalho com perfil em ícone
+   ========================================================================== */
+.cab-linha{display:flex;align-items:center;gap:var(--e3)}
+.cab-txt{min-width:0;flex:1}
+.cab-txt .eyebrow{padding-right:0;display:block;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+
+/* botão redondo, do tamanho dos outros do cabeçalho */
+.perfil-btn{
+  width:44px; height:44px; flex:0 0 44px; padding:0; margin:0;
+  border-radius:var(--r-full); border:1px solid var(--sep);
+  background:var(--card); color:var(--txt-2);
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  transition:background .16s, color .16s, border-color .16s, transform .12s;
+  max-width:none;
+}
+.perfil-btn .ico{width:21px;height:21px}
+.perfil-btn:hover{background:var(--fill);color:var(--txt);border-color:transparent}
+.perfil-btn:active{transform:scale(.94)}
+.perfil-btn[aria-expanded="true"]{background:var(--azul);border-color:transparent;color:#fff}
+.perfil-btn:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+/* pontinho verde discreto quando há conta ativa */
+.perfil-btn::after{content:"";position:absolute;width:9px;height:9px;border-radius:var(--r-full);
+  background:var(--verde);border:2px solid var(--bg);transform:translate(15px,-14px);opacity:0;
+  transition:opacity .2s}
+.perfil-btn.logado::after{opacity:1}
+.perfil-btn{position:relative}
+
+/* ==========================================================================
+   v5.3 — abertura animada
+   O fundo em degradê já é a versão final para quem não tem WebGL, está sem
+   internet ou pediu menos movimento. A cena 3D entra por cima quando carrega.
+   ========================================================================== */
+.capa{
+  position:fixed; inset:0; z-index:190;
+  display:flex; align-items:center; justify-content:center;
+  background:
+    radial-gradient(120% 90% at 50% 55%, #47072e 0%, #2a0722 45%, #1a0418 100%),
+    #1a0418;
+  color:#fff; overflow:hidden; cursor:pointer;
+  transition:opacity .7s ease, filter .7s ease;
+}
+.capa.sai{opacity:0;filter:blur(6px);pointer-events:none}
+#capaCena{position:absolute;inset:0;width:100%;height:100%;display:block;opacity:0;
+  transition:opacity 1.2s ease}
+#capaCena.pronta{opacity:1}
+/* brilho suave por trás do texto, para ele se ler sobre qualquer quadro da cena */
+.capa-frente{
+  position:relative; z-index:2; text-align:center; padding:var(--e6);
+  max-width:420px;
+  animation:capaEntra .9s var(--suave) .25s both;
+}
+@keyframes capaEntra{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.capa-marca{
+  width:60px;height:60px;border-radius:var(--r-lg);margin:0 auto var(--e5);
+  display:flex;align-items:flex-end;justify-content:center;gap:5px;padding:14px 13px;
+  background:rgba(10,4,12,.55);
+  border:1px solid rgba(255,255,255,.14);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  box-shadow:0 10px 40px -10px rgba(255,45,107,.55);
+}
+.capa-marca i{display:block;width:6px;border-radius:2px;background:rgba(255,255,255,.5)}
+.capa-marca i:nth-child(1){height:34%}
+.capa-marca i:nth-child(2){height:52%}
+.capa-marca i:nth-child(3){height:70%}
+.capa-marca i:nth-child(4){height:100%;background:#ffd36b}
+.capa-tit{
+  font-size:clamp(30px,8vw,42px); font-weight:var(--peso-b); letter-spacing:-.035em;
+  margin:0 0 var(--e2); line-height:1.05;
+  text-shadow:0 2px 30px rgba(0,0,0,.5);
+}
+.capa-sub{
+  font-size:var(--t-md); color:rgba(255,255,255,.72); margin:0 0 var(--e7);
+  line-height:1.45; text-shadow:0 1px 20px rgba(0,0,0,.6);
+}
+.capa-btn{
+  min-width:200px; min-height:52px; font-size:var(--t-md);
+  background:rgba(255,255,255,.96); color:#1a0418; border:none;
+  box-shadow:0 10px 40px -10px rgba(255,211,107,.6);
+}
+.capa-btn:hover{background:#fff;filter:none;transform:translateY(-1px)}
+.capa-btn:active{transform:scale(.975)}
+.capa-btn .onda{background:rgba(26,4,24,.18)}
+.capa-dica{
+  font-size:var(--t-sm); color:rgba(255,255,255,.42); margin:var(--e4) 0 0;
+  animation:respira 2.6s ease-in-out infinite;
+}
+@keyframes respira{0%,100%{opacity:.42}50%{opacity:.82}}
+@media (prefers-reduced-motion:reduce){
+  .capa-frente,.capa-dica{animation:none}
+  .capa,#capaCena{transition:opacity .2s}
+}

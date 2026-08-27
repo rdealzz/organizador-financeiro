@@ -1,9 +1,9 @@
 /* Sobra do Mês — service worker
    Objetivo: o app abre e funciona sem internet, e as notificações
    continuam sendo entregues pelo sistema mesmo com a aba fechada. */
-const VERSAO = 'sobra-v5.2.0';
+const VERSAO = 'sobra-v5.3.0';
 const CASCA = [
-  '/', '/index.html', '/styles.css', '/app.js', '/auth.js', '/manifest.webmanifest',
+  '/', '/index.html', '/styles.css', '/app.js', '/auth.js', '/intro.js', '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png',
   '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png', '/icons/favicon-32.png'
 ];
@@ -31,8 +31,10 @@ self.addEventListener('activate', e => {
   })());
 });
 
-/* Navegação: rede primeiro (pega o deploy novo), cai pro cache offline.
-   Estáticos do mesmo domínio: cache primeiro, com atualização em segundo plano.
+/* Cada versão do app é um conjunto fechado: HTML, CSS e JS saem sempre do
+   mesmo cache. Nada de "rede primeiro" para o HTML — misturar HTML novo com
+   CSS velho quebra a tela. A troca acontece de uma vez só, quando o service
+   worker seguinte assume.
 
    Regra de ouro deste arquivo: guardar a cópia SEMPRE antes de devolver a
    resposta, e devolver a original. Clonar depois de entregar trava o corpo e
@@ -54,35 +56,24 @@ self.addEventListener('fetch', e => {
 
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
-      const doCache = () => caches.match('/index.html').then(r => r || caches.match('/'));
+      /* O HTML sai do MESMO cache que o CSS e o JS.
+         Antes a navegação buscava da rede primeiro enquanto os estáticos vinham
+         do cache: entre dois deploys o app abria com HTML novo e CSS velho, e a
+         tela quebrava (botões sem estilo, funções que não existiam ainda).
+         Agora cada versão é um conjunto fechado. A versão nova não entra por
+         aqui: ela chega instalando outro service worker, que enche o próprio
+         cache e espera a pessoa tocar em "Atualizar". */
+      const doCache = await caches.match('/index.html') || await caches.match('/');
+      if (doCache) return doCache;
 
-      // Sem internet, nem tenta a rede: esperar o navegador desistir custa
-      // segundos de tela parada. A cópia salva abre na hora.
-      if (!self.navigator.onLine) {
-        const c = await doCache();
-        if (c) return c;
-      }
-
-      // Com internet, a rede tem 2,5 s para responder. Passou disso, abre pela
-      // cópia salva — melhor um app instantâneo e um pouco antigo do que uma
-      // tela branca no 3G ruim.
-      const daRede = (async () => {
+      // Sem cópia salva (primeira visita com este SW): busca da rede e guarda.
+      try {
         const pre = await e.preloadResponse;
         const res = pre || await fetch(req);
         guardar(new Request('/index.html'), res);
         return res;
-      })();
-      const relogio = new Promise(r => setTimeout(() => r(null), 2500));
-
-      try {
-        const res = await Promise.race([daRede, relogio]);
-        if (res) return res;
-        const c = await doCache();
-        if (c) { e.waitUntil(daRede.catch(() => {})); return c; }
-        return await daRede;
       } catch (_) {
-        const c = await doCache();
-        return c || new Response(
+        return new Response(
           '<meta charset="utf-8"><p style="font:16px system-ui;padding:24px">Sem conexão e sem cópia salva. Abra o app uma vez com internet.',
           { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
       }
@@ -91,12 +82,12 @@ self.addEventListener('fetch', e => {
   }
 
   e.respondWith((async () => {
+    /* Sem revalidação em segundo plano, pelo mesmo motivo da navegação: trazer
+       um arquivo novo para o cache de uma versão antiga mistura as duas. O
+       conteúdo de cada versão é imutável; quem troca tudo de uma vez é o
+       service worker seguinte. */
     const guardado = await caches.match(req);
-    if (guardado) {
-      // Revalida em segundo plano, sem prender a resposta que já foi entregue.
-      e.waitUntil(fetch(req).then(res => guardar(req, res)).catch(() => {}));
-      return guardado;
-    }
+    if (guardado) return guardado;
     try {
       const res = await fetch(req);
       guardar(req, res);
