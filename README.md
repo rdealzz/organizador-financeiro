@@ -7,19 +7,36 @@ no celular quando o gasto foge do plano.
 
 Site estático, sem backend. **Nenhum dado sai do seu aparelho.**
 
-## O que tem
+## As quatro áreas
 
-| Aba | Para quê |
+Barra fixa embaixo, no padrão de app de banco. Botão flutuante (+) sempre visível
+abre a folha de lançamento, de qualquer tela.
+
+| Área | O que tem |
 |---|---|
-| **Renda** | salário, renda variável, dias de fechamento e vencimento da fatura, meta de poupança |
-| **Tetos** | teto por categoria, calculado a partir do que sobra depois de guardar; dá pra travar qualquer um na mão |
-| **Gastos** | lançamentos do ciclo (fixo, variável, parcelado, 1x), quem paga (você, dividido, outra pessoa) e contas a vencer |
-| **Cortar** | o que está fora do teto, em ordem, com o quanto cada corte rende no ano |
-| **Metas** | reserva de emergência, objetivos com prazo e dívidas com juros |
-| **Gráficos** | para onde foi o dinheiro, evolução mês a mês, quanto de cada teto já foi e parcelas já compromissadas |
-| **Meses** | faturas arquivadas, item a item, com a variação contra o mês anterior |
-| **Alertas** | quais avisos quer receber e o que está pendente agora |
-| **Importar** | extrato/fatura em OFX, CSV ou colado na mão, com categorização automática |
+| **Hoje** | *quanto você pode gastar hoje*, insights do momento, para onde o dinheiro foi, contas a vencer e os últimos lançamentos |
+| **Plano** | renda e meta de poupança · tetos por categoria · reserva, objetivos e dívidas |
+| **Análises** | gráficos (rosca, evolução, tetos, parcelas futuras) · o que cortar, em ordem · faturas arquivadas |
+| **Ajustes** | alertas e lembretes com hora marcada · importar OFX/CSV · backup, CSV e diagnóstico |
+
+## Lançar um gasto em segundos
+
+Um campo só. Você escreve `ifood 45` e o app entende descrição, valor,
+categoria, peso e recorrência provável — reaproveitando o mesmo classificador
+que lê extratos do banco. Aceita `mercado 1.234,56`, `r$ 89 netflix`,
+`farmácia 97,50`. Se já existe um gasto com aquele nome, ele herda tudo do
+anterior. O resto dos campos (parcelado, quem paga, vencimento, conta) fica em
+*Mais opções*, para quando realmente precisar.
+
+Abaixo do campo ficam **chips** dos seus gastos mais frequentes, tirados do
+histórico: um toque preenche a descrição e só falta o valor.
+
+## O número principal
+
+O painel não abre com "sobra prevista" — abre com **quanto você pode gastar
+hoje**: o que ainda cabe no ciclo dividido pelos dias que faltam até a fatura
+fechar, já descontada a meta de poupança. É o número que decide se você pede o
+delivery ou não.
 
 ## Como os dados ficam salvos
 
@@ -44,14 +61,32 @@ IndexedDB (as 7 últimas ficam), e o rodapé tem *Baixar backup* (JSON),
 Rodam inteiramente no aparelho: não há servidor de push e nada é enviado pra
 lugar nenhum. O service worker entrega o aviso como notificação do sistema.
 
-Avisos disponíveis: teto de categoria estourando, gastando mais do que dá, meta
-de guardar em risco, fatura vai fechar, fatura vai vencer, conta fixa a vencer,
-lançamento variável zerado e última parcela. Cada um dispara **uma vez por
-ciclo** (nada de repetir o mesmo aviso todo dia), no máximo 3 por checagem.
+**Alertas de situação** — disparam quando algo foge do plano: teto de categoria
+estourando, gastando mais do que dá, meta em risco, fatura vai fechar, fatura
+vai vencer, conta fixa a vencer, lançamento variável zerado, última parcela.
+Cada um sai **uma vez por ciclo**, no máximo 3 por checagem.
 
-A checagem acontece ao abrir o app, ao voltar pra ele e a cada 30 minutos com
-ele aberto. Em Android instalado, o `periodicSync` também acorda a checagem em
-segundo plano quando o navegador permite.
+**Lembretes com hora marcada** — você escolhe os horários e o momento de cada
+um: *quanto posso gastar hoje* (manhã), *como está o ritmo* (meio do dia),
+*fechar a conta do dia* (noite) e *só perto da fatura*. A mensagem é montada na
+hora a partir do estado real das contas — "☀️ Bom dia — R$ 48,37 pra hoje",
+"🍽️ Comida fora já está R$ 120 acima do teto", "💳 Separando R$ 96 por dia até
+lá, a fatura fica paga sem susto".
+
+### O limite honesto do horário
+
+Sem servidor de push, o navegador **não acorda o app numa hora exata com ele
+fechado**. Na prática:
+
+* app aberto → o lembrete sai no minuto marcado;
+* app fechado → sai **assim que o app for aberto de novo** (ele sabe que a hora
+  passou e ainda não avisou hoje);
+* Android instalado → o `periodicSync` acorda o app sozinho e o lembrete chega
+  perto do horário.
+
+Isso está escrito na própria tela de Alertas, para ninguém contar com uma
+garantia que não existe. Hora exata com o app fechado exigiria Web Push com
+servidor — e é justamente por não ter servidor que nenhum dado sai do aparelho.
 
 **No iPhone**, notificações web só funcionam se o site for adicionado à Tela de
 Início pelo Safari (Compartilhar → Adicionar à Tela de Início) e aberto por lá.
@@ -100,3 +135,15 @@ icons/                ícones do app
 
 Os gráficos são SVG escrito na mão — sem biblioteca externa. A paleta
 categórica foi validada para daltonismo e contraste nos dois temas.
+
+## Detalhes de uso que importam
+
+* **Desfazer** em tudo que remove — snackbar de 5 segundos, nada some pra sempre.
+* **Toast + vibração curta** a cada gasto registrado.
+* **Retrospectiva do mês** quando a fatura fecha: quanto gastou, comparação com
+  o mês anterior, para onde foi, variação por categoria — e confete quando você
+  economizou.
+* **Estados vazios que ensinam**: a primeira tela é um onboarding de dois passos,
+  não uma lista vazia.
+* Contadores animados, cards que entram com fade, folha com mola e arrastar-para-fechar.
+* `render()` com debounce de 220 ms nos campos numéricos.
