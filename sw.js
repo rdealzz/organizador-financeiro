@@ -1,18 +1,42 @@
 /* Sobra do Mês — service worker
    Objetivo: o app abre e funciona sem internet, e as notificações
    continuam sendo entregues pelo sistema mesmo com a aba fechada. */
-const VERSAO = 'sobra-v5.4.1';
+const VERSAO = 'sobra-v5.5.0';
 const CASCA = [
   '/', '/index.html', '/styles.css', '/app.js', '/auth.js', '/intro.js', '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png',
   '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png', '/icons/favicon-32.png'
 ];
 
+/* Uma resposta marcada como "redirecionada" NÃO pode ser devolvida numa
+   navegação: o navegador recusa a entrega e mostra "Não é possível acessar
+   esse site" (ERR_FAILED), sem pista nenhuma de que a culpa é do cache.
+
+   Isto morde aqui porque o vercel.json usa "cleanUrls": true — a hospedagem
+   responde 308 em /index.html e manda para /. Quem busca /index.html recebe o
+   conteúdo certo, mas com a marca de redirecionado grudada. Guardar essa
+   resposta e devolvê-la depois numa navegação derruba o app inteiro.
+
+   A saída é reconstruir a resposta: mesmo corpo, mesmos cabeçalhos, sem a
+   marca. */
+async function semRedirecionamento(res) {
+  if (!res || !res.redirected) return res;
+  const corpo = await res.blob();
+  return new Response(corpo, { status: res.status, statusText: res.statusText, headers: res.headers });
+}
+
 self.addEventListener('install', e => {
   e.waitUntil((async () => {
     const c = await caches.open(VERSAO);
-    // addAll falha inteiro se um item falhar; guardamos um a um
-    await Promise.all(CASCA.map(u => c.add(u).catch(() => {})));
+    // Um a um: addAll falha inteiro se um item falhar. E nada de c.add(), que
+    // guardaria a resposta com a marca de redirecionado intacta.
+    await Promise.all(CASCA.map(async u => {
+      try {
+        const res = await fetch(u, { cache: 'reload' });
+        if (!res.ok) return;
+        await c.put(u, await semRedirecionamento(res));
+      } catch (_) {}
+    }));
     // Sem skipWaiting: a versão nova fica em espera e a página oferece o
     // botão "Atualizar". Quem decide a hora de trocar é a pessoa.
   })());
@@ -36,13 +60,16 @@ self.addEventListener('activate', e => {
    CSS velho quebra a tela. A troca acontece de uma vez só, quando o service
    worker seguinte assume.
 
-   Regra de ouro deste arquivo: guardar a cópia SEMPRE antes de devolver a
-   resposta, e devolver a original. Clonar depois de entregar trava o corpo e
-   o navegador fica esperando um script que nunca termina. */
-function guardar(req, res) {
+   Regra de ouro deste arquivo: clonar SEMPRE antes de devolver a resposta, e
+   devolver a original. Clonar depois de entregar trava o corpo e o navegador
+   fica esperando um script que nunca termina — por isso quem chama guardar()
+   passa um res.clone() feito na hora, e esta função pode consumir à vontade. */
+async function guardar(req, res) {
   if (!res || !res.ok || res.type === 'opaque') return;
-  const copia = res.clone();
-  caches.open(VERSAO).then(c => c.put(req, copia)).catch(() => {});
+  try {
+    const c = await caches.open(VERSAO);
+    await c.put(req, await semRedirecionamento(res));
+  } catch (_) {}
 }
 
 self.addEventListener('fetch', e => {
@@ -74,16 +101,19 @@ self.addEventListener('fetch', e => {
          outro service worker, que enche o próprio cache e espera a pessoa
          tocar em "Atualizar". */
       try {
-        const doCache = await caches.match('/index.html') || await caches.match('/');
-        if (doCache) return doCache;
+        // '/' primeiro: é o endereço que a hospedagem serve de verdade.
+        // /index.html só existe como redirecionamento para cá.
+        const doCache = await caches.match('/') || await caches.match('/index.html');
+        if (doCache) return await semRedirecionamento(doCache);
       } catch (_) { /* cache indisponível ou corrompido: cai para a rede */ }
 
       // Sem cópia salva (primeira visita com este SW): busca da rede e guarda.
       try {
         const pre = await e.preloadResponse;
         const res = pre || await fetch(req);
-        guardar(new Request('/index.html'), res);
-        return res;
+        const limpa = await semRedirecionamento(res);
+        guardar(new Request('/'), limpa.clone());
+        return limpa;
       } catch (_) {}
 
       return new Response(
@@ -104,7 +134,7 @@ self.addEventListener('fetch', e => {
     } catch (_) { /* cache indisponível: cai para a rede */ }
     try {
       const res = await fetch(req);
-      guardar(req, res);
+      guardar(req, res.clone());
       return res;
     } catch (_) {
       return new Response('', { status: 504, statusText: 'offline' });
