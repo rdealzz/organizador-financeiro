@@ -1172,7 +1172,30 @@ function renderAlertas(c){
    PWA: service worker, instalação e checagem periódica
    ========================================================================== */
 let eventoInstalar=null;
-if('serviceWorker' in navigator&&location.protocol!=='file:'){
+
+/* Escotilha de resgate. Abrir o site com ?sw=off apaga o service worker e todos
+   os caches de casca. É a saída para o dia em que uma versão salva ficar
+   quebrada e o app não abrir mais — os dados financeiros NÃO são tocados: eles
+   moram em localStorage/IndexedDB e na conta, não no cache de arquivos.
+   O sw.js também reconhece este endereço e sai da frente, então ele abre mesmo
+   com o cache corrompido. */
+const RESGATE = new URLSearchParams(location.search).get('sw')==='off';
+if(RESGATE){
+  (async()=>{
+    try{
+      const rs=await navigator.serviceWorker.getRegistrations();
+      await Promise.all(rs.map(r=>r.unregister().catch(()=>{})));
+    }catch(e){}
+    try{
+      const ks=await caches.keys();
+      await Promise.all(ks.map(k=>caches.delete(k).catch(()=>{})));
+    }catch(e){}
+    // Volta para o endereço limpo, agora sem service worker nenhum no caminho.
+    location.replace('/');
+  })();
+}
+
+if('serviceWorker' in navigator&&location.protocol!=='file:'&&!RESGATE){
   window.addEventListener('load',async()=>{
     try{
       swReg=await navigator.serviceWorker.register('/sw.js',{scope:'/'});

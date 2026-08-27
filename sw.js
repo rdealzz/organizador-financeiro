@@ -1,7 +1,7 @@
 /* Sobra do Mês — service worker
    Objetivo: o app abre e funciona sem internet, e as notificações
    continuam sendo entregues pelo sistema mesmo com a aba fechada. */
-const VERSAO = 'sobra-v5.4.0';
+const VERSAO = 'sobra-v5.4.1';
 const CASCA = [
   '/', '/index.html', '/styles.css', '/app.js', '/auth.js', '/intro.js', '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png',
@@ -55,16 +55,28 @@ self.addEventListener('fetch', e => {
   if (url.pathname.startsWith('/auth/') || url.pathname.startsWith('/rest/')) return;
 
   if (req.mode === 'navigate') {
+    /* Escotilha de resgate: abrir o site com ?sw=off faz o service worker sair
+       da frente por completo. Se um dia o cache ficar corrompido a ponto de a
+       página não abrir, este endereço ainda abre — e o app se desregistra. */
+    if (url.searchParams.get('sw') === 'off') return;
+
     e.respondWith((async () => {
-      /* O HTML sai do MESMO cache que o CSS e o JS.
-         Antes a navegação buscava da rede primeiro enquanto os estáticos vinham
-         do cache: entre dois deploys o app abria com HTML novo e CSS velho, e a
-         tela quebrava (botões sem estilo, funções que não existiam ainda).
-         Agora cada versão é um conjunto fechado. A versão nova não entra por
-         aqui: ela chega instalando outro service worker, que enche o próprio
-         cache e espera a pessoa tocar em "Atualizar". */
-      const doCache = await caches.match('/index.html') || await caches.match('/');
-      if (doCache) return doCache;
+      /* Este bloco NUNCA pode terminar em promessa rejeitada: quando isso
+         acontece o navegador não mostra erro nenhum do app, mostra
+         "Não é possível acessar esse site" (ERR_FAILED) e a pessoa fica sem
+         saída. Por isso tudo aqui dentro está protegido e há sempre uma
+         resposta de último caso no fim.
+
+         O HTML sai do MESMO cache que o CSS e o JS. Antes a navegação buscava
+         da rede primeiro enquanto os estáticos vinham do cache: entre dois
+         deploys o app abria com HTML novo e CSS velho e a tela quebrava. Agora
+         cada versão é um conjunto fechado; a versão nova chega instalando
+         outro service worker, que enche o próprio cache e espera a pessoa
+         tocar em "Atualizar". */
+      try {
+        const doCache = await caches.match('/index.html') || await caches.match('/');
+        if (doCache) return doCache;
+      } catch (_) { /* cache indisponível ou corrompido: cai para a rede */ }
 
       // Sem cópia salva (primeira visita com este SW): busca da rede e guarda.
       try {
@@ -72,11 +84,11 @@ self.addEventListener('fetch', e => {
         const res = pre || await fetch(req);
         guardar(new Request('/index.html'), res);
         return res;
-      } catch (_) {
-        return new Response(
-          '<meta charset="utf-8"><p style="font:16px system-ui;padding:24px">Sem conexão e sem cópia salva. Abra o app uma vez com internet.',
-          { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
-      }
+      } catch (_) {}
+
+      return new Response(
+        '<meta charset="utf-8"><p style="font:16px system-ui;padding:24px">Sem conexão e sem cópia salva. Abra o app uma vez com internet.',
+        { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     })());
     return;
   }
@@ -86,8 +98,10 @@ self.addEventListener('fetch', e => {
        um arquivo novo para o cache de uma versão antiga mistura as duas. O
        conteúdo de cada versão é imutável; quem troca tudo de uma vez é o
        service worker seguinte. */
-    const guardado = await caches.match(req);
-    if (guardado) return guardado;
+    try {
+      const guardado = await caches.match(req);
+      if (guardado) return guardado;
+    } catch (_) { /* cache indisponível: cai para a rede */ }
     try {
       const res = await fetch(req);
       guardar(req, res);
