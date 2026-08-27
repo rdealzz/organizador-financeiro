@@ -9,6 +9,25 @@ Cada pessoa tem sua conta. Os dados ficam numa linha só dela no banco,
 protegida por Row Level Security — e uma cópia local mantém o app funcionando
 sem internet.
 
+## Perfil e assinatura
+
+No canto superior esquerdo fica o **botão de perfil**: avatar com a inicial e a
+saudação. Clicando, abre um menu com nome, e-mail, plano atual e os atalhos para
+*Editar perfil*, *Assinatura*, *Alertas*, *Dados* e **Sair da conta**. Fecha com
+Escape, com clique fora, e as setas do teclado percorrem os itens.
+
+A aba **Assinatura** é esqueleto para um futuro SaaS, marcada como *Em breve*:
+mostra o plano atual (Gratuito), o que já existe hoje e as ideias para uma versão
+paga. **Não há forma de pagamento, cadastro de cartão nem cobrança** — e a tela
+diz isso com todas as letras.
+
+> **Aviso para quando isto virar SaaS de verdade:** o campo `S.plano` existe só
+> para a interface saber o que desenhar. Ele é gravado pelo próprio usuário na
+> coluna `dados`, então qualquer pessoa poderia se dar um plano pago editando o
+> navegador. A fonte da verdade da assinatura tem que ser **uma tabela separada,
+> escrita só pelo servidor** (ou pelo webhook do meio de pagamento) e apenas
+> legível pelo dono — nunca o jsonb que o cliente controla.
+
 ## As quatro áreas
 
 No celular e no tablet, barra fixa embaixo, no padrão de app de banco. **No

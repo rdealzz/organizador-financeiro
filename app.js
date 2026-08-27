@@ -1269,7 +1269,7 @@ const AREAS={
   hoje:    {titulo:'Hoje',        subs:[]},
   plano:   {titulo:'Planejamento',subs:['renda','tetos','objetivos']},
   analise: {titulo:'Análises',    subs:['graficos','cortes','hist']},
-  ajustes: {titulo:'Ajustes',     subs:['alertas','conta','extrato','dados']}
+  ajustes: {titulo:'Ajustes',     subs:['alertas','conta','assinatura','extrato','dados']}
 };
 let AREA='hoje';
 const SUB={plano:'renda',analise:'graficos',ajustes:'alertas'};
@@ -1289,7 +1289,7 @@ function irPara(destino){
   });
   $('#tituloArea').textContent=AREAS[area].titulo;
   if(area==='analise'&&SUB.analise==='graficos') renderGraficos(calc());
-  if(area==='ajustes') renderAlertas(calc());
+  if(area==='ajustes'){ renderAlertas(calc()); renderAssinatura(); }
   try{ history.replaceState(null,'','?ir='+area+(AREAS[area].subs.length?':'+SUB[area]:'')); }catch(e){}
   window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -2129,6 +2129,7 @@ async function abrirApp(recemLogado){
   const ir=new URLSearchParams(location.search).get('ir');
   irPara(ir||'hoje');
   renderAgenda(); renderAlertas(calc()); renderChips(); pintarConta();
+  renderAssinatura(); pintarMenuPerfil();
 
   // Local primeiro: o app já está pronto com o que estava no aparelho. A nuvem
   // é consultada em segundo plano, sem segurar a tela. Se vier algo mais novo,
@@ -2177,7 +2178,7 @@ function pedirNomeSeFaltar(){
     await comCarregamento(e.currentTarget, async()=>{
       try{
         await Auth.definirNome(v);
-        pintarSaudacao(); pintarConta();
+        pintarSaudacao(); pintarConta(); pintarMenuPerfil();
         alvo.hidden=true;
         toast('Prazer, '+Auth.primeiroNome());
       }catch(err){ toast(Auth.mensagemDeErro(err),true); }
@@ -2314,7 +2315,7 @@ $('#salvarApelido').onclick=async e=>{
   await comCarregamento(e.currentTarget, async()=>{
     try{
       await Auth.definirNome(campo.value);
-      pintarSaudacao(); pintarConta(); render();
+      pintarSaudacao(); pintarConta(); pintarMenuPerfil(); render();
       toast('Agora te chamamos de '+Auth.primeiroNome());
     }catch(err){ toast(Auth.mensagemDeErro(err),true); }
   },'Salvar');
@@ -2442,3 +2443,107 @@ function icone(nome, tamanho){
 /* qual traço representa cada categoria e cada tipo de conselho */
 const ICONE_CAT={casa:'casa',mercado:'mercado',transporte:'transporte',comida:'comida',
   assinatura:'assinatura',lazer:'lazer',saude:'saude',estudo:'estudo',divida:'divida',outros:'outros'};
+
+/* ==========================================================================
+   v5.2 — menu de perfil e esqueleto de assinatura
+   ========================================================================== */
+
+/* O plano fica registrado no estado só para a interface saber o que mostrar.
+   ATENÇÃO para quando isto virar SaaS de verdade: assinatura NÃO pode morar
+   aqui. Este objeto é gravado pelo próprio usuário na coluna `dados`, então
+   qualquer pessoa poderia se dar um plano pago editando o navegador. A fonte
+   da verdade tem que ser uma tabela separada, escrita só pelo servidor (ou
+   pelo webhook do meio de pagamento) e apenas legível pelo dono. */
+const PLANOS={
+  gratuito:{nome:'Gratuito', desc:'Tudo o que existe hoje, sem limite'},
+  pago:    {nome:'Pro',      desc:'Ainda não existe'}
+};
+function planoAtual(){
+  const p=(S.plano&&S.plano.tipo)||'gratuito';
+  return PLANOS[p]?p:'gratuito';
+}
+
+const RECURSOS_HOJE=[
+  ['Lançamentos sem limite','Quantos gastos você quiser, em quantos ciclos precisar.'],
+  ['Sua conta em qualquer aparelho','Celular, tablet e computador com os mesmos dados.'],
+  ['Alertas e lembretes com hora marcada','Sem limite de horários nem de tipos de aviso.'],
+  ['Gráficos e histórico de faturas','As últimas 24 faturas guardadas, item a item.'],
+  ['Importar extrato do banco','OFX e CSV, lidos no seu aparelho.'],
+  ['Funciona sem internet','E sincroniza sozinho quando a conexão volta.']
+];
+const IDEIAS_PAGAS=[
+  ['Vários cartões e contas','Cada um com fechamento e vencimento próprios.'],
+  ['Lembrete na hora exata com o app fechado','Exige um servidor de notificação — é o que hoje não dá para garantir.'],
+  ['Orçamento compartilhado','Duas pessoas, a mesma casa, os mesmos tetos.'],
+  ['Histórico sem limite de meses','Hoje guardamos as últimas 24 faturas.'],
+  ['Relatório do ano em PDF','Para levar ao contador ou guardar.'],
+  ['Categorias suas','Além das dez que já vêm prontas.']
+];
+
+function renderAssinatura(){
+  const cx=$('#planoAtual'); if(!cx) return;
+  const p=planoAtual();
+  cx.innerHTML=`<div class="plano-cartao">
+    <div class="pc-ic">${icone('certo',20)}</div>
+    <div><b>Seu plano: ${PLANOS[p].nome}</b><span>${PLANOS[p].desc}</span></div>
+  </div>`;
+  $('#listaGratuito').innerHTML=RECURSOS_HOJE.map(([t,d])=>
+    `<li>${icone('certo',18)}<div><b>${esc(t)}</b><span class="obs">${esc(d)}</span></div></li>`).join('');
+  $('#listaPago').innerHTML=IDEIAS_PAGAS.map(([t,d])=>
+    `<li>${icone('relogio',18)}<div><b>${esc(t)}</b><span class="obs">${esc(d)}</span></div></li>`).join('');
+}
+
+/* ---------- menu de perfil ---------- */
+let menuAberto=false;
+function pintarMenuPerfil(){
+  const u=Auth.usuario(); if(!u) return;
+  const nome=Auth.primeiroNome();
+  const inicial=(nome||u.email||'?').charAt(0);
+  $('#perfilInicial').textContent=inicial;
+  $('#mpAvatar').textContent=inicial;
+  $('#mpNome').textContent=(u.nome||'').trim()||'Sem nome ainda';
+  $('#mpEmail').textContent=u.email||'—';
+  const p=planoAtual();
+  $('#mpPlano').innerHTML=`<span>Plano <b>${PLANOS[p].nome}</b></span>`+
+    (p==='gratuito'?'<em class="selo">Grátis</em>':'');
+}
+function abrirMenu(){
+  pintarMenuPerfil();
+  menuAberto=true;
+  $('#menuPerfil').hidden=false;
+  $('#perfilBtn').setAttribute('aria-expanded','true');
+  const primeiro=$('#menuPerfil').querySelector('.mp-item');
+  if(primeiro) setTimeout(()=>primeiro.focus(),40);
+}
+function fecharMenu(devolverFoco){
+  if(!menuAberto) return;
+  menuAberto=false;
+  $('#menuPerfil').hidden=true;
+  $('#perfilBtn').setAttribute('aria-expanded','false');
+  if(devolverFoco) $('#perfilBtn').focus();
+}
+$('#perfilBtn').onclick=()=>{ menuAberto?fecharMenu(true):abrirMenu(); };
+document.addEventListener('click',e=>{
+  if(!menuAberto) return;
+  if(e.target.closest('#menuPerfil')||e.target.closest('#perfilBtn')) return;
+  fecharMenu(false);
+});
+document.addEventListener('keydown',e=>{
+  if(!menuAberto) return;
+  if(e.key==='Escape'){ e.stopPropagation(); fecharMenu(true); return; }
+  if(e.key!=='ArrowDown'&&e.key!=='ArrowUp') return;
+  const itens=[...$('#menuPerfil').querySelectorAll('.mp-item')];
+  const i=itens.indexOf(document.activeElement);
+  e.preventDefault();
+  const proximo=e.key==='ArrowDown' ? (i+1)%itens.length : (i<=0?itens.length-1:i-1);
+  itens[proximo].focus();
+});
+$('#menuPerfil').addEventListener('click',e=>{
+  const item=e.target.closest('[data-menu]'); if(!item) return;
+  const acao=item.dataset.menu;
+  fecharMenu(false);
+  if(acao==='sair'){ sairDaConta(); return; }
+  const destino={conta:'ajustes:conta', assinatura:'ajustes:assinatura',
+                 alertas:'ajustes:alertas', dados:'ajustes:dados'}[acao];
+  if(destino) irPara(destino);
+});

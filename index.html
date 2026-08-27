@@ -132,8 +132,43 @@ html[data-tema="escuro"] #splash{background:#000}
       <i aria-hidden="true"></i><span>—</span></button>
     <button class="tema-btn" id="btnTema" aria-label="Alternar tema">🌙</button>
   </div>
-  <div class="eyebrow" id="saudacao">Controle financeiro pessoal</div>
+  <button class="perfil-btn" id="perfilBtn" type="button"
+          aria-haspopup="menu" aria-expanded="false" aria-controls="menuPerfil">
+    <span class="avatar-p" id="perfilInicial" aria-hidden="true">?</span>
+    <span class="eyebrow" id="saudacao">Controle financeiro pessoal</span>
+    <svg class="ico seta" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+  </button>
   <h1 id="tituloArea">Hoje</h1>
+
+  <div class="menu-perfil" id="menuPerfil" role="menu" aria-labelledby="perfilBtn" hidden>
+    <div class="mp-cabeca">
+      <span class="avatar" id="mpAvatar" aria-hidden="true">?</span>
+      <div class="mp-quem">
+        <b id="mpNome">—</b>
+        <span id="mpEmail">—</span>
+      </div>
+    </div>
+    <div class="mp-plano" id="mpPlano"></div>
+    <div class="mp-lista">
+      <button role="menuitem" class="mp-item" data-menu="conta">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.4" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>
+        <span>Editar perfil</span></button>
+      <button role="menuitem" class="mp-item" data-menu="assinatura">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8z"/></svg>
+        <span>Assinatura</span><em class="selo">Em breve</em></button>
+      <button role="menuitem" class="mp-item" data-menu="alertas">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 1 0-12 0c0 5-2 6-2 6h16s-2-1-2-6"/><path d="M13.7 20a2 2 0 0 1-3.4 0"/></svg>
+        <span>Alertas</span></button>
+      <button role="menuitem" class="mp-item" data-menu="dados">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6.2" rx="7.4" ry="2.8"/><path d="M4.6 6.2v11.6c0 1.6 3.3 2.8 7.4 2.8s7.4-1.2 7.4-2.8V6.2"/><path d="M4.6 12c0 1.6 3.3 2.8 7.4 2.8s7.4-1.2 7.4-2.8"/></svg>
+        <span>Meus dados</span></button>
+    </div>
+    <div class="mp-rodape">
+      <button role="menuitem" class="mp-item perigo" data-menu="sair">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 20H5.4A1.4 1.4 0 0 1 4 18.6V5.4A1.4 1.4 0 0 1 5.4 4h4.1"/><path d="m15.5 15.5 3.9-3.5-3.9-3.5"/><path d="M19.4 12H9.6"/></svg>
+        <span>Sair da conta</span></button>
+    </div>
+  </div>
 </header>
 
 <div id="instalar">
@@ -315,7 +350,8 @@ html[data-tema="escuro"] #splash{background:#000}
     <button class="sub" role="tab" aria-selected="true" data-s="alertas">Alertas</button>
     <button class="sub" role="tab" aria-selected="false" data-s="extrato">Importar</button>
     <button class="sub" role="tab" aria-selected="false" data-s="conta">Conta</button>
-    <button class="sub" role="tab" aria-selected="false" data-s="dados">Meus dados</button>
+    <button class="sub" role="tab" aria-selected="false" data-s="assinatura">Assinatura</button>
+    <button class="sub" role="tab" aria-selected="false" data-s="dados">Dados</button>
   </div>
 
   <section class="bloco" id="t-alertas">
@@ -348,6 +384,27 @@ html[data-tema="escuro"] #splash{background:#000}
 
     <h3>O que está pendente agora</h3>
     <div id="pendentes"></div>
+  </section>
+
+  <section class="bloco" id="t-assinatura" hidden>
+    <div class="bloco-topo">
+      <h2>Assinatura</h2>
+      <span class="selo grande">Em breve</span>
+    </div>
+    <p class="ajuda">Hoje o app é <b>inteiro de graça</b>, sem limite de lançamentos e sem anúncio. Estas são as ideias para uma versão paga no futuro — nada disso está ativo, e nenhuma cobrança existe.</p>
+
+    <div id="planoAtual"></div>
+
+    <h3>O que você tem agora</h3>
+    <ul class="lista-plano" id="listaGratuito"></ul>
+
+    <h3>O que a versão paga poderia trazer</h3>
+    <ul class="lista-plano futura" id="listaPago"></ul>
+
+    <div class="aviso-card info">
+      <span class="av-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M12 11v5.4"/><path d="M12 7.6h.01"/></svg></span>
+      <div><b>Nada aqui cobra nada.</b> Não há forma de pagamento no app, nem cadastro de cartão, nem cobrança agendada. Se um dia existir uma versão paga, ela vai ser oferecida de forma clara, com preço à vista e cancelamento em um toque — e o que você já usa hoje continua funcionando.</div>
+    </div>
   </section>
 
   <section class="bloco" id="t-extrato" hidden>
