@@ -40,7 +40,31 @@ hoje**: o que ainda cabe no ciclo dividido pelos dias que faltam até a fatura
 fechar, já descontada a meta de poupança. É o número que decide se você pede o
 delivery ou não.
 
+## Sistema de design
+
+Um bloco de tokens no topo do `styles.css` decide **cor, espaço, raio, sombra e
+tipografia**; nenhum componente inventa valor próprio. É o que faz as telas
+parecerem uma coisa só.
+
+* **Espaço** numa escala de 4 em 4 (`--e1` a `--e10`) — sem número solto.
+* **Raio** em quatro degraus: 8 px (miúdos), 12 px (botões, inputs, chips),
+  16 px (cards), 20 px (destaque, folhas) e pílula.
+* **Sombra** difusa e discreta; no tema escuro a profundidade vem da borda.
+* **Tipografia** em oito degraus, com pesos 400/500/600/700.
+* **Cor com propósito**: superfícies e texto são neutros puros; cor forte só em
+  ação, sucesso, erro e alerta. As cores de categoria existem só nos gráficos.
+  Cada cor tem a forma de *preencher* e a de *escrever* — a segunda mais escura,
+  porque texto pequeno precisa de mais contraste. Todas conferidas: texto branco
+  no botão 4,9:1, link 6,6:1, verde de texto 6,1:1, erro 4,8:1.
+* **Ícones** de um conjunto próprio (`TRACOS` no `app.js`): traço 1.75, cantos
+  arredondados, 24×24. Nenhum emoji na interface — eles ficam só nas
+  notificações do sistema, onde se saem bem.
+
 ## Conta e segurança
+
+No cadastro pedimos **nome, e-mail e senha**. O nome é o que o app usa para
+falar com a pessoa em todo lugar ("Bom dia, Erick") e pode ser trocado em
+*Ajustes → Conta*. O pedaço do e-mail nunca vira identidade.
 
 Autenticação com **Supabase Auth** (e-mail e senha) e isolamento no **Postgres**,
 não no navegador. A tabela `estado` tem a chave primária igual ao `id` do
@@ -109,9 +133,13 @@ sincronizando, offline ou falha.
 
 Quando um deploy novo chega na `main`, o app detecta (ao abrir, ao voltar para
 ele e de hora em hora) e mostra um banner **"Uma nova versão está disponível"**
-com o botão **Atualizar**. O service worker novo fica em espera — nada troca
-sem a pessoa pedir. Ao tocar em Atualizar, o app salva e sincroniza o que
+com o botão **Atualizar agora**. O service worker novo fica em espera — nada
+troca sem a pessoa pedir. Ao tocar em Atualizar, o app salva e sincroniza o que
 estiver pendente, manda o service worker assumir e recarrega já na versão nova.
+
+O **X** no canto fecha o aviso só para aquela versão: o app pergunta ao service
+worker em espera qual é a versão dele e guarda esse número. Saiu outra versão,
+o aviso volta sozinho.
 
 Não existe atualização silenciosa por trás disso porque um PWA não pode fazer
 isso sem recarregar a página no meio do uso — o botão é a forma mais simples e

@@ -16,15 +16,17 @@ let KEY=KEY_ANTIGA;
 function usarChaveDe(uid){ KEY = uid ? ('sobra-do-mes:u:'+uid) : KEY_ANTIGA; }
 // nome, cat, peso, valor, cartão, parcelas restantes, tipo, quanto o pai cobre
 const SEED=[];
+/* Ajustes → Alertas. O `icone` aqui é um traço do conjunto do app; o emoji
+   que vai no título da notificação do sistema é definido em alertasPendentes. */
 const ALERTAS_PADRAO={
-  teto:      {on:true,  icone:'🚦', nome:'Teto de categoria estourando',  desc:'Quando uma categoria passa do percentual que você definiu do teto.'},
-  gasto:     {on:true,  icone:'🔥', nome:'Gastando mais do que dá',        desc:'Quando o total do ciclo passa do disponível depois de guardar.'},
-  meta:      {on:true,  icone:'🎯', nome:'Meta de guardar em risco',       desc:'Quando a sobra prevista cai abaixo do que você quer guardar.'},
-  fechamento:{on:true,  icone:'📅', nome:'Fatura vai fechar',              desc:'Alguns dias antes do fechamento, com o valor que está na fatura.'},
-  vencimento:{on:true,  icone:'💳', nome:'Fatura vai vencer',              desc:'Alguns dias antes do vencimento, pra não pagar juros por esquecimento.'},
-  contas:    {on:true,  icone:'🧾', nome:'Conta fixa a vencer',            desc:'Contas com dia de vencimento (aluguel, luz, mensalidade) chegando.'},
-  variavel:  {on:true,  icone:'✏️', nome:'Lançamento variável zerado',      desc:'Depois da virada do ciclo, lembra de preencher mercado, gasolina e afins.'},
-  parcela:   {on:false, icone:'🎉', nome:'Última parcela',                 desc:'Quando um parcelado chega na última — dinheiro que volta pro seu bolso.'}
+  teto:      {on:true,  icone:'atencao',    nome:'Teto de categoria estourando', desc:'Quando uma categoria passa do percentual que você definiu do teto.'},
+  gasto:     {on:true,  icone:'fogo',       nome:'Gastando mais do que dá',      desc:'Quando o total do ciclo passa do disponível depois de guardar.'},
+  meta:      {on:true,  icone:'alvo',       nome:'Meta de guardar em risco',     desc:'Quando a sobra prevista cai abaixo do que você quer guardar.'},
+  fechamento:{on:true,  icone:'calendario', nome:'Fatura vai fechar',            desc:'Alguns dias antes do fechamento, com o valor que está na fatura.'},
+  vencimento:{on:true,  icone:'cartao',     nome:'Fatura vai vencer',            desc:'Alguns dias antes do vencimento, pra não pagar juros por esquecimento.'},
+  contas:    {on:true,  icone:'nota',       nome:'Conta fixa a vencer',          desc:'Contas com dia de vencimento (aluguel, luz, mensalidade) chegando.'},
+  variavel:  {on:true,  icone:'lapis',      nome:'Lançamento variável zerado',   desc:'Depois da virada do ciclo, lembra de preencher mercado, gasolina e afins.'},
+  parcela:   {on:false, icone:'festa',      nome:'Última parcela',               desc:'Quando um parcelado chega na última — dinheiro que volta pro seu bolso.'}
 };
 let S={versao:2,tema:'auto',salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:5,ultimoFech:null,hist:[],
        tetos:{},lanc:SEED,div:[],obj:[],meses:6,jaTem:0,
@@ -287,8 +289,7 @@ function render(){
   const vazio=!S.lanc.length;
   $('#blocoOnde').hidden=vazio;
   $('#topoUltimos').hidden=vazio;
-  $('#blocoUltimos').style.background=vazio?'transparent':'';
-  $('#blocoUltimos').style.boxShadow=vazio?'none':'';
+  $('#blocoUltimos').classList.toggle('sem-moldura',vazio);
   renderTopCats(c); renderUltimos(c);
   renderMeta(c); renderHist(); renderTetos(c); renderLanc(c); renderCortes(c); renderReserva(c); renderObj(c); renderDiv();
   renderVenc(c); renderAlertas(c); renderChips();
@@ -554,7 +555,9 @@ function aplicarTema(){
   const cor=esc?'#000000':'#F2F2F7';
   document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute('content',cor));
   document.documentElement.setAttribute('data-tema',esc?'escuro':'claro');
-  $('#btnTema').textContent=esc?'☀️':'🌙';
+  const b=$('#btnTema');
+  b.innerHTML=icone(esc?'sol':'lua',20);
+  b.setAttribute('aria-label',esc?'Mudar para o tema claro':'Mudar para o tema escuro');
 }
 $('#lParc').disabled=true;
 $('#resetTetos').onclick=()=>{ S.tetos={}; render(); salvar(); };
@@ -1048,7 +1051,7 @@ function alertasPendentes(c){
       const g=c.porCat[k]||0, t=c.tetos[k]||0;
       if(t<=0||g<t*lim) return;
       const passou=g>t;
-      fora.push({tag:'teto:'+k+':'+ck, icone:passou?'🔴':'🚦', aba:'plano:tetos',
+      fora.push({tag:'teto:'+k+':'+ck, icone:passou?'🔴':'🚦', ico:'atencao', aba:'plano:tetos',
         titulo:passou?`${cat.n}: passou do teto`:`${cat.n}: ${pct(g/t)} do teto`,
         corpo:passou?`Você já gastou ${brl(g)} de um teto de ${brl(t)}. São ${brl(g-t)} a mais do que cabia.`
                     :`${brl(g)} de ${brl(t)}. Ainda cabem ${brl(t-g)} até o fim do ciclo.`,
@@ -1056,13 +1059,13 @@ function alertasPendentes(c){
     });
   }
   if(on('gasto')&&c.renda>0&&c.gasto>c.disponivel&&c.disponivel>0){
-    fora.push({tag:'gasto:'+ck, icone:'🔥', aba:'analise:cortes',
+    fora.push({tag:'gasto:'+ck, icone:'🔥', ico:'fogo', aba:'analise:cortes',
       titulo:'Você está gastando mais do que dá',
       corpo:`O ciclo já soma ${brl(c.gasto)} e o disponível depois de guardar é ${brl(c.disponivel)}. Faltam cortar ${brl(c.gasto-c.disponivel)}.`,
       peso:3});
   }
   if(on('meta')&&c.renda>0&&c.meta>0&&c.sobra<c.meta){
-    fora.push({tag:'meta:'+ck, icone:'🎯', aba:'plano:renda',
+    fora.push({tag:'meta:'+ck, icone:'🎯', ico:'alvo', aba:'plano:renda',
       titulo:'A meta de guardar está em risco',
       corpo:`A sobra prevista é ${brl(c.sobra)} e sua meta é ${brl(c.meta)}. Faltam ${brl(c.meta-c.sobra)}.`,
       peso:2});
@@ -1070,7 +1073,7 @@ function alertasPendentes(c){
   if(on('fechamento')){
     const prox=proximoFech(), d=Math.round((prox-h)/86400000);
     if(d<=(+S.aDiasFech||3)){
-      fora.push({tag:'fech:'+iso(prox), icone:'📅', aba:'hoje',
+      fora.push({tag:'fech:'+iso(prox), icone:'📅', ico:'calendario', aba:'hoje',
         titulo:d===0?'A fatura fecha hoje':`A fatura fecha em ${d} dia${d===1?'':'s'}`,
         corpo:`Estão na fatura ${brl(c.bruto)} (${brl(c.gasto)} seus). Confira os variáveis antes de virar o ciclo.`,
         peso:2});
@@ -1079,7 +1082,7 @@ function alertasPendentes(c){
   if(on('vencimento')){
     const dv=+S.diaVenc||+S.diaFech||5, pv=proximoVenc(dv), d=Math.round((pv-h)/86400000);
     if(d<=(+S.aDiasVenc||2)){
-      fora.push({tag:'venc:'+iso(pv), icone:'💳', aba:'plano:renda',
+      fora.push({tag:'venc:'+iso(pv), icone:'💳', ico:'cartao', aba:'plano:renda',
         titulo:d===0?'A fatura vence hoje':`A fatura vence em ${d} dia${d===1?'':'s'}`,
         corpo:`Pague antes de ${dataBR(iso(pv))} pra não entrar no rotativo — é o juro mais caro que existe.`,
         peso:3});
@@ -1087,7 +1090,7 @@ function alertasPendentes(c){
   }
   if(on('contas')){
     contasAVencer().filter(x=>x.dias<=(+S.aDiasVenc||2)).forEach(x=>{
-      fora.push({tag:'conta:'+x.l.id+':'+iso(x.data), icone:'🧾', aba:'hoje',
+      fora.push({tag:'conta:'+x.l.id+':'+iso(x.data), icone:'🧾', ico:'nota', aba:'hoje',
         titulo:x.dias===0?`${x.l.nome} vence hoje`:`${x.l.nome} vence em ${x.dias} dia${x.dias===1?'':'s'}`,
         corpo:`${brl(meuValor(x.l))} · ${x.l.fonte||'Conta'} · vencimento ${x.data.getDate()}/${String(x.data.getMonth()+1).padStart(2,'0')}.`,
         peso:2});
@@ -1096,7 +1099,7 @@ function alertasPendentes(c){
   if(on('variavel')){
     const zerados=S.lanc.filter(l=>l.tipo==='var'&&!(l.valor>0)&&(+l.ref||0)>0);
     if(zerados.length){
-      fora.push({tag:'var:'+ck, icone:'✏️', aba:'hoje',
+      fora.push({tag:'var:'+ck, icone:'✏️', ico:'lapis', aba:'hoje',
         titulo:`${zerados.length} gasto${zerados.length===1?'':'s'} variáve${zerados.length===1?'l':'is'} sem valor`,
         corpo:`${zerados.slice(0,3).map(l=>l.nome).join(', ')}${zerados.length>3?' e outros':''} estão zerados desde a virada. Preencha pra a conta do mês fechar certa.`,
         peso:1});
@@ -1104,7 +1107,7 @@ function alertasPendentes(c){
   }
   if(on('parcela')){
     S.lanc.filter(l=>l.tipo==='parc'&&+l.pRest===1).forEach(l=>{
-      fora.push({tag:'ult:'+l.id+':'+ck, icone:'🎉', aba:'hoje',
+      fora.push({tag:'ult:'+l.id+':'+ck, icone:'🎉', ico:'festa', aba:'hoje',
         titulo:`Última parcela de ${l.nome}`,
         corpo:`Depois desta, ${brl(meuValor(l))} por mês voltam pro seu bolso. Já pensou em mandar isso pra reserva?`,
         peso:1});
@@ -1147,7 +1150,7 @@ function renderAlertas(c){
 
   $('#listaAlertas').innerHTML=Object.entries(ALERTAS_PADRAO).map(([k,a])=>`
     <div class="alerta-linha">
-      <div class="ai">${a.icone}</div>
+      <div class="ai">${icone(a.icone,19)}</div>
       <div class="at"><div class="an">${a.nome}</div><div class="ad">${a.desc}</div></div>
       <button class="sw" role="switch" data-al="${k}" aria-checked="${S.alertas[k]?'true':'false'}" aria-label="${a.nome}"></button>
     </div>`).join('');
@@ -1159,7 +1162,7 @@ function renderAlertas(c){
 
   const lista=alertasPendentes(c||calc());
   $('#pendentes').innerHTML=lista.length
-    ? lista.map(a=>`<div class="alerta-linha"><div class="ai">${a.icone}</div>
+    ? lista.map(a=>`<div class="alerta-linha"><div class="ai">${icone(a.ico||'atencao',19)}</div>
         <div class="at"><div class="an">${esc(a.titulo)}</div><div class="ad">${esc(a.corpo)}</div>
         <div style="margin-top:6px"><span class="chip ${jaAvisou(a.tag)?'':'on'}">${jaAvisou(a.tag)?'já avisado neste ciclo':'ainda não avisado'}</span></div></div></div>`).join('')
     : '<p class="vazio">Nada fora do lugar agora. Quando algo escapar do plano, aparece aqui e vira notificação.</p>';
@@ -1306,9 +1309,14 @@ function snack(msg,rotulo,acao){
   s.innerHTML=`<span>${esc(msg)}</span><button type="button">${esc(rotulo)}</button>`;
   s.querySelector('button').onclick=()=>{ acao(); fechaSnack(); };
   s.classList.add('abre');
+  document.body.classList.add('com-snack');
   clearTimeout(snackT); snackT=setTimeout(fechaSnack,5200);
 }
-function fechaSnack(){ $('#snack').classList.remove('abre'); clearTimeout(snackT); }
+function fechaSnack(){
+  $('#snack').classList.remove('abre');
+  document.body.classList.remove('com-snack');
+  clearTimeout(snackT);
+}
 
 /* ---------- contador animado ---------- */
 const RED=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1350,6 +1358,7 @@ function renderHero(c){
       : `É o que cabe por dia nos <b>${dias} dia${dias===1?'':'s'}</b> que faltam até a fatura fechar, já descontando o que você quer guardar.`;
   }
   document.querySelector('.hero-mini').hidden=!c.renda;
+  document.querySelector('.hero-pista').hidden=!c.renda;
   const ant=ultimoFechPassado(), total=Math.max(Math.round((proximoFech()-ant)/86400000),1);
   $('#hoje-pista').style.width=Math.round((total-dias)/total*100)+'%';
   $('#hoje-sobra').textContent=brl(c.sobra);
@@ -1382,8 +1391,8 @@ function renderUltimos(c){
   if(!S.lanc.length){
     const temRenda=(+S.salario||0)+(+S.extra||0)>0;
     el.innerHTML=`<div class="bloco vazio-b" style="margin:0">
-      <div class="em">${temRenda?'🧾':'🚀'}</div>
-      <div class="ti">${temRenda?'Agora os gastos fixos':'Dois passos e o app faz o resto'}</div>
+      <div class="em">${icone(temRenda?'nota':'raio',32)}</div>
+      <div class="ti">${temRenda?'Agora os gastos fixos':'Dois passos e pronto'}</div>
       <div class="de">${temRenda
         ? 'Aluguel, internet, energia, academia. São os que não mudam — e é com eles que o app descobre quanto sobra de verdade no seu mês.'
         : 'Primeiro sua renda e quanto quer guardar. Depois os gastos fixos. A partir daí o app calcula os tetos, avisa quando você está gastando demais e fecha a fatura sozinho.'}</div>
@@ -1401,7 +1410,8 @@ function renderUltimos(c){
   const its=[...S.lanc].sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0)||b.valor-a.valor).slice(0,6);
   const selo=l=>(l.tipo==='fixo')?'fixo':l.tipo==='var'?'variável':l.tipo==='parc'?`faltam ${l.pRest||0}x`:'1x';
   el.innerHTML=its.map(l=>`<div class="item">
-    <div class="ic" style="background:color-mix(in srgb,${CATS[l.cat].c} 16%,transparent)">${EMOJI[l.cat]||'📦'}</div>
+    <div class="ic" style="background:color-mix(in srgb,${CATS[l.cat].c} 13%,transparent);color:${CATS[l.cat].c}"
+      >${icone(ICONE_CAT[l.cat]||'outros')}</div>
     <div class="tx"><div class="nm">${esc(l.nome)}</div>
       <div class="dt">${CATS[l.cat].n} · ${selo(l)}${l.fonte&&l.fonte!=='Conta'?' · '+esc(l.fonte):''}</div></div>
     <div class="vl">${brl(l.valor)}${(+l.pai>0)?`<small>meu ${brl(meuValor(l))}</small>`:''}</div>
@@ -1428,40 +1438,41 @@ function montarInsights(c){
     const jaFechado=c.gasto-variavel;
     const projetado=jaFechado+variavel/decorridos*(decorridos+dias);
     if(projetado>c.disponivel*1.05)
-      out.push({t:'ruim',e:'📈',txt:`No ritmo dos variáveis, o ciclo fecha em <b>${brl(projetado)}</b> — ${brl(projetado-c.disponivel)} acima do que cabe. Segurar <b>${brl((projetado-c.disponivel)/dias)}</b> por dia já resolve.`});
+      out.push({t:'ruim',e:'subindo',txt:`No ritmo dos variáveis, o ciclo fecha em <b>${brl(projetado)}</b> — ${brl(projetado-c.disponivel)} acima do que cabe. Segurar <b>${brl((projetado-c.disponivel)/dias)}</b> por dia já resolve.`});
     else if(projetado<c.disponivel*0.9)
-      out.push({t:'bom',e:'✨',txt:`No ritmo de agora o ciclo fecha em <b>${brl(projetado)}</b> e sobram <b>${brl(c.disponivel-projetado)}</b> além da meta.`});
+      out.push({t:'bom',e:'raio',txt:`No ritmo de agora o ciclo fecha em <b>${brl(projetado)}</b> e sobram <b>${brl(c.disponivel-projetado)}</b> além da meta.`});
   }
   // categoria que mais subiu contra a média
   Object.keys(CATS).forEach(k=>{
     const m=mediaHist(k), hoje=c.porCat[k]||0;
     if(m&&m>50&&hoje>m*1.18)
-      out.push({t:'atencao',e:'⚠️',txt:`<b>${CATS[k].n}</b> está ${pct(hoje/m-1)} acima da sua média dos últimos meses — ${brl(hoje)} contra ${brl(m)}.`});
+      out.push({t:'atencao',e:'atencao',txt:`<b>${CATS[k].n}</b> está ${pct(hoje/m-1)} acima da sua média dos últimos meses — ${brl(hoje)} contra ${brl(m)}.`});
     if(m&&m>50&&hoje<m*0.8&&hoje>0)
-      out.push({t:'bom',e:'👏',txt:`<b>${CATS[k].n}</b> caiu ${pct(1-hoje/m)} em relação à sua média: ${brl(m-hoje)} a menos este mês.`});
+      out.push({t:'bom',e:'descendo',txt:`<b>${CATS[k].n}</b> caiu ${pct(1-hoje/m)} em relação à sua média: ${brl(m-hoje)} a menos este mês.`});
   });
   // o maior cortável
   const corta=S.lanc.filter(l=>l.tier===3&&meuValor(l)>0).sort((a,b)=>meuValor(b)-meuValor(a))[0];
   if(corta&&c.sobra<c.meta)
-    out.push({t:'atencao',e:'✂️',txt:`Zerar <b>${esc(corta.nome)}</b> devolve ${brl(meuValor(corta))} por mês — ${brl(meuValor(corta)*12)} no ano.`});
+    out.push({t:'atencao',e:'tesoura',txt:`Zerar <b>${esc(corta.nome)}</b> devolve ${brl(meuValor(corta))} por mês — ${brl(meuValor(corta)*12)} no ano.`});
   // fatura chegando
   if(dias<=5)
-    out.push({t:'atencao',e:'📅',txt:`A fatura fecha em <b>${dias} dia${dias===1?'':'s'}</b> com ${brl(c.bruto)}. Confira os variáveis antes que o ciclo vire.`});
+    out.push({t:'atencao',e:'calendario',txt:`A fatura fecha em <b>${dias} dia${dias===1?'':'s'}</b> com ${brl(c.bruto)}. Confira os variáveis antes que o ciclo vire.`});
   // variáveis zerados
   const zerados=S.lanc.filter(l=>l.tipo==='var'&&!(l.valor>0)&&(+l.ref||0)>0);
   if(zerados.length)
-    out.push({t:'atencao',e:'✏️',txt:`${zerados.length} gasto${zerados.length===1?'':'s'} variáve${zerados.length===1?'l':'is'} sem valor (${zerados.slice(0,2).map(l=>esc(l.nome)).join(', ')}). Sem eles a conta do mês sai errada.`});
+    out.push({t:'atencao',e:'lapis',txt:`${zerados.length} gasto${zerados.length===1?'':'s'} variáve${zerados.length===1?'l':'is'} sem valor (${zerados.slice(0,2).map(l=>esc(l.nome)).join(', ')}). Sem eles a conta do mês sai errada.`});
   // parabéns
   if(c.sobra>=c.meta&&c.meta>0&&S.lanc.length)
-    out.push({t:'bom',e:'🎯',txt:`Você está batendo a meta e ainda sobram <b>${brl(c.sobra-c.meta)}</b> livres.`});
+    out.push({t:'bom',e:'alvo',txt:`Você está batendo a meta e ainda sobram <b>${brl(c.sobra-c.meta)}</b> livres.`});
   if(porDia>0&&S.lanc.length&&dias>0)
-    out.push({t:'bom',e:'☕',txt:`Sobram <b>${brl(folga)}</b> pro resto do ciclo: dá <b>${brl(porDia)}</b> por dia sem mexer no que você quer guardar.`});
+    out.push({t:'bom',e:'certo',txt:`Sobram <b>${brl(folga)}</b> pro resto do ciclo: dá <b>${brl(porDia)}</b> por dia sem mexer no que você quer guardar.`});
   return out.slice(0,3);
 }
 function renderInsights(c){
   const el=$('#insights'); if(!el) return;
   el.innerHTML=montarInsights(c).map(i=>
-    `<div class="insight ${i.t}"><div class="ie">${i.e}</div><div class="it2">${i.txt}</div></div>`).join('');
+    `<div class="insight ${i.t}"><div class="ie">${icone(i.e,19)}</div>
+     <div class="it2">${i.txt}</div></div>`).join('');
 }
 
 /* ==========================================================================
@@ -1578,10 +1589,10 @@ function fecharFolha(){
        em tempos e o lembrete sai perto do horário.
    ========================================================================== */
 const MOMENTOS={
-  manha:  {nome:'Quanto posso gastar hoje', icone:'☀️'},
-  meio:   {nome:'Como está o ritmo',        icone:'🍽️'},
-  noite:  {nome:'Fechar a conta do dia',    icone:'🌙'},
-  fatura: {nome:'Só perto da fatura',       icone:'💳'}
+  manha:  {nome:'Quanto posso gastar hoje', icone:'sol',    emoji:'☀️'},
+  meio:   {nome:'Como está o ritmo',        icone:'comida', emoji:'🍽️'},
+  noite:  {nome:'Fechar a conta do dia',    icone:'lua',    emoji:'🌙'},
+  fatura: {nome:'Só perto da fatura',       icone:'cartao', emoji:'💳'}
 };
 const AGENDA_PADRAO=[
   {id:'m',hora:'08:30',tipo:'manha',on:true},
@@ -1671,7 +1682,7 @@ function renderAgenda(){
     el.innerHTML=S.agenda.map(h=>`<div class="hora">
       <input type="time" value="${esc(h.hora)}" data-hora="${h.id}" aria-label="Horário do lembrete">
       <select data-tipo="${h.id}" aria-label="Tipo de lembrete">
-        ${Object.entries(MOMENTOS).map(([k,m])=>`<option value="${k}"${k===h.tipo?' selected':''}>${m.icone} ${m.nome}</option>`).join('')}
+        ${Object.entries(MOMENTOS).map(([k,m])=>`<option value="${k}"${k===h.tipo?' selected':''}>${m.emoji} ${m.nome}</option>`).join('')}
       </select>
       <button class="sw" role="switch" data-on="${h.id}" aria-checked="${h.on?'true':'false'}" aria-label="Ligar lembrete"></button>
       <button class="rm" data-rmh="${h.id}" aria-label="Remover horário">×</button>
@@ -1840,8 +1851,9 @@ function pintarSinc(){
   el.querySelector('span').textContent=txt;
   el.setAttribute('aria-label','Sincronização: '+txt+'. Toque para sincronizar agora.');
   const c=$('#contaSinc');
+  const traco={ok:'certo',offline:'lua',erro:'atencao',enviando:'relogio',local:'nota'}[sincEstado]||'relogio';
   if(c) c.innerHTML=`<div class="aviso-card ${sincEstado==='ok'?'ok':sincEstado==='erro'?'ruim':''}">
-    <span>${sincEstado==='ok'?'☁️':sincEstado==='offline'?'📴':sincEstado==='erro'?'⚠️':'🔄'}</span>
+    <span class="av-ic">${icone(traco,18)}</span>
     <div>${sincEstado==='ok'?`<b>Tudo salvo na sua conta.</b> Última sincronização às ${hora}. Abrindo em outro aparelho com este mesmo login, os dados estarão lá.`
       :sincEstado==='offline'?'<b>Sem internet agora.</b> Continue usando normalmente — está tudo salvo neste aparelho e sobe sozinho quando a conexão voltar.'
       :sincEstado==='erro'?'<b>Não consegui sincronizar.</b> Seus dados estão salvos neste aparelho. Toque em “Sincronizar agora” para tentar de novo.'
@@ -1940,7 +1952,7 @@ function pintarModo(){
   const tit={entrar:'Entrar',cadastrar:'Criar conta',recuperar:'Recuperar senha'}[modoAuth];
   const sub={
     entrar:'Seus dados ficam na sua conta, e só nela.',
-    cadastrar:'Leva 20 segundos. Só precisamos de um e-mail e uma senha.',
+    cadastrar:'Leva 20 segundos: seu nome, um e-mail e uma senha.',
     recuperar:'Digite seu e-mail e enviamos um link para criar uma senha nova.'
   }[modoAuth];
   const rotulo={entrar:'Entrar',cadastrar:'Criar minha conta',recuperar:'Enviar o link'}[modoAuth];
@@ -1948,6 +1960,7 @@ function pintarModo(){
   $a('authSub').textContent=sub;
   $a('authEnviar').dataset.rotulo=rotulo;
   $a('authEnviar').textContent=rotulo;
+  $a('campoNome').hidden=(modoAuth!=='cadastrar');
   $a('campoSenha').hidden=(modoAuth==='recuperar');
   $a('campoConfirma').hidden=(modoAuth!=='cadastrar');
   $a('forcaSenha').hidden=(modoAuth!=='cadastrar');
@@ -1955,13 +1968,20 @@ function pintarModo(){
   $a('authSenha').setAttribute('autocomplete',modoAuth==='cadastrar'?'new-password':'current-password');
   $a('authTrocaTxt').textContent=(modoAuth==='entrar')?'Ainda não tem conta?':'Já tem conta?';
   $a('authTroca').textContent=(modoAuth==='entrar')?'Criar conta':'Entrar';
-  ['Email','Senha','Confirma'].forEach(c=>mostrarErroCampo(c,''));
+  ['Nome','Email','Senha','Confirma'].forEach(c=>mostrarErroCampo(c,''));
   avisoAuth('');
 }
-function trocarModo(novo){ modoAuth=novo; pintarModo(); $a('authEmail').focus(); }
+function trocarModo(novo){
+  modoAuth=novo; pintarModo();
+  $a(modoAuth==='cadastrar'?'authNome':'authEmail').focus();
+}
 
 function validarFormulario(){
   let ok=true;
+  if(modoAuth==='cadastrar'){
+    const n=Auth.validarNome($a('authNome').value);
+    mostrarErroCampo('Nome',n); if(n) ok=false;
+  }
   const e=Auth.validarEmail($a('authEmail').value);
   mostrarErroCampo('Email',e); if(e) ok=false;
   if(modoAuth!=='recuperar'){
@@ -1983,6 +2003,7 @@ async function enviarAuth(ev){
   if(ev) ev.preventDefault();
   if(!validarFormulario()) return;
   const email=$a('authEmail').value.trim(), senha=$a('authSenha').value;
+  const nome=$a('authNome').value.trim();
   carregandoAuth(true);
   avisoAuth('');
   try{
@@ -1990,7 +2011,7 @@ async function enviarAuth(ev){
       await Auth.entrar(email,senha);
       await abrirApp(true);
     }else if(modoAuth==='cadastrar'){
-      const r=await Auth.cadastrar(email,senha);
+      const r=await Auth.cadastrar(email,senha,nome);
       if(r.confirmar){
         avisoAuth(`<b>Conta criada.</b> Enviamos um link de confirmação para <b>${esc(email)}</b>.
           Abra o e-mail, confirme e volte aqui para entrar.
@@ -2003,6 +2024,11 @@ async function enviarAuth(ev){
         modoAuth='entrar'; pintarModo();
         avisoAuth(`<b>Conta criada.</b> Confirme pelo link que enviamos para <b>${esc(email)}</b> e entre aqui.`,'ok');
       }else{
+        // Rede de segurança: se o nome não voltou junto da sessão, gravamos
+        // agora — a saudação nunca pode cair no pedaço do e-mail.
+        if(nome && !(Auth.usuario()||{}).nome){
+          try{ await Auth.definirNome(nome); }catch(e2){}
+        }
         await abrirApp(true);
       }
     }else{
@@ -2097,11 +2123,7 @@ async function abrirApp(recemLogado){
   if(!Array.isArray(S.agenda)) S.agenda=AGENDA_PADRAO.map(h=>Object.assign({},h));
   preencherCampos();
 
-  const h=new Date().getHours();
-  const apelido=(u&&u.email?u.email.split('@')[0]:'').replace(/[._-]+/g,' ').trim();
-  const curto=apelido && !/\d{4}/.test(apelido) ? apelido.split(' ')[0].slice(0,14) : '';
-  $('#saudacao').textContent=(h<5?'Boa madrugada':h<12?'Bom dia':h<18?'Boa tarde':'Boa noite')+
-    (curto?', '+curto.charAt(0).toUpperCase()+curto.slice(1):'');
+  pintarSaudacao();
 
   const ir=new URLSearchParams(location.search).get('ir');
   irPara(ir||'hoje');
@@ -2118,14 +2140,28 @@ async function abrirApp(recemLogado){
     setTimeout(()=>mostrarRetro(S.hist[0]),650);
   }
   setTimeout(()=>{ checarAlertas(false); checarAgenda(false); },1600);
-  if(recemLogado) toast('Bem-vindo de volta');
+  if(recemLogado){
+    const nome=Auth.primeiroNome();
+    toast(estaVazio(S) ? (nome?`Bem-vindo, ${nome}`:'Bem-vindo')
+                       : (nome?`Bem-vindo de volta, ${nome}`:'Bem-vindo de volta'));
+  }
 }
 
+/* A saudação usa o nome que a pessoa escolheu. Se por algum motivo não houver
+   nome, cumprimentamos sem nome — o pedaço do e-mail nunca vira identidade. */
+function pintarSaudacao(){
+  const h=new Date().getHours();
+  const hora=h<5?'Boa madrugada':h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';
+  const nome=Auth.primeiroNome();
+  $('#saudacao').textContent=hora+(nome?', '+nome:'');
+}
 function pintarConta(){
   const u=Auth.usuario(); if(!u) return;
+  const nome=Auth.primeiroNome();
+  $('#contaNome').textContent=(u.nome||'').trim()||'Sem nome ainda';
   $('#contaEmail').textContent=u.email||'—';
-  $('#contaAvatar').textContent=(u.email||'?').charAt(0);
-  $('#contaDesde').textContent='Sessão ativa neste aparelho';
+  $('#contaAvatar').textContent=(nome||u.email||'?').charAt(0);
+  $('#contaApelido').value=(u.nome||'').trim();
   pintarSinc();
 }
 
@@ -2160,9 +2196,31 @@ async function sairDaConta(){
 /* ==========================================================================
    Nova versão disponível
    ========================================================================== */
-let swEsperando=null;
-function mostrarAtualizacao(reg){
+let swEsperando=null, versaoEmEspera=null;
+const CHAVE_DISPENSADA='sobra:versao-dispensada';
+
+/* Pergunta ao service worker em espera qual versão ele é. Assim "fechar o
+   aviso" vale para aquela versão, e não para todas as futuras. */
+function perguntarVersao(sw){
+  return new Promise(res=>{
+    if(!sw) return res(null);
+    const canal=new MessageChannel();
+    const relogio=setTimeout(()=>res(null),1500);
+    canal.port1.onmessage=e=>{ clearTimeout(relogio);
+      res((e.data&&e.data.versao)||null); };
+    try{ sw.postMessage({tipo:'versao'},[canal.port2]); }
+    catch(e){ clearTimeout(relogio); res(null); }
+  });
+}
+async function mostrarAtualizacao(reg){
   swEsperando=(reg&&reg.waiting)||null;
+  if(!swEsperando) return;
+  versaoEmEspera=await perguntarVersao(swEsperando);
+  let dispensada=null;
+  try{ dispensada=localStorage.getItem(CHAVE_DISPENSADA); }catch(e){}
+  // Fechou este mesmo aviso antes? Fica quieto. Versão nova? Aparece de novo.
+  if(versaoEmEspera && dispensada===versaoEmEspera) return;
+  $('#atNota').textContent='Suas informações são salvas antes de atualizar.';
   $('#atualiza').classList.add('abre');
 }
 $('#btnAtualizar').onclick=async()=>{
@@ -2183,7 +2241,11 @@ $('#btnAtualizar').onclick=async()=>{
     location.reload();
   }
 };
-$('#btnAtualizarDepois').onclick=()=>$('#atualiza').classList.remove('abre');
+$('#btnAtualizarDepois').onclick=()=>{
+  $('#atualiza').classList.remove('abre');
+  // Esconde só esta versão. Quando sair outra, o aviso volta sozinho.
+  try{ if(versaoEmEspera) localStorage.setItem(CHAVE_DISPENSADA,versaoEmEspera); }catch(e){}
+};
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',()=>{
     if(!window.__recarregando){ window.__recarregando=true; location.reload(); }
@@ -2193,6 +2255,54 @@ if('serviceWorker' in navigator){
 /* ==========================================================================
    Eventos da conta
    ========================================================================== */
+/* Um botão que espera precisa dizer que está esperando. */
+async function comCarregamento(botao, tarefa, rotuloFinal){
+  const rotulo=botao.textContent;
+  botao.disabled=true; botao.classList.add('ocupado');
+  botao.innerHTML='<span class="girando"></span>';
+  try{ return await tarefa(); }
+  finally{
+    botao.disabled=false; botao.classList.remove('ocupado');
+    botao.textContent=rotuloFinal||rotulo;
+  }
+}
+
+$('#salvarApelido').onclick=async e=>{
+  const campo=$('#contaApelido'), erro=$('#errApelido');
+  const msg=Auth.validarNome(campo.value);
+  erro.textContent=msg; erro.hidden=!msg;
+  campo.setAttribute('aria-invalid',msg?'true':'false');
+  if(msg){ campo.focus(); return; }
+  await comCarregamento(e.currentTarget, async()=>{
+    try{
+      await Auth.definirNome(campo.value);
+      pintarSaudacao(); pintarConta(); render();
+      toast('Agora te chamamos de '+Auth.primeiroNome());
+    }catch(err){ toast(Auth.mensagemDeErro(err),true); }
+  },'Salvar');
+};
+$('#contaApelido').addEventListener('input',()=>{
+  const erro=$('#errApelido');
+  if(!erro.hidden && !Auth.validarNome($('#contaApelido').value)){
+    erro.hidden=true; $('#contaApelido').setAttribute('aria-invalid','false');
+  }
+});
+
+/* Ondinha no ponto do toque — o retorno físico de que o botão respondeu. */
+document.addEventListener('pointerdown',e=>{
+  const alvo=e.target.closest('.btn, .chip-s, .fab');
+  if(!alvo||alvo.disabled) return;
+  if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const r=alvo.getBoundingClientRect(), d=Math.max(r.width,r.height);
+  const onda=document.createElement('span');
+  onda.className='onda';
+  onda.style.width=onda.style.height=d+'px';
+  onda.style.left=(e.clientX-r.left-d/2)+'px';
+  onda.style.top=(e.clientY-r.top-d/2)+'px';
+  alvo.appendChild(onda);
+  setTimeout(()=>onda.remove(),520);
+});
+
 $('#sinc').onclick=()=>{ if(Auth.logado()) puxarDaNuvem(); };
 $('#btnSincAgora').onclick=async()=>{ await puxarDaNuvem(); await enviarParaNuvem(); toast('Sincronizado'); };
 $('#btnSair').onclick=sairDaConta;
@@ -2200,14 +2310,16 @@ $('#btnTrocarSenha').onclick=()=>{
   const el=$('#trocaSenha'); el.hidden=!el.hidden;
   if(!el.hidden) $('#novaSenha').focus();
 };
-$('#salvarSenha').onclick=async()=>{
+$('#salvarSenha').onclick=async e=>{
   const v=$('#novaSenha').value, msg=Auth.validarSenha(v);
-  if(msg){ toast(msg,true); return; }
-  try{
-    await Auth.definirNovaSenha(v);
-    $('#novaSenha').value=''; $('#trocaSenha').hidden=true;
-    toast('Senha alterada');
-  }catch(e){ toast(Auth.mensagemDeErro(e),true); }
+  if(msg){ toast(msg,true); $('#novaSenha').focus(); return; }
+  await comCarregamento(e.currentTarget, async()=>{
+    try{
+      await Auth.definirNovaSenha(v);
+      $('#novaSenha').value=''; $('#trocaSenha').hidden=true;
+      toast('Senha alterada');
+    }catch(err){ toast(Auth.mensagemDeErro(err),true); }
+  },'Salvar nova senha');
 };
 
 /* ==========================================================================
@@ -2249,3 +2361,46 @@ function esconderSplash(){
     esconderSplash();
   }
 })();
+
+/* ==========================================================================
+   v5 — Conjunto de ícones
+   Um só desenho para o app inteiro: traço de 1.75, cantos arredondados,
+   24×24. Emoji só sobra nas notificações do sistema, onde ele se sai bem.
+   ========================================================================== */
+const TRACOS={
+  casa:      '<path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10.2V19h11v-8.8"/><path d="M10.2 19v-4.3h3.6V19"/>',
+  mercado:   '<path d="M3.5 4.5h2l2.2 9.4a1.6 1.6 0 0 0 1.6 1.2h6.9a1.6 1.6 0 0 0 1.6-1.2l1.2-5.4H6.2"/><circle cx="10" cy="19" r="1.3"/><circle cx="17" cy="19" r="1.3"/>',
+  transporte:'<path d="M5 16.5v2a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1v-2"/><path d="M21.5 16.5v2a1 1 0 0 1-1 1H20a1 1 0 0 1-1-1v-2"/><path d="M4 16.5h16v-4l-1.8-4.3A2 2 0 0 0 16.4 7H7.6a2 2 0 0 0-1.8 1.2L4 12.5Z"/><path d="M6.5 12.5h11"/>',
+  comida:    '<path d="M6 3.5v7a2.5 2.5 0 0 0 5 0v-7"/><path d="M8.5 13v7.5"/><path d="M17.5 3.5c-1.5 1-2.2 2.7-2.2 4.6 0 1.6.6 2.6 2.2 3v9.4"/>',
+  assinatura:'<rect x="2.8" y="6" width="18.4" height="12.5" rx="2.2"/><path d="M10.2 10.4 14 12.2l-3.8 1.9z"/>',
+  lazer:     '<path d="M20.5 12.7c0 4.3-3.8 7.8-8.5 7.8s-8.5-3.5-8.5-7.8c0-2 .9-3.9 2.3-5.3"/><path d="M8 8.2 12 3.5l4 4.7"/><circle cx="12" cy="12.8" r="2.6"/>',
+  saude:     '<path d="M12 20.3s-7.5-4.3-7.5-9.5A4.3 4.3 0 0 1 12 7.9a4.3 4.3 0 0 1 7.5 2.9c0 5.2-7.5 9.5-7.5 9.5Z"/>',
+  estudo:    '<path d="M12 4 2.8 8.4 12 12.8l9.2-4.4z"/><path d="M6.4 10.6v5c0 1.4 2.5 2.6 5.6 2.6s5.6-1.2 5.6-2.6v-5"/><path d="M21.2 8.4v5.4"/>',
+  divida:    '<rect x="2.8" y="5.4" width="18.4" height="13.2" rx="2.2"/><path d="M2.8 9.8h18.4"/><path d="M6.6 14.6h3.6"/>',
+  outros:    '<rect x="3.4" y="3.4" width="7" height="7" rx="1.8"/><rect x="13.6" y="3.4" width="7" height="7" rx="1.8"/><rect x="3.4" y="13.6" width="7" height="7" rx="1.8"/><rect x="13.6" y="13.6" width="7" height="7" rx="1.8"/>',
+
+  subindo:   '<path d="M3.5 17.5 9.5 11l4 4 7-7.5"/><path d="M15.5 7.5h5.5V13"/>',
+  descendo:  '<path d="M3.5 7.5 9.5 14l4-4 7 7.5"/><path d="M15.5 17.5h5.5V12"/>',
+  certo:     '<circle cx="12" cy="12" r="8.6"/><path d="m8.4 12.2 2.5 2.5 4.7-5"/>',
+  atencao:   '<path d="M12 4.4 2.9 19.3h18.2z"/><path d="M12 10v4"/><path d="M12 16.8h.01"/>',
+  alvo:      '<circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="4.4"/><circle cx="12" cy="12" r=".9"/>',
+  tesoura:   '<circle cx="6.4" cy="6.4" r="2.4"/><circle cx="6.4" cy="17.6" r="2.4"/><path d="M8.5 8.1 19.6 18.8"/><path d="M8.5 15.9 19.6 5.2"/>',
+  calendario:'<rect x="3.4" y="5.4" width="17.2" height="15.2" rx="2.2"/><path d="M3.4 10h17.2"/><path d="M8 3.4v3.4M16 3.4v3.4"/>',
+  lapis:     '<path d="m16.4 4.6 3 3L8.6 18.4l-4 1 1-4z"/>',
+  relogio:   '<circle cx="12" cy="12" r="8.6"/><path d="M12 7.4V12l3 1.8"/>',
+  sol:       '<circle cx="12" cy="12" r="4"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/>',
+  lua:       '<path d="M20 13.5A8.2 8.2 0 0 1 10.5 4a8.2 8.2 0 1 0 9.5 9.5Z"/>',
+  cartao:    '<rect x="2.8" y="5.4" width="18.4" height="13.2" rx="2.2"/><path d="M2.8 9.8h18.4"/>',
+  nota:      '<path d="M5.4 3.6h13.2v16.8l-2.6-1.6-2.2 1.6-2.2-1.6-2.2 1.6-2.6-1.6z"/><path d="M9 8.4h6M9 12.4h6"/>',
+  festa:     '<path d="M4 20.4 8.6 8.2l7.2 7.2z"/><path d="M14.4 4.6v2M19.4 9.6h-2M18.2 5.8 16.8 7.2"/>',
+  fogo:      '<path d="M12 3.4s5 4 5 8.6a5 5 0 0 1-10 0c0-1.6.7-3 1.6-4.2.4 1.2 1.2 2 2.2 2 0-2.6.6-4.8 1.2-6.4Z"/>',
+  raio:      '<path d="M13.4 3.4 5 13.6h5.6L9.8 20.6 18.6 10.4H13z"/>'
+};
+function icone(nome, tamanho){
+  const d=TRACOS[nome]||TRACOS.outros;
+  const t=tamanho||20;
+  return `<svg class="ico" viewBox="0 0 24 24" width="${t}" height="${t}" aria-hidden="true">${d}</svg>`;
+}
+/* qual traço representa cada categoria e cada tipo de conselho */
+const ICONE_CAT={casa:'casa',mercado:'mercado',transporte:'transporte',comida:'comida',
+  assinatura:'assinatura',lazer:'lazer',saude:'saude',estudo:'estudo',divida:'divida',outros:'outros'};

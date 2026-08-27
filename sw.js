@@ -1,7 +1,7 @@
 /* Sobra do Mês — service worker
    Objetivo: o app abre e funciona sem internet, e as notificações
    continuam sendo entregues pelo sistema mesmo com a aba fechada. */
-const VERSAO = 'sobra-v4.0.0';
+const VERSAO = 'sobra-v5.0.0';
 const CASCA = [
   '/', '/index.html', '/styles.css', '/app.js', '/auth.js', '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png',
@@ -126,7 +126,10 @@ self.addEventListener('message', e => {
   }
   if (d.tipo === 'pular-espera') self.skipWaiting();
   if (d.tipo === 'versao') {
-    if (e.source) e.source.postMessage({ tipo: 'versao', versao: VERSAO });
+    // Responde pelo canal que a página abriu; se não houver, pelo cliente.
+    const porta = e.ports && e.ports[0];
+    if (porta) porta.postMessage({ tipo: 'versao', versao: VERSAO });
+    else if (e.source) e.source.postMessage({ tipo: 'versao', versao: VERSAO });
   }
 });
 

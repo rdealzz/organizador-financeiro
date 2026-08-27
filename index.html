@@ -61,6 +61,14 @@ html[data-tema="escuro"] #splash{background:#000}
     <div class="auth-ok" id="authOk" role="status" aria-live="polite" hidden></div>
 
     <form id="authForm" novalidate>
+      <div class="campo" id="campoNome" hidden>
+        <label for="authNome">Como podemos te chamar?</label>
+        <input type="text" id="authNome" autocomplete="given-name" autocapitalize="words"
+               spellcheck="false" placeholder="Seu nome ou apelido" maxlength="40"
+               aria-describedby="errNome">
+        <p class="campo-erro" id="errNome" hidden></p>
+      </div>
+
       <div class="campo">
         <label for="authEmail">E-mail</label>
         <input type="email" id="authEmail" autocomplete="email" inputmode="email"
@@ -364,7 +372,17 @@ html[data-tema="escuro"] #splash{background:#000}
     <h2>Sua conta</h2>
     <div class="conta-topo">
       <div class="avatar" id="contaAvatar" aria-hidden="true">?</div>
-      <div class="conta-inf"><b id="contaEmail">—</b><span id="contaDesde">—</span></div>
+      <div class="conta-inf"><b id="contaNome">—</b><span id="contaEmail">—</span></div>
+    </div>
+
+    <div class="campo" style="max-width:340px">
+      <label for="contaApelido">Como você quer ser chamado</label>
+      <div class="linha-campo">
+        <input type="text" id="contaApelido" autocapitalize="words" maxlength="40"
+               placeholder="Seu nome ou apelido" aria-describedby="errApelido">
+        <button class="btn sec" id="salvarApelido">Salvar</button>
+      </div>
+      <p class="campo-erro" id="errApelido" hidden></p>
     </div>
     <div id="contaSinc"></div>
     <div class="acoes">
@@ -419,8 +437,9 @@ html[data-tema="escuro"] #splash{background:#000}
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/></svg><span>Ajustes</span></button>
 </nav>
 
-<button class="fab" id="fab" aria-label="Adicionar um gasto">
+<button class="fab" id="fab">
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+  <span>Adicionar gasto</span>
 </button>
 
 <!-- ══════════════════════ FOLHA DE LANÇAMENTO ══════════════════════ -->
@@ -474,12 +493,19 @@ html[data-tema="escuro"] #splash{background:#000}
 </div>
 
 <div class="atualiza" id="atualiza" role="status" aria-live="polite">
-  <div class="at-ic" aria-hidden="true">
-    <svg viewBox="0 0 24 24"><path d="M12 4v10"/><path d="m8 10.5 4 4 4-4"/><path d="M5 19h14"/></svg>
+  <button class="at-x" id="btnAtualizarDepois" aria-label="Fechar este aviso">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+  </button>
+  <div class="at-topo">
+    <div class="at-ic" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M18 3.5V7h-3.5"/></svg>
+    </div>
+    <div class="at-tx">
+      <b>Uma nova versão está disponível</b>
+      <span id="atNota">Suas informações são salvas antes de atualizar.</span>
+    </div>
   </div>
-  <div class="at-tx"><b>Uma nova versão está disponível.</b><span id="atNota">Toque em atualizar para receber as novidades.</span></div>
-  <button class="btn" id="btnAtualizar">Atualizar</button>
-  <button class="btn-x" id="btnAtualizarDepois" aria-label="Agora não">×</button>
+  <button class="btn" id="btnAtualizar">Atualizar agora</button>
 </div>
 
 <div class="snack" id="snack" role="status" aria-live="polite"></div>

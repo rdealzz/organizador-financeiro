@@ -43,11 +43,13 @@ const expiraEm  = () => (sessao && sessao.expires_at) ? sessao.expires_at*1000 :
 
 function montarSessao(r){
   if(!r || !r.access_token) return null;
+  const u = r.user || {};
+  const meta = u.user_metadata || {};
   return {
     access_token: r.access_token,
     refresh_token: r.refresh_token,
     expires_at: r.expires_at || Math.floor(Date.now()/1000) + (r.expires_in||3600),
-    user: { id: r.user && r.user.id, email: r.user && r.user.email }
+    user: { id: u.id, email: u.email, nome: (meta.nome || '').trim() }
   };
 }
 
@@ -127,8 +129,9 @@ async function entrar(email, senha){
      2. devolve só o usuário                -> entramos com o mesmo e-mail/senha;
      3. falha ao enviar o e-mail de boas-vindas (o SMTP gratuito é limitado)
         -> a conta costuma existir mesmo assim, então tentamos entrar. */
-async function cadastrar(email, senha){
-  const dados = {email:String(email).trim().toLowerCase(), password:senha};
+async function cadastrar(email, senha, nome){
+  const dados = {email:String(email).trim().toLowerCase(), password:senha,
+                 data:{nome:String(nome||'').trim()}};
   let r = null, falhaDoCadastro = null;
   try{
     r = await chamar('/auth/v1/signup', {method:'POST', body:dados});
@@ -160,6 +163,21 @@ async function reenviarConfirmacao(email){
 }
 async function definirNovaSenha(senha){
   await chamar('/auth/v1/user', {method:'PUT', comToken:true, body:{password:senha}});
+}
+/* O nome fica no perfil da conta, não no estado financeiro: assim ele
+   acompanha a pessoa em qualquer aparelho, junto do login. */
+async function definirNome(nome){
+  const limpo = String(nome||'').trim();
+  await chamar('/auth/v1/user', {method:'PUT', comToken:true, body:{data:{nome:limpo}}});
+  if(sessao && sessao.user){ sessao.user.nome = limpo; guardarSessao(sessao); }
+  return limpo;
+}
+/* Primeiro nome, com inicial maiúscula — nunca o pedaço do e-mail. */
+function primeiroNome(){
+  const n = (sessao && sessao.user && sessao.user.nome || '').trim();
+  if(!n) return '';
+  const p = n.split(/\s+/)[0];
+  return p.charAt(0).toLocaleUpperCase('pt-BR') + p.slice(1);
 }
 async function sair(){
   // Invalida o refresh token no servidor; se estiver offline, limpa localmente.
@@ -217,6 +235,14 @@ function validarEmail(v){
   if(!EMAIL_OK.test(e)) return 'Esse e-mail não parece válido.';
   return '';
 }
+function validarNome(v){
+  const n = String(v||'').trim();
+  if(!n) return 'Como você quer ser chamado?';
+  if(n.length < 2) return 'Escreva pelo menos duas letras.';
+  if(n.length > 40) return 'Um nome mais curto funciona melhor.';
+  if(/^[\d\s\W]+$/.test(n)) return 'Use letras — é assim que vamos te chamar.';
+  return '';
+}
 function validarSenha(v){
   const s = String(v||'');
   if(!s) return 'Digite uma senha.';
@@ -240,7 +266,8 @@ sessao = lerSessaoSalva();
 
 window.Auth = {
   entrar, cadastrar, recuperarSenha, reenviarConfirmacao, definirNovaSenha, sair,
+  definirNome, primeiroNome,
   puxarEstado, enviarEstado, apagarEstadoNaNuvem,
   usuario, logado, tokenValido, guardarSessao, montarSessao,
-  mensagemDeErro, validarEmail, validarSenha, forcaDaSenha
+  mensagemDeErro, validarEmail, validarSenha, validarNome, forcaDaSenha
 };
