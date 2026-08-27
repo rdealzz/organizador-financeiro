@@ -1417,6 +1417,59 @@ body.tem-cena .auth-troca{border-top-color:rgba(255,255,255,.13);color:rgba(255,
 body.tem-cena .auth-erro{background:rgba(255,59,48,.20);color:#ffb4ae}
 body.tem-cena .auth-ok{background:rgba(52,199,89,.20);color:#8ff0b0}
 
+/* ── A esfera atrás do app, depois do login ───────────────────────────────
+   z-index -1 põe a cena atrás de todo o conteúdo em fluxo; para ela aparecer,
+   o fundo do html e do body precisa sair da frente. É por isso que os dois
+   ficam transparentes aqui. */
+.cena.fundo{z-index:-1}
+/* Sem desfoque aqui. Um ponto de 1 px desfocado em 2 px simplesmente deixa de
+   existir — a esfera sumia inteira atrás do app. Quem segura a legibilidade
+   são os painéis, que já são opacos o bastante. */
+.cena.fundo #capaCena{transform:none;filter:none}
+/* Véu mais leve aqui que na tela de login: ali ele protegia um painel de
+   vidro fino, aqui os painéis do app já são opacos o bastante sozinhos — e
+   se o véu ficar forte a esfera some, que é justamente o que não se quer. */
+.cena.fundo .cena-veu{opacity:.45}
+
+html:has(body.fundo-vivo){background:#0d0209}
+body.fundo-vivo{
+  background:transparent;
+  /* A esfera é escura por natureza: o app inteiro passa a usar a paleta
+     escura. Tema claro sobre ela seria ilegível — e é isto que o texto do
+     ajuste avisa antes de a pessoa ligar. */
+  --bg:transparent; --card:rgba(24,8,22,.80); --card-2:rgba(34,14,32,.86);
+  --sep:rgba(255,255,255,.11);
+  --txt:#F6F6F7; --txt-2:rgba(246,246,247,.66); --txt-3:rgba(246,246,247,.46);
+  --fill:rgba(255,255,255,.07); --fill-2:rgba(255,255,255,.12);
+  --azul:#2F7BF6; --azul-txt:#8FBBFF; --azul-fraco:rgba(74,144,255,.18);
+  --verde:#3DD68C; --verde-txt:#5BE3A0; --verde-fraco:rgba(61,214,140,.16);
+  --vermelho:#FF6B5E; --vermelho-txt:#FF8C82; --vermelho-fraco:rgba(255,107,94,.16);
+  --laranja:#F0A140; --laranja-txt:#F5B764; --amarelo:#E3B341;
+  --roxo:#BCA2F0; --rosa:#F294B4; --teal:#5BCFE0; --indigo:#9296F0; --marrom:#C9A585;
+  --c200:#9AA1AC; --cdiv:#C8CDD4; --cout:#9AA1AC;
+  --s1:none;
+  --s2:0 1px 0 rgba(255,255,255,.05) inset, 0 8px 26px rgba(0,0,0,.45);
+  --s3:0 18px 54px -18px rgba(0,0,0,.75);
+}
+/* Painéis translúcidos, mas SEM backdrop-filter. Desfocar o que está atrás
+   obriga o navegador a refazer o desfoque a cada quadro da esfera, para cada
+   painel na tela — foi exatamente isso que segurou a abertura em 44 fps antes.
+   A translucidez sozinha já deixa o campo aparecer, e não custa nada. */
+body.fundo-vivo .painel,
+body.fundo-vivo .painel-aba,
+body.fundo-vivo .bloco,
+body.fundo-vivo .hero,
+body.fundo-vivo .re-card,
+body.fundo-vivo .insight,
+body.fundo-vivo .sheet,
+body.fundo-vivo #instalar{
+  border:1px solid rgba(255,255,255,.10);
+}
+body.fundo-vivo .tabbar{
+  background:rgba(18,5,16,.86);
+  border-top:1px solid rgba(255,255,255,.10);
+}
+
 @media (prefers-reduced-motion:reduce){
   .capa-frente,.capa-dica span{animation:none}
   .capa,.cena,#capaCena,.cena-veu{transition:opacity .2s}

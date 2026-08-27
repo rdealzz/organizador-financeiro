@@ -2133,7 +2133,7 @@ async function abrirApp(recemLogado){
   const u=Auth.usuario();
   usarChaveDe(u&&u.id);
   document.body.classList.remove('sem-barra');
-  encerrarCena();                 // o fundo animado só existe até o login
+  if(fundoLigado()) cenaAoFundo(); else encerrarCena();
   $('#auth').hidden=true;
   $('#appWrap').hidden=false;
   $('#tabbar').hidden=false;
@@ -2168,7 +2168,7 @@ async function abrirApp(recemLogado){
   const ir=new URLSearchParams(location.search).get('ir');
   irPara(ir||'hoje');
   renderAgenda(); renderAlertas(calc()); renderChips(); pintarConta();
-  renderAssinatura(); pintarMenuPerfil(); pintarSwitchCapa();
+  renderAssinatura(); pintarMenuPerfil(); pintarSwitchCapa(); pintarSwitchFundo();
 
   // Local primeiro: o app já está pronto com o que estava no aparelho. A nuvem
   // é consultada em segundo plano, sem segurar a tela. Se vier algo mais novo,
@@ -2605,16 +2605,42 @@ $('#menuPerfil').addEventListener('click',e=>{
    ========================================================================== */
 let cena=null, capaSaindo=false;
 
-/* Desmonta a cena e devolve o fundo normal do app. Chamada quando a pessoa
-   entra de verdade: manter um canvas animado rodando atrás do app seria
-   gastar bateria à toa. */
+/* Desmonta a cena e devolve o fundo normal do app. */
 function encerrarCena(){
-  document.body.classList.remove('tem-cena','capa-aberta');
+  document.body.classList.remove('tem-cena','capa-aberta','fundo-vivo');
   const el=$('#cena');
   if(!el || el.hidden) return;
   el.classList.add('sai');
   if(cena){ cena.encerrar(); cena=null; }
-  setTimeout(()=>{ el.hidden=true; el.classList.remove('sai','mergulha'); },520);
+  setTimeout(()=>{ el.hidden=true; el.classList.remove('sai','mergulha','fundo'); },520);
+}
+
+/* A esfera pode continuar viva atrás do app depois do login. É preferência de
+   aparelho, não de conta: quem usa um celular fraco desliga ali, e isso não
+   deve seguir a pessoa para o computador dela. */
+const FUNDO_APP='sobra:fundo-app';
+function fundoLigado(){
+  try{ return localStorage.getItem('sobra:fundo-app')!=='0'; }catch(e){ return true; }
+}
+
+/* Leva a cena para trás do app: z-index abaixo do conteúdo, e o campo entra em
+   modo decoração — mais apagado, mais devagar, metade dos quadros. Se a
+   abertura estiver desligada não existe cena nenhuma ainda, então ela é criada
+   aqui mesmo. */
+function cenaAoFundo(){
+  const el=$('#cena');
+  if(!el) return;
+  el.hidden=false;
+  el.classList.add('mergulha','fundo');
+  el.classList.remove('sai');
+  document.body.classList.add('fundo-vivo');
+  document.body.classList.remove('tem-cena','capa-aberta');
+  if(cena){ cena.recuar(); $('#capaCena').classList.add('pronta'); return; }
+  import('/intro.js')
+    .then(m=>m.iniciarAbertura($('#capaCena'),'fundo'))
+    .then(c=>{ if(!fundoLigado()){ c.encerrar(); return; }
+      cena=c; $('#capaCena').classList.add('pronta'); })
+    .catch(()=>{ /* fica o degradê do CSS, que já é um fundo escuro inteiro */ });
 }
 
 const CAPA_DESLIGADA='sobra:capa-off';
@@ -2626,6 +2652,10 @@ function capaLigada(){
   try{ return localStorage.getItem('sobra:capa-off')!=='1'; }catch(e){ return true; }
 }
 function mostrarCapa(){
+  /* No resgate a página vai embora em seguida: montar a esfera aqui só
+     atrasaria a saída, competindo pela thread justamente na hora em que a
+     pessoa está tentando destravar o app. */
+  if(RESGATE) return Promise.resolve();
   if(!capaLigada()) return Promise.resolve();
   const capa=$('#capa'), fundo=$('#cena');
   fundo.hidden=false;
@@ -2685,4 +2715,17 @@ $('#swCapa').onclick=()=>{
   try{ localStorage.setItem(CAPA_DESLIGADA, ligar?'0':'1'); }catch(e){}
   pintarSwitchCapa();
   toast(ligar?'Abertura animada ligada':'Abertura animada desligada');
+};
+
+function pintarSwitchFundo(){
+  const b=$('#swFundo'); if(!b) return;
+  b.setAttribute('aria-checked', fundoLigado()?'true':'false');
+}
+$('#swFundo').onclick=()=>{
+  const ligar=!fundoLigado();
+  try{ localStorage.setItem(FUNDO_APP, ligar?'1':'0'); }catch(e){}
+  pintarSwitchFundo();
+  // Vale na hora: ligar traz a esfera, desligar devolve o fundo normal.
+  if(ligar) cenaAoFundo(); else encerrarCena();
+  toast(ligar?'Esfera ligada atrás do app':'Esfera desligada');
 };
