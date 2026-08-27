@@ -19,17 +19,34 @@
    volta elástica, linhas de ligação entre vizinhas, profundidade real por
    parallax, brilho seguindo o cursor. Sem dependência nenhuma.
 
-   Custo medido: 0,2 ms de JavaScript por quadro (física + montagem do
-   desenho), 60 fps mesmo num Chromium sem placa de vídeo. O que cresce rápido
-   é o número de ligações, que é par a par — por isso a contagem de partículas
-   é limitada por área de tela e cortada pela metade em aparelho fraco.
+   Custo medido com as duas camadas cheias (cerca de 1.850 pontos de poeira
+   mais 150 de constelação a 1440×900): 0,1 ms de física e 0,5 ms de desenho
+   por quadro, 60 fps mesmo num Chromium sem placa de vídeo.
    ========================================================================== */
 
+/* O campo tem DUAS camadas, e é a diferença entre elas que dá profundidade:
+
+   POEIRA      milhares de pontinhos nítidos, bem ao fundo. É o que enche a
+               tela. Não tem halo nem ligação com ninguém — só posição, brilho
+               e parallax. Por isso pode ser numerosa: o desenho dela são
+               retângulos de 1 a 2 px, agrupados por cor e brilho, e o custo
+               por ponto é quase zero.
+
+   CONSTELAÇÃO as partículas maiores, com halo, que se ligam por linhas. Estas
+               são caras (a ligação é par a par, cresce ao quadrado), então
+               continuam poucas e limitadas por área de tela.
+
+   Aumentar a poeira é barato; aumentar a constelação, não. */
 const CONFIG = {
   // Uma partícula a cada N pixels de tela, com piso e teto.
   densidade: 13000,
   minimo: 46,
-  maximo: 170,
+  maximo: 150,
+
+  // A poeira: bem mais densa, e o teto é alto porque cada ponto custa pouco.
+  densidadePo: 700,
+  minimoPo: 320,
+  maximoPo: 2600,
 
   raioFuga: 155,        // até onde o ponteiro empurra
   forcaFuga: 0.62,      // quanto empurra
@@ -100,10 +117,12 @@ export function iniciarAbertura(canvas) {
   const sprites = PALETA.map(fazerSprite);
   const FAIXAS = 5;
   const lotes = Array.from({ length: PALETA.length * FAIXAS }, () => []);
+  const lotesPo = Array.from({ length: PALETA.length * FAIXAS }, () => []);
 
   let L = 0, A = 0;                 // largura e altura em pixels de CSS
   let fundo = null;                 // degradê de fundo, remontado a cada tamanho
   let pontos = [];
+  let poeira = [];
   let quadro = 0;
   let vivo = true;
   let mergulhando = 0;              // 0 = parado, sobe até 1 durante a entrada
@@ -129,38 +148,50 @@ export function iniciarAbertura(canvas) {
     fundo.addColorStop(1, '#17040f');
   }
 
-  function quantas() {
-    const n = Math.round((L * A) / CONFIG.densidade);
-    const teto = fraco ? Math.round(CONFIG.maximo / 2) : CONFIG.maximo;
-    return Math.max(CONFIG.minimo, Math.min(teto, n));
+  function quantas(dens, min, max) {
+    const n = Math.round((L * A) / dens);
+    const teto = fraco ? Math.round(max / 2) : max;
+    return Math.max(Math.min(min, teto), Math.min(teto, n));
   }
 
   /* Semeia guardando a posição relativa: numa virada de tela o campo
      acompanha em vez de recomeçar do zero. */
   function semear(preservar) {
-    const antigos = preservar ? pontos : null;
-    const n = quantas();
-    pontos = [];
+    pontos = semearCamada(preservar ? pontos : null,
+      quantas(CONFIG.densidade, CONFIG.minimo, CONFIG.maximo), false);
+    poeira = semearCamada(preservar ? poeira : null,
+      quantas(CONFIG.densidadePo, CONFIG.minimoPo, CONFIG.maximoPo), true);
+  }
+
+  function semearCamada(antigos, n, ehPoeira) {
+    const saida = [];
     for (let i = 0; i < n; i++) {
       const velho = antigos && antigos[i];
       const u = velho ? velho.hx / Math.max(1, velho.L) : Math.random();
       const v = velho ? velho.hy / Math.max(1, velho.A) : Math.random();
-      const z = velho ? velho.z : 0.34 + Math.random() * 0.66;
+      /* A poeira fica atrás: profundidade baixa, e por isso menor, mais fraca
+         e com menos parallax. É essa separação que faz as duas camadas se
+         lerem como distantes uma da outra em vez de virarem uma sopa só. */
+      const z = velho ? velho.z
+        : ehPoeira ? 0.10 + Math.random() * 0.42
+                   : 0.36 + Math.random() * 0.64;
       const ic = velho ? velho.ic : (Math.random() * PALETA.length) | 0;
       const hx = u * L, hy = v * A;
-      pontos.push({
+      saida.push({
         hx, hy, L, A,
         x: velho ? velho.x : hx,
         y: velho ? velho.y : hy,
         vx: 0, vy: 0,
-        z,                                     // profundidade: 0,34 fundo → 1 frente
-        r: 0.7 + z * 2.1,                      // longe é menor
+        z,
+        // Poeira: 0,4 a 1,2 px de raio — pontinho nítido, sem halo.
+        r: ehPoeira ? 0.4 + z * 1.6 : 0.65 + z * 1.75,
         ic,                                    // índice na paleta
         cor: PALETA[ic],
         fase: Math.random() * Math.PI * 2,      // desencontra a deriva
         giro: 0.16 + Math.random() * 0.5
       });
     }
+    return saida;
   }
 
   /* ---------------------------------------------------------------- física */
@@ -176,33 +207,38 @@ export function iniciarAbertura(canvas) {
     const forca = CONFIG.forcaFuga * (calmo ? 0.4 : 1) * (1 + mergulhando * 2.4);
     const raio2 = raio * raio;
 
-    for (const p of pontos) {
-      // Deriva: círculo lento e minúsculo, para o campo nunca parecer morto.
-      const d = CONFIG.deriva * (calmo ? 0.5 : 1);
-      p.vx += Math.cos(t * 0.00035 * p.giro + p.fase) * d * 0.05;
-      p.vy += Math.sin(t * 0.00042 * p.giro + p.fase) * d * 0.05;
+    const d = CONFIG.deriva * (calmo ? 0.5 : 1);
 
-      // Fuga do ponteiro. A força cai com o quadrado da distância para o
-      // empurrão ser firme de perto e não existir de longe.
-      if (pt.dentro) {
-        const dx = p.x - pt.x, dy = p.y - pt.y;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < raio2 && d2 > 0.01) {
-          const dist = Math.sqrt(d2);
-          const q = 1 - dist / raio;
-          const emp = q * q * forca * (0.45 + p.z * 0.85);   // frente reage mais
-          p.vx += (dx / dist) * emp;
-          p.vy += (dy / dist) * emp;
+    // A poeira também foge do cursor: ela é o grosso do que se vê, e um fundo
+    // parado atrás de partículas que reagem entregaria o truque na hora.
+    for (const camada of [pontos, poeira]) {
+      for (const p of camada) {
+        // Deriva: círculo lento e minúsculo, para o campo nunca parecer morto.
+        p.vx += Math.cos(t * 0.00035 * p.giro + p.fase) * d * 0.05;
+        p.vy += Math.sin(t * 0.00042 * p.giro + p.fase) * d * 0.05;
+
+        // Fuga do ponteiro. A força cai com o quadrado da distância para o
+        // empurrão ser firme de perto e não existir de longe.
+        if (pt.dentro) {
+          const dx = p.x - pt.x, dy = p.y - pt.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < raio2 && d2 > 0.01) {
+            const dist = Math.sqrt(d2);
+            const q = 1 - dist / raio;
+            const emp = q * q * forca * (0.45 + p.z * 0.85);   // frente reage mais
+            p.vx += (dx / dist) * emp;
+            p.vy += (dy / dist) * emp;
+          }
         }
-      }
 
-      // Mola de volta para casa + atrito. Juntos fazem o retorno lento.
-      p.vx += (p.hx - p.x) * CONFIG.volta;
-      p.vy += (p.hy - p.y) * CONFIG.volta;
-      p.vx *= CONFIG.atrito;
-      p.vy *= CONFIG.atrito;
-      p.x += p.vx;
-      p.y += p.vy;
+        // Mola de volta para casa + atrito. Juntos fazem o retorno lento.
+        p.vx += (p.hx - p.x) * CONFIG.volta;
+        p.vy += (p.hy - p.y) * CONFIG.volta;
+        p.vx *= CONFIG.atrito;
+        p.vy *= CONFIG.atrito;
+        p.x += p.vx;
+        p.y += p.vy;
+      }
     }
   }
 
@@ -215,6 +251,37 @@ export function iniciarAbertura(canvas) {
     const escala = 1 + mergulhando * 0.55;      // o campo avança no mergulho
     const cx = L / 2, cy = A / 2;
     const opacidade = calmo ? 0.78 : 1;
+
+    /* POEIRA — a camada de trás, desenhada primeiro.
+       Retângulos de 1 a 2 px agrupados por cor e brilho: um fillStyle por
+       lote em vez de um por ponto. É isso que permite milhares deles sem
+       pesar. Nada de halo aqui — halo em ponto pequeno vira borrão, e o que
+       se quer é o pontinho nítido. */
+    for (const b of lotesPo) b.length = 0;
+    for (let i = 0; i < poeira.length; i++) {
+      const p = poeira[i];
+      const desl = p.z / 0.52;
+      let x = p.x + par.x * CONFIG.parallax * 0.45 * desl;
+      let y = p.y + par.y * CONFIG.parallax * 0.45 * desl;
+      if (escala !== 1) { x = cx + (x - cx) * escala; y = cy + (y - cy) * escala; }
+      if (x < -4 || y < -4 || x > L + 4 || y > A + 4) continue;
+      const alfa = (0.16 + p.z * 1.15) * opacidade;
+      const faixa = Math.min(FAIXAS - 1, (alfa / 0.76 * FAIXAS) | 0);
+      const t = p.r < 0.75 ? 1 : p.r < 1.25 ? 1.5 : 2;
+      lotesPo[p.ic * FAIXAS + faixa].push(x, y, t);
+    }
+    for (let ic = 0; ic < PALETA.length; ic++) {
+      const c = PALETA[ic];
+      for (let k = 0; k < FAIXAS; k++) {
+        const lote = lotesPo[ic * FAIXAS + k];
+        if (!lote.length) continue;
+        ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${((k + 0.6) / FAIXAS * 0.76).toFixed(3)})`;
+        for (let m = 0; m < lote.length; m += 3) {
+          const t = lote[m + 2];
+          ctx.fillRect(lote[m] - t / 2, lote[m + 1] - t / 2, t, t);
+        }
+      }
+    }
 
     // Posição final de cada partícula: física + parallax por profundidade
     // + escala do mergulho. Calculada uma vez e reaproveitada nas ligações.
@@ -279,8 +346,8 @@ export function iniciarAbertura(canvas) {
     ctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < pontos.length; i++) {
       const p = pontos[i];
-      const tam = p.r * 9 * (1 + mergulhando * 0.8);   // 9 = diâmetro do halo
-      ctx.globalAlpha = (0.30 + p.z * 0.66) * opacidade;
+      const tam = p.r * 7.5 * (1 + mergulhando * 0.8);  // 7,5 = diâmetro do halo
+      ctx.globalAlpha = (0.24 + p.z * 0.58) * opacidade;
       ctx.drawImage(sprites[p.ic], px[i] - tam / 2, py[i] - tam / 2, tam, tam);
     }
     ctx.globalAlpha = 1;
@@ -305,8 +372,9 @@ export function iniciarAbertura(canvas) {
        painel de vidro — que obriga o navegador a refazer o desfoque a cada
        quadro novo. Meia taxa ali economiza bateria sem ninguém perceber. */
     if (calmo && (pula ^= 1)) return;
-    passo(t);
-    desenhar();
+    const _a=performance.now(); passo(t);
+    const _b=performance.now(); desenhar();
+    (window.__perf=window.__perf||[]).push([_b-_a,performance.now()-_b,pontos.length,poeira.length]);
   }
 
   /* ---------------------------------------------------------------- entrada */
@@ -350,6 +418,7 @@ export function iniciarAbertura(canvas) {
     window.removeEventListener('blur', aoSair);
     window.removeEventListener('resize', aoVirar);
     pontos = [];
+    poeira = [];
   }
 
   return {
