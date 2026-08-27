@@ -2116,8 +2116,10 @@ function mostrarAuth(){
    fica adiado; quem chama de novo é a saída da capa. */
 function focarEntrada(){
   setTimeout(()=>{
+    // "Ainda cobrindo" é a capa visível E que não começou a sair: no momento
+    // em que ela sai o login já está à frente, e aí o foco pode ir.
     const capa=$('#capa');
-    if(capa && !capa.hidden) return;          // a capa chama isto ao sair
+    if(capa && !capa.hidden && !capa.classList.contains('sai')) return;
     if($('#auth').hidden) return;             // já entrou no app
     const alvo=$a(modoAuth==='cadastrar'?'authNome':'authEmail');
     if(alvo) alvo.focus();
@@ -2131,6 +2133,7 @@ async function abrirApp(recemLogado){
   const u=Auth.usuario();
   usarChaveDe(u&&u.id);
   document.body.classList.remove('sem-barra');
+  encerrarCena();                 // o fundo animado só existe até o login
   $('#auth').hidden=true;
   $('#appWrap').hidden=false;
   $('#tabbar').hidden=false;
@@ -2587,12 +2590,32 @@ $('#menuPerfil').addEventListener('click',e=>{
 });
 
 /* ==========================================================================
-   v5.3 — abertura animada
-   A capa aparece a cada abertura fria. Um toque em qualquer lugar entra.
-   O degradê já é a versão completa para quem não tem WebGL, está offline ou
-   pediu menos movimento: a cena 3D é um bônus que entra por cima se der.
+   v5.6 — abertura cinematográfica
+
+   Uma cena só, viva do primeiro segundo até o login terminar:
+
+     cena de fundo  ← nunca é trocada, só recua
+       └ capa       ← logo, nome, frase, "clique em qualquer lugar"
+       └ login      ← entra por cima, em painel de vidro
+
+   O clique não corta para outra tela: ele afasta o fundo (escala, desfoque,
+   véu) e traz o formulário à frente. O degradê por baixo do canvas já é a
+   versão final para quem está sem o campo de partículas — offline, aparelho
+   antigo ou menos movimento —, então nada fica feio se o canvas não subir.
    ========================================================================== */
 let cena=null, capaSaindo=false;
+
+/* Desmonta a cena e devolve o fundo normal do app. Chamada quando a pessoa
+   entra de verdade: manter um canvas animado rodando atrás do app seria
+   gastar bateria à toa. */
+function encerrarCena(){
+  document.body.classList.remove('tem-cena','capa-aberta');
+  const el=$('#cena');
+  if(!el || el.hidden) return;
+  el.classList.add('sai');
+  if(cena){ cena.encerrar(); cena=null; }
+  setTimeout(()=>{ el.hidden=true; el.classList.remove('sai','mergulha'); },520);
+}
 
 const CAPA_DESLIGADA='sobra:capa-off';
 /* A chave vai escrita à mão aqui de propósito. Esta função é chamada na
@@ -2604,39 +2627,50 @@ function capaLigada(){
 }
 function mostrarCapa(){
   if(!capaLigada()) return Promise.resolve();
-  const capa=$('#capa');
+  const capa=$('#capa'), fundo=$('#cena');
+  fundo.hidden=false;
   capa.hidden=false;
+  document.body.classList.add('tem-cena','capa-aberta');
   esconderSplash();               // uma tela de espera de cada vez
   document.body.style.overflow='hidden';
-  // A cena é pesada e vem de fora: carrega sem segurar nada.
+
+  // O campo de partículas é um módulo à parte: carrega sem segurar nada.
+  // Se falhar, fica o degradê — que já é a tela final, não um remendo.
   import('/intro.js')
     .then(m=>m.iniciarAbertura($('#capaCena')))
-    .then(c=>{ if(capaSaindo){ c.encerrar(); return; }
+    .then(c=>{ if(capaSaindo && !cena){ c.encerrar(); return; }
       cena=c; $('#capaCena').classList.add('pronta'); })
-    .catch(()=>{ /* fica o degradê, que já é bonito e sempre funciona */ });
+    .catch(()=>{});
+
   return new Promise(resolve=>{
     const entrar=()=>{
       if(capaSaindo) return;
       capaSaindo=true;
       vibrar(12);
-      const terminar=()=>{
-        capa.classList.add('sai');
+
+      /* O fundo recua e o texto da capa sai junto — as duas coisas ao mesmo
+         tempo, senão a troca parece um corte. O login só é revelado no meio
+         do caminho, quando o desfoque já pegou. */
+      fundo.classList.add('mergulha');
+      capa.classList.add('sai');
+
+      const revelar=()=>{
+        document.body.classList.remove('capa-aberta');   // o login entra agora
         document.body.style.overflow='';
-        setTimeout(()=>{
-          capa.hidden=true;
-          if(cena){ cena.encerrar(); cena=null; }
-          focarEntrada();          // o foco estava adiado enquanto a capa cobria
-        },760);
-        resolve();
+        resolve();                 // daqui o app decide: login ou direto pro app
+        focarEntrada();
       };
-      // Com a cena viva, mergulha na esfera e revela o app no meio do caminho.
-      if(cena) cena.mergulhar(terminar);
-      else terminar();
+      if(cena) cena.mergulhar(revelar);
+      else setTimeout(revelar,380);
+
+      setTimeout(()=>{ capa.hidden=true; },650);
     };
     capa.addEventListener('click',entrar);
-    capa.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' ') entrar(); });
-    $('#capaEntrar').addEventListener('click',e=>{ e.stopPropagation(); entrar(); });
-    setTimeout(()=>{ const b=$('#capaEntrar'); if(b) b.focus(); },700);
+    capa.addEventListener('keydown',e=>{
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); entrar(); }
+    });
+    // A tela inteira é o botão, então é ela que recebe o foco do teclado.
+    setTimeout(()=>{ if(!capa.hidden) capa.focus(); },700);
   });
 }
 

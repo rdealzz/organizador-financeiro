@@ -49,15 +49,23 @@ html[data-tema="escuro"] #splash{background:#000}
   <div class="nome">Sobra do Mês</div>
 </div>
 
-<!-- ══════════════════════ ABERTURA ══════════════════════ -->
-<div class="capa" id="capa" hidden>
-  <canvas id="capaCena" aria-hidden="true"></canvas>
+<!-- ══════════════════════ CENA DE FUNDO ══════════════════════
+     Fica atrás da capa E do login. O fundo não troca quando o formulário
+     aparece: ele só recua — zoom, desfoque e escurecimento. -->
+<div class="cena" id="cena" hidden aria-hidden="true">
+  <canvas id="capaCena"></canvas>
+  <div class="cena-veu"></div>
+</div>
+
+<!-- ══════════════════════ ABERTURA ══════════════════════
+     Sem botão: a tela inteira é a área de clique. -->
+<div class="capa" id="capa" hidden role="button" tabindex="0"
+     aria-label="Entrar no Sobra do Mês">
   <div class="capa-frente">
     <div class="capa-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <h1 class="capa-tit">Sobra do Mês</h1>
     <p class="capa-sub">Quanto sobra no fim do mês, sem planilha.</p>
-    <button class="btn capa-btn" id="capaEntrar" type="button">Começar</button>
-    <p class="capa-dica" aria-hidden="true">ou toque em qualquer lugar</p>
+    <p class="capa-dica"><span>Clique em qualquer lugar para entrar</span></p>
   </div>
 </div>
 
