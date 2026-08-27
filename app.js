@@ -11,7 +11,9 @@ const CATS={
   outros:{n:'Outros',c:'var(--cout)',peso:5,dica:'o que não se encaixa'}
 };
 const TIER={1:{n:'Essencial',cl:'t1'},2:{n:'Vale a pena',cl:'t2'},3:{n:'Pode cortar',cl:'t3'}};
-const KEY='sobra-do-mes:novo';
+const KEY_ANTIGA='sobra-do-mes:novo';   // dados de antes do login, neste aparelho
+let KEY=KEY_ANTIGA;
+function usarChaveDe(uid){ KEY = uid ? ('sobra-do-mes:u:'+uid) : KEY_ANTIGA; }
 // nome, cat, peso, valor, cartão, parcelas restantes, tipo, quanto o pai cobre
 const SEED=[];
 const ALERTAS_PADRAO={
@@ -29,6 +31,7 @@ let S={versao:2,tema:'auto',salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,dia
        alertas:{teto:true,gasto:true,meta:true,fechamento:true,vencimento:true,contas:true,variavel:true,parcela:false},
        aTetoPct:85,aDiasFech:3,aDiasVenc:2,notifLog:{},_ultimoSalvo:0};
 let prev=[], avisoCiclo='';
+let saindo=false;   // logout em andamento: nada mais pode gravar em disco
 
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -101,6 +104,9 @@ function idbAbrir(){
     r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
   });
 }
+async function idbDel(k){ const db=await idbAbrir();
+  return new Promise((res,rej)=>{ const t=db.transaction('kv','readwrite');
+    t.objectStore('kv').delete(k); t.oncomplete=()=>res(true); t.onerror=()=>rej(t.error); }); }
 async function idbSet(k,v){ const db=await idbAbrir();
   return new Promise((res,rej)=>{ const t=db.transaction('kv','readwrite');
     t.objectStore('kv').put(v,k); t.oncomplete=()=>res(true); t.onerror=()=>rej(t.error); }); }
@@ -117,6 +123,7 @@ function cookieGet(k){ try{
   return m?decodeURIComponent(m[1]):null; }catch(e){ return null; } }
 
 async function storeSet(k,v){
+  if(saindo) return false;
   let ok=false;
   if(window.storage&&window.storage.set){ try{ await window.storage.set(k,v); ok=true; DIAG.claude='funciona'; modo='claude'; }
     catch(e){ DIAG.claude='indisponível'; } } else DIAG.claude='indisponível';
@@ -159,13 +166,28 @@ function avisoModo(){
     $('#alertaSalvar').innerHTML='';
   }
 }
-let salvarPendente=null;
+const META=['_ts','_ultimoSalvo','_revisao','_ultimaCopia'];
+function conteudoDe(o){
+  const c={}; Object.keys(o).forEach(k=>{ if(!META.includes(k)) c[k]=o[k]; });
+  return JSON.stringify(c);
+}
+function estaVazio(o){
+  if(!o) return true;
+  return !(o.lanc||[]).length && !(o.hist||[]).length && !(o.obj||[]).length
+      && !(o.div||[]).length && !((+o.salario||0)+(+o.extra||0));
+}
+let ultimoConteudo=null;
 async function salvar(){
-  S._ts=Date.now(); S._ultimoSalvo=S._ts;
+  if(saindo) return false;
+  const agora=conteudoDe(S);
+  // Só carimba data nova quando algo mudou de verdade. Abrir o app não conta.
+  if(agora!==ultimoConteudo){ S._ts=Date.now(); ultimoConteudo=agora; }
+  S._ultimoSalvo=Date.now();
   const txt=JSON.stringify(S);
   const ok=await storeSet(KEY,txt);
   avisoModo();
   copiaDeSeguranca(txt);
+  agendarEnvio();
   return ok;
 }
 /* Cópia de segurança automática: uma por dia, as 7 últimas ficam guardadas.
@@ -187,6 +209,7 @@ async function copiaDeSeguranca(txt){
 }
 async function carregar(){
   try{ const v=await storeGet(KEY); if(v) S=Object.assign(S,JSON.parse(v)); }catch(e){}
+  ultimoConteudo=conteudoDe(S);
   rodarCiclos(); aplicarTema();
   $('#salario').value=S.salario||''; $('#extra').value=S.extra||'';
   $('#metaPct').value=S.metaPct||''; $('#metaVal').value=S.metaVal||'';
@@ -549,6 +572,7 @@ $('#btnBackup').onclick=baixarBackup;
 $('#btnRestaurar').onclick=()=>$('#arqBackup').click();
 $('#arqBackup').onchange=e=>{ const f=e.target.files[0]; if(f) restaurarBackup(f); e.target.value=''; };
 window.addEventListener('beforeunload',()=>{ try{
+  if(saindo||!Auth.logado()) return;   // logout em andamento: não ressuscitar os dados
   const v=JSON.stringify(Object.assign(S,{_ts:Date.now()}));
   if(temLS) localStorage.setItem(KEY,v);
   cookieSet(KEY,v);
@@ -597,7 +621,9 @@ $('#zerar').onclick=()=>{ if(confirm('Apagar tudo e recomeçar do zero?')){
   S=Object.assign({},S,{salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:5,
      ultimoFech:iso(ultimoFechPassado()),hist:[],tetos:{},lanc:[],div:[],obj:[],meses:6,jaTem:0,notifLog:{},agendaLog:{},retroVista:null});
   ['salario','extra','jaTem','metaVal'].forEach(i=>$('#'+i).value=''); $('#metaPct').value=20; $('#meses').value=6;
-  avisoCiclo=''; render(); salvar(); toast('Tudo apagado'); irPara('hoje'); } };
+  avisoCiclo=''; render(); salvar();
+  Auth.apagarEstadoNaNuvem().catch(()=>{});
+  toast('Tudo apagado'); irPara('hoje'); } };
 
 /* ---------- leitura de extrato ---------- */
 /* Normaliza antes de classificar: "Farmácia" e "farmacia" têm que cair no
@@ -1148,12 +1174,20 @@ if('serviceWorker' in navigator&&location.protocol!=='file:'){
     try{
       swReg=await navigator.serviceWorker.register('/sw.js',{scope:'/'});
       DIAG.sw='funciona';
+      // Versão nova já esperando de uma visita anterior
+      if(swReg.waiting && navigator.serviceWorker.controller) mostrarAtualizacao(swReg);
       swReg.addEventListener('updatefound',()=>{
         const novo=swReg.installing;
         if(novo) novo.addEventListener('statechange',()=>{
-          if(novo.state==='installed'&&navigator.serviceWorker.controller)
-            $('#status').textContent='Versão nova disponível — recarregue a página.';
+          if(novo.state==='installed'&&navigator.serviceWorker.controller) mostrarAtualizacao(swReg);
         });
+      });
+      // Procura versão nova ao abrir, ao voltar pro app e de hora em hora
+      const procurar=()=>{ swReg.update().catch(()=>{}); };
+      procurar();
+      setInterval(procurar,60*60*1000);
+      document.addEventListener('visibilitychange',()=>{
+        if(document.visibilityState==='visible') procurar();
       });
     }catch(e){ DIAG.sw='indisponível'; }
   });
@@ -1221,9 +1255,8 @@ $('#btnCSV').onclick=exportarCSV;
 /* checagem periódica com o app aberto + ao voltar pra ele */
 setInterval(()=>checarAlertas(false),30*60*1000);
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible'){
-    rodarCiclos(); render(); checarAlertas(false); checarAgenda(false);
-  }
+  if(document.visibilityState!=='visible'||!Auth.logado()) return;
+  rodarCiclos(); render(); checarAlertas(false); checarAgenda(false); puxarDaNuvem();
 });
 
 /* ==========================================================================
@@ -1233,7 +1266,7 @@ const AREAS={
   hoje:    {titulo:'Hoje',        subs:[]},
   plano:   {titulo:'Planejamento',subs:['renda','tetos','objetivos']},
   analise: {titulo:'Análises',    subs:['graficos','cortes','hist']},
-  ajustes: {titulo:'Ajustes',     subs:['alertas','extrato','dados']}
+  ajustes: {titulo:'Ajustes',     subs:['alertas','conta','extrato','dados']}
 };
 let AREA='hoje';
 const SUB={plano:'renda',analise:'graficos',ajustes:'alertas'};
@@ -1782,31 +1815,434 @@ $('#addHorario').onclick=()=>{
   });
 })();
 
-/* ---------- partida ---------- */
-(async()=>{
+/* checagens periódicas */
+setInterval(()=>{ if(Auth.logado()) checarAgenda(false); },60*1000);   // o minuto do horário marcado
+setInterval(()=>{ if(Auth.logado()) checarAlertas(false); },30*60*1000); // os alertas de situação
+
+/* ==========================================================================
+   v4 — sessão, sincronização e atualização do app
+   ========================================================================== */
+
+/* ---------- sincronização com a nuvem ---------- */
+let sincEstado='local', sincQuando=0, envioT=null, enviando=false, pendente=false;
+
+function pintarSinc(){
+  const el=$('#sinc'); if(!el) return;
+  const hora=sincQuando?new Date(sincQuando).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'';
+  const txt={
+    ok:       hora?('Sincronizado '+hora):'Sincronizado',
+    enviando: 'Sincronizando…',
+    offline:  'Offline — salvo aqui',
+    erro:     'Falha ao sincronizar',
+    local:    'Só neste aparelho'
+  }[sincEstado]||'—';
+  el.dataset.e=sincEstado;
+  el.querySelector('span').textContent=txt;
+  el.setAttribute('aria-label','Sincronização: '+txt+'. Toque para sincronizar agora.');
+  const c=$('#contaSinc');
+  if(c) c.innerHTML=`<div class="aviso-card ${sincEstado==='ok'?'ok':sincEstado==='erro'?'ruim':''}">
+    <span>${sincEstado==='ok'?'☁️':sincEstado==='offline'?'📴':sincEstado==='erro'?'⚠️':'🔄'}</span>
+    <div>${sincEstado==='ok'?`<b>Tudo salvo na sua conta.</b> Última sincronização às ${hora}. Abrindo em outro aparelho com este mesmo login, os dados estarão lá.`
+      :sincEstado==='offline'?'<b>Sem internet agora.</b> Continue usando normalmente — está tudo salvo neste aparelho e sobe sozinho quando a conexão voltar.'
+      :sincEstado==='erro'?'<b>Não consegui sincronizar.</b> Seus dados estão salvos neste aparelho. Toque em “Sincronizar agora” para tentar de novo.'
+      :'Sincronizando…'}</div></div>`;
+}
+function marcarSinc(e){ sincEstado=e; if(e==='ok') sincQuando=Date.now(); pintarSinc(); }
+
+function agendarEnvio(){
+  if(!Auth.logado()) return;
+  clearTimeout(envioT);
+  envioT=setTimeout(enviarParaNuvem,1200);
+}
+async function enviarParaNuvem(){
+  if(!Auth.logado()) return;
+  if(enviando){ pendente=true; return; }
+  if(!navigator.onLine){ marcarSinc('offline'); pendente=true; return; }
+  if(estaVazio(S) && S._revisao){ marcarSinc('ok'); return; }
+  enviando=true; marcarSinc('enviando');
+  try{
+    const r=await Auth.enviarEstado(S);
+    if(r) S._revisao=r.revisao;
+    marcarSinc('ok');
+  }catch(e){
+    marcarSinc(String(e.codigo||'').includes('sem_rede')||!navigator.onLine?'offline':'erro');
+  }finally{
+    enviando=false;
+    if(pendente){ pendente=false; agendarEnvio(); }
+  }
+}
+/* Puxa o que está na nuvem e resolve conflito pelo carimbo de tempo:
+   quem gravou por último ganha, e o outro lado é sobrescrito só se for mais velho. */
+async function puxarDaNuvem(silencioso){
+  if(!Auth.logado()) return;
+  if(!navigator.onLine){ marcarSinc('offline'); return; }
+  if(!silencioso) marcarSinc('enviando');
+  try{
+    const linha=await Auth.puxarEstado();
+    if(!linha){ await enviarParaNuvem(); return; }
+    const remoto=linha.dados||{};
+    const tRemoto=+remoto._ts||0, tLocal=+S._ts||0;
+    // Rede de segurança: aparelho sem nada não apaga conta com dados.
+    const adotarRemoto = (!estaVazio(remoto) && estaVazio(S)) || tRemoto>tLocal;
+    if(adotarRemoto){
+      S=Object.assign(S,remoto);
+      S._revisao=linha.revisao;
+      rodarCiclos(); aplicarTema(); preencherCampos(); render();
+      await storeSet(KEY,JSON.stringify(S));
+      marcarSinc('ok');
+      if(!silencioso) toast('Dados atualizados desta conta');
+    }else if(tLocal>tRemoto && !estaVazio(S)){
+      await enviarParaNuvem();
+    }else{
+      S._revisao=linha.revisao; marcarSinc('ok');
+    }
+  }catch(e){
+    marcarSinc(String(e.codigo||'').includes('sem_rede')?'offline':'erro');
+  }
+}
+window.addEventListener('online',()=>{ if(Auth.logado()){ marcarSinc('enviando'); puxarDaNuvem(true); } });
+window.addEventListener('offline',()=>{ if(Auth.logado()) marcarSinc('offline'); });
+
+/* preenche os campos do formulário a partir do estado (usado no load e no pull) */
+function preencherCampos(){
+  const p=(id,v)=>{ const el=$('#'+id); if(el) el.value=(v||v===0)?v:''; };
+  p('salario',S.salario); p('extra',S.extra); p('metaPct',S.metaPct); p('metaVal',S.metaVal);
+  p('meses',S.meses||6); p('jaTem',S.jaTem); p('diaFech',S.diaFech||5);
+  p('diaVenc',S.diaVenc||S.diaFech||5);
+  p('aTetoPct',S.aTetoPct||85); p('aDiasFech',S.aDiasFech||3); p('aDiasVenc',S.aDiasVenc||2);
+}
+
+/* ==========================================================================
+   Tela de entrar / criar conta
+   ========================================================================== */
+let modoAuth='entrar';   // entrar | cadastrar | recuperar
+const $a=id=>document.getElementById(id);
+
+function mostrarErroCampo(campo,msg){
+  const err=$a('err'+campo), inp=$a('auth'+campo);
+  if(!err||!inp) return;
+  err.textContent=msg||''; err.hidden=!msg;
+  inp.setAttribute('aria-invalid',msg?'true':'false');
+}
+function avisoAuth(msg,tipo){
+  const e=$a('authErro'), k=$a('authOk');
+  e.hidden=true; k.hidden=true;
+  if(!msg) return;
+  const alvo=tipo==='ok'?k:e;
+  alvo.innerHTML=msg; alvo.hidden=false;
+}
+function carregandoAuth(ligado,rotulo){
+  const b=$a('authEnviar');
+  b.disabled=ligado;
+  b.innerHTML=ligado?'<span class="girando"></span>':(rotulo||b.dataset.rotulo||'Entrar');
+}
+function pintarModo(){
+  const tit={entrar:'Entrar',cadastrar:'Criar conta',recuperar:'Recuperar senha'}[modoAuth];
+  const sub={
+    entrar:'Seus dados ficam na sua conta, e só nela.',
+    cadastrar:'Leva 20 segundos. Só precisamos de um e-mail e uma senha.',
+    recuperar:'Digite seu e-mail e enviamos um link para criar uma senha nova.'
+  }[modoAuth];
+  const rotulo={entrar:'Entrar',cadastrar:'Criar minha conta',recuperar:'Enviar o link'}[modoAuth];
+  $a('authTit').textContent=tit;
+  $a('authSub').textContent=sub;
+  $a('authEnviar').dataset.rotulo=rotulo;
+  $a('authEnviar').textContent=rotulo;
+  $a('campoSenha').hidden=(modoAuth==='recuperar');
+  $a('campoConfirma').hidden=(modoAuth!=='cadastrar');
+  $a('forcaSenha').hidden=(modoAuth!=='cadastrar');
+  $a('authEsqueci').hidden=(modoAuth!=='entrar');
+  $a('authSenha').setAttribute('autocomplete',modoAuth==='cadastrar'?'new-password':'current-password');
+  $a('authTrocaTxt').textContent=(modoAuth==='entrar')?'Ainda não tem conta?':'Já tem conta?';
+  $a('authTroca').textContent=(modoAuth==='entrar')?'Criar conta':'Entrar';
+  ['Email','Senha','Confirma'].forEach(c=>mostrarErroCampo(c,''));
+  avisoAuth('');
+}
+function trocarModo(novo){ modoAuth=novo; pintarModo(); $a('authEmail').focus(); }
+
+function validarFormulario(){
+  let ok=true;
+  const e=Auth.validarEmail($a('authEmail').value);
+  mostrarErroCampo('Email',e); if(e) ok=false;
+  if(modoAuth!=='recuperar'){
+    const s=modoAuth==='cadastrar'
+      ? Auth.validarSenha($a('authSenha').value)
+      : ($a('authSenha').value ? '' : 'Digite sua senha.');
+    mostrarErroCampo('Senha',s); if(s) ok=false;
+  }
+  if(modoAuth==='cadastrar'){
+    const c=$a('authConfirma').value;
+    const msg=!c ? 'Repita a senha para confirmar.'
+      : (c!==$a('authSenha').value ? 'As senhas não são iguais. Confira as duas.' : '');
+    mostrarErroCampo('Confirma',msg); if(msg) ok=false;
+  }
+  return ok;
+}
+
+async function enviarAuth(ev){
+  if(ev) ev.preventDefault();
+  if(!validarFormulario()) return;
+  const email=$a('authEmail').value.trim(), senha=$a('authSenha').value;
+  carregandoAuth(true);
+  avisoAuth('');
+  try{
+    if(modoAuth==='entrar'){
+      await Auth.entrar(email,senha);
+      await abrirApp(true);
+    }else if(modoAuth==='cadastrar'){
+      const r=await Auth.cadastrar(email,senha);
+      if(r.confirmar){
+        avisoAuth(`<b>Conta criada.</b> Enviamos um link de confirmação para <b>${esc(email)}</b>.
+          Abra o e-mail, confirme e volte aqui para entrar.
+          <button type="button" class="link" id="reenviar" style="display:block;margin-top:6px">Reenviar o e-mail</button>`,'ok');
+        const rb=$a('reenviar');
+        if(rb) rb.onclick=async()=>{
+          try{ await Auth.reenviarConfirmacao(email); avisoAuth('E-mail reenviado. Confira a caixa de entrada e o spam.','ok'); }
+          catch(e2){ avisoAuth(Auth.mensagemDeErro(e2)); }
+        };
+        modoAuth='entrar'; pintarModo();
+        avisoAuth(`<b>Conta criada.</b> Confirme pelo link que enviamos para <b>${esc(email)}</b> e entre aqui.`,'ok');
+      }else{
+        await abrirApp(true);
+      }
+    }else{
+      await Auth.recuperarSenha(email, location.origin+'/?recuperar=1');
+      avisoAuth(`Se existir uma conta com <b>${esc(email)}</b>, o link para criar uma senha nova já está a caminho. Confira também o spam.`,'ok');
+      modoAuth='entrar';
+      const guardado=$a('authOk').innerHTML;
+      pintarModo(); avisoAuth(guardado,'ok');
+    }
+  }catch(e){
+    avisoAuth(Auth.mensagemDeErro(e));
+    if(String(e.message||'').toLowerCase().includes('invalid login')) $a('authSenha').select();
+  }finally{
+    carregandoAuth(false);
+  }
+}
+
+function ligarAuth(){
+  $a('authForm').addEventListener('submit',enviarAuth);
+  $a('authTroca').onclick=()=>trocarModo(modoAuth==='entrar'?'cadastrar':'entrar');
+  $a('authEsqueci').onclick=()=>trocarModo('recuperar');
+  document.querySelectorAll('.olho').forEach(b=>b.onclick=()=>{
+    const inp=$a(b.dataset.ver); if(!inp) return;
+    const ver=(inp.type==='password');
+    inp.type=ver?'text':'password';
+    b.setAttribute('aria-pressed',ver?'true':'false');
+    b.setAttribute('aria-label',ver?'Ocultar senha':'Mostrar senha');
+    b.querySelectorAll('.o-aberto').forEach(el=>el.style.opacity=ver?'.4':'1');
+    b.querySelector('.o-riscado').hidden=!ver;
+    inp.focus();
+  });
+  $a('authSenha').addEventListener('input',()=>{
+    if(modoAuth!=='cadastrar') return;
+    const f=Auth.forcaDaSenha($a('authSenha').value);
+    const box=$a('forcaSenha');
+    box.dataset.n=f.nivel;
+    box.querySelector('i').style.width=(f.nivel/4*100)+'%';
+    box.querySelector('span').textContent=$a('authSenha').value?f.rotulo:'';
+    if($a('errSenha').hidden===false && !Auth.validarSenha($a('authSenha').value)) mostrarErroCampo('Senha','');
+  });
+  $a('authConfirma').addEventListener('input',()=>{
+    const c=$a('authConfirma').value;
+    if(c && c===$a('authSenha').value) mostrarErroCampo('Confirma','');
+  });
+  ['authEmail'].forEach(id=>$a(id).addEventListener('blur',()=>{
+    if($a(id).value) mostrarErroCampo('Email',Auth.validarEmail($a(id).value));
+  }));
+}
+
+function mostrarAuth(){
+  document.body.classList.add('sem-barra');
+  $('#auth').hidden=false;
+  $('#appWrap').hidden=true;
+  $('#tabbar').hidden=true;
+  $('#fab').hidden=true;
+  pintarModo();
+  setTimeout(()=>$a('authEmail').focus(),380);
+}
+
+/* ==========================================================================
+   Entrar no app depois de autenticado
+   ========================================================================== */
+async function abrirApp(recemLogado){
+  const u=Auth.usuario();
+  usarChaveDe(u&&u.id);
+  document.body.classList.remove('sem-barra');
+  $('#auth').hidden=true;
+  $('#appWrap').hidden=false;
+  $('#tabbar').hidden=false;
+  $('#fab').hidden=false;
+
   await carregar();
+
+  // Dados que já existiam neste aparelho antes de haver conta: importa uma vez.
+  if(recemLogado && !S.lanc.length && !((+S.salario||0)+(+S.extra||0))){
+    try{
+      const antigo=await storeGet(KEY_ANTIGA);
+      if(antigo){
+        const d=JSON.parse(antigo);
+        if(d && (d.lanc||[]).length){
+          S=Object.assign(S,d); delete S._revisao;
+          rodarCiclos(); preencherCampos(); render(); await salvar();
+          toast('Importamos os dados que já estavam neste aparelho');
+        }
+      }
+    }catch(e){}
+  }
+
   S.alertas=Object.assign({teto:true,gasto:true,meta:true,fechamento:true,vencimento:true,
     contas:true,variavel:true,parcela:false},S.alertas||{});
   S.notifLog=S.notifLog||{}; S.agendaLog=S.agendaLog||{};
   if(!Array.isArray(S.agenda)) S.agenda=AGENDA_PADRAO.map(h=>Object.assign({},h));
-  $('#aTetoPct').value=S.aTetoPct||85; $('#aDiasFech').value=S.aDiasFech||3; $('#aDiasVenc').value=S.aDiasVenc||2;
+  preencherCampos();
 
   const h=new Date().getHours();
-  $('#saudacao').textContent=h<5?'Boa madrugada':h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';
+  const apelido=(u&&u.email?u.email.split('@')[0]:'').replace(/[._-]+/g,' ').trim();
+  const curto=apelido && !/\d{4}/.test(apelido) ? apelido.split(' ')[0].slice(0,14) : '';
+  $('#saudacao').textContent=(h<5?'Boa madrugada':h<12?'Bom dia':h<18?'Boa tarde':'Boa noite')+
+    (curto?', '+curto.charAt(0).toUpperCase()+curto.slice(1):'');
 
-  const ir=new URLSearchParams(location.search).get('ir')||
-           (new URLSearchParams(location.search).get('aba')?'hoje':'');
+  const ir=new URLSearchParams(location.search).get('ir');
   irPara(ir||'hoje');
-  renderAgenda(); renderAlertas(calc()); renderChips();
+  renderAgenda(); renderAlertas(calc()); renderChips(); pintarConta();
 
-  // se um ciclo fechou desde a última visita, mostra a retrospectiva
+  marcarSinc(navigator.onLine?'enviando':'offline');
+  await puxarDaNuvem(true);
+
   if(avisoCiclo&&S.hist.length&&S.retroVista!==S.hist[0].data){
     S.retroVista=S.hist[0].data; salvar();
     setTimeout(()=>mostrarRetro(S.hist[0]),650);
   }
   setTimeout(()=>{ checarAlertas(false); checarAgenda(false); },1600);
-})();
+  if(recemLogado) toast('Bem-vindo de volta');
+}
 
-/* checagens periódicas */
-setInterval(()=>checarAgenda(false),60*1000);          // o minuto do horário marcado
-setInterval(()=>checarAlertas(false),30*60*1000);      // os alertas de situação
+function pintarConta(){
+  const u=Auth.usuario(); if(!u) return;
+  $('#contaEmail').textContent=u.email||'—';
+  $('#contaAvatar').textContent=(u.email||'?').charAt(0);
+  $('#contaDesde').textContent='Sessão ativa neste aparelho';
+  pintarSinc();
+}
+
+/* Limpa a cópia local de uma conta em TODAS as camadas onde o app grava.
+   Sem isso, quem pegasse o aparelho depois poderia ver os dados de quem saiu. */
+async function limparDadosLocais(uid){
+  const chave='sobra-do-mes:u:'+uid;
+  try{ localStorage.removeItem(chave); }catch(e){}
+  try{ await idbDel(chave); }catch(e){}
+  try{ document.cookie=chave+'=;max-age=0;path=/'; }catch(e){}
+  try{ delete memoria[chave]; }catch(e){}
+  try{
+    const db=await idbAbrir();
+    const chaves=await new Promise((res,rej)=>{ const t=db.transaction('kv','readonly');
+      const q=t.objectStore('kv').getAllKeys(); q.onsuccess=()=>res(q.result||[]); q.onerror=()=>rej(q.error); });
+    const copias=chaves.filter(k=>String(k).startsWith('copia:'));
+    if(copias.length){ const t=db.transaction('kv','readwrite');
+      copias.forEach(k=>t.objectStore('kv').delete(k)); }
+  }catch(e){}
+}
+async function sairDaConta(){
+  if(!confirm('Sair da conta?\n\nSeus dados continuam salvos na nuvem e voltam quando você entrar de novo. A cópia guardada neste aparelho será apagada.')) return;
+  const u=Auth.usuario();
+  const b=$('#btnSair'); b.disabled=true; b.textContent='Saindo…';
+  try{ await enviarParaNuvem(); }catch(e){}
+  saindo=true;
+  if(u) await limparDadosLocais(u.id);
+  await Auth.sair();
+  location.replace('/');
+}
+
+/* ==========================================================================
+   Nova versão disponível
+   ========================================================================== */
+let swEsperando=null;
+function mostrarAtualizacao(reg){
+  swEsperando=(reg&&reg.waiting)||null;
+  $('#atualiza').classList.add('abre');
+}
+$('#btnAtualizar').onclick=async()=>{
+  const b=$('#btnAtualizar');
+  b.disabled=true; b.textContent='Atualizando…';
+  try{ await salvar(); await enviarParaNuvem(); }catch(e){}
+  if(swEsperando){
+    // O SW novo assume e a página recarrega já na versão nova.
+    swEsperando.postMessage({tipo:'pular-espera'});
+    setTimeout(()=>location.reload(),700);
+  }else{
+    try{
+      const rs=await navigator.serviceWorker.getRegistrations();
+      await Promise.all(rs.map(r=>r.update()));
+      const ks=await caches.keys();
+      await Promise.all(ks.map(k=>caches.delete(k)));
+    }catch(e){}
+    location.reload();
+  }
+};
+$('#btnAtualizarDepois').onclick=()=>$('#atualiza').classList.remove('abre');
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(!window.__recarregando){ window.__recarregando=true; location.reload(); }
+  });
+}
+
+/* ==========================================================================
+   Eventos da conta
+   ========================================================================== */
+$('#sinc').onclick=()=>{ if(Auth.logado()) puxarDaNuvem(); };
+$('#btnSincAgora').onclick=async()=>{ await puxarDaNuvem(); await enviarParaNuvem(); toast('Sincronizado'); };
+$('#btnSair').onclick=sairDaConta;
+$('#btnTrocarSenha').onclick=()=>{
+  const el=$('#trocaSenha'); el.hidden=!el.hidden;
+  if(!el.hidden) $('#novaSenha').focus();
+};
+$('#salvarSenha').onclick=async()=>{
+  const v=$('#novaSenha').value, msg=Auth.validarSenha(v);
+  if(msg){ toast(msg,true); return; }
+  try{
+    await Auth.definirNovaSenha(v);
+    $('#novaSenha').value=''; $('#trocaSenha').hidden=true;
+    toast('Senha alterada');
+  }catch(e){ toast(Auth.mensagemDeErro(e),true); }
+};
+
+/* ==========================================================================
+   Partida
+   ========================================================================== */
+function esconderSplash(){
+  const s=document.getElementById('splash');
+  if(s){ s.classList.add('sai'); setTimeout(()=>s.remove(),380); }
+}
+(async()=>{
+  ligarAuth();
+  try{
+    // Voltou do e-mail de recuperação: o token vem no fragmento da URL.
+    const frag=new URLSearchParams(location.hash.replace(/^#/,''));
+    if(frag.get('access_token')){
+      const s=Auth.montarSessao({
+        access_token:frag.get('access_token'),
+        refresh_token:frag.get('refresh_token'),
+        expires_in:+frag.get('expires_in')||3600,
+        user:{}
+      });
+      if(s){
+        Auth.guardarSessao(s);
+        history.replaceState(null,'',location.pathname);
+        await abrirApp(true);
+        irPara('ajustes:conta');
+        $('#trocaSenha').hidden=false;
+        toast('Agora escolha uma senha nova');
+        esconderSplash();
+        return;
+      }
+    }
+    if(Auth.logado()) await abrirApp(false);
+    else mostrarAuth();
+  }catch(e){
+    mostrarAuth();
+    avisoAuth('Algo saiu do lugar ao abrir o app. Entre de novo, por favor.');
+  }finally{
+    esconderSplash();
+  }
+})();

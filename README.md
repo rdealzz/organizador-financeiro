@@ -5,7 +5,9 @@ Você diz quanto ganha e quanto quer guardar; o app divide o resto em tetos por
 categoria, fecha a fatura sozinho na data do cartão, guarda o histórico e avisa
 no celular quando o gasto foge do plano.
 
-Site estático, sem backend. **Nenhum dado sai do seu aparelho.**
+Cada pessoa tem sua conta. Os dados ficam numa linha só dela no banco,
+protegida por Row Level Security — e uma cópia local mantém o app funcionando
+sem internet.
 
 ## As quatro áreas
 
@@ -37,6 +39,78 @@ O painel não abre com "sobra prevista" — abre com **quanto você pode gastar
 hoje**: o que ainda cabe no ciclo dividido pelos dias que faltam até a fatura
 fechar, já descontada a meta de poupança. É o número que decide se você pede o
 delivery ou não.
+
+## Conta e segurança
+
+Autenticação com **Supabase Auth** (e-mail e senha) e isolamento no **Postgres**,
+não no navegador. A tabela `estado` tem a chave primária igual ao `id` do
+usuário e quatro políticas de RLS amarradas a `auth.uid()` — uma por operação.
+A tabela usa `force row level security`, então nem o dono escapa das políticas.
+
+Isso foi **testado, não suposto**. Com um segundo usuário autenticado mandando
+SQL direto no banco contra a linha de outro:
+
+| Ataque | Resultado |
+|---|---|
+| Listar a tabela inteira | 0 linhas |
+| `SELECT` na linha alheia | nada retornado |
+| `UPDATE` na linha alheia | 0 linhas afetadas |
+| `DELETE` na linha alheia | 0 linhas afetadas |
+| `INSERT` forjando o `user_id` | bloqueado pela política |
+| Gravar o próprio estado | funciona |
+
+A chave publicável (`anon`) vai no HTML de propósito: ela é feita para ficar
+exposta. Quem protege os dados é o RLS, não o sigilo dessa chave.
+
+**No aparelho:** a cópia local é guardada numa chave por usuário
+(`sobra-do-mes:u:<id>`), então trocar de conta no mesmo celular não mistura
+nada. Ao sair, o app apaga a cópia local em todas as camadas — localStorage,
+IndexedDB, cookie e as cópias de segurança diárias — e encerra a sessão em
+todos os aparelhos.
+
+### Cliente sem dependências
+
+Falamos com a API do Supabase por `fetch` puro (`auth.js`): sem SDK, sem CDN,
+sem nada para dar errado offline. Token renovado sozinho um minuto antes de
+vencer; sem rede, a sessão continua valendo localmente e o app segue
+funcionando.
+
+### Configuração do projeto
+
+Ao publicar seu próprio clone, troque `SB.url` e `SB.key` em `auth.js` e rode a
+migração de `supabase/` no seu projeto.
+
+> **Confirmação de e-mail:** projetos novos do Supabase vêm com "Confirm email"
+> ligado, e o SMTP compartilhado do plano gratuito é bem limitado (poucos
+> e-mails por hora). O app trata os dois casos — se o cadastro não devolver
+> sessão, ele mostra a tela de "confirme seu e-mail" com botão de reenvio. Para
+> um fluxo sem fricção, desligue a confirmação em *Authentication → Providers →
+> Email*; para produção de verdade, configure um SMTP próprio.
+
+## Sincronização
+
+Local primeiro, nuvem em seguida. Toda gravação salva no aparelho na hora e
+sobe para a conta 1,2 s depois (com fila quando offline). Ao abrir, o app puxa
+o que está na nuvem e compara pelo carimbo da **última mudança de conteúdo** —
+não pela hora da gravação, senão só abrir o app já faria o aparelho parecer
+mais novo que a nuvem. Duas redes de segurança: um aparelho vazio nunca
+sobrescreve uma conta com dados, e um estado vazio nunca é enviado por cima de
+uma linha existente.
+
+O indicador no cabeçalho mostra o estado real: sincronizado (com a hora),
+sincronizando, offline ou falha.
+
+## Nova versão disponível
+
+Quando um deploy novo chega na `main`, o app detecta (ao abrir, ao voltar para
+ele e de hora em hora) e mostra um banner **"Uma nova versão está disponível"**
+com o botão **Atualizar**. O service worker novo fica em espera — nada troca
+sem a pessoa pedir. Ao tocar em Atualizar, o app salva e sincroniza o que
+estiver pendente, manda o service worker assumir e recarrega já na versão nova.
+
+Não existe atualização silenciosa por trás disso porque um PWA não pode fazer
+isso sem recarregar a página no meio do uso — o botão é a forma mais simples e
+previsível que a plataforma permite.
 
 ## Como os dados ficam salvos
 
@@ -124,10 +198,12 @@ command, **Output Directory: `.`** (raiz). O `vercel.json` já cuida dos headers
 ## Estrutura
 
 ```
-index.html            marcação e as abas
+index.html            marcação: tela de entrar, as quatro áreas, folha, banners
 styles.css            estilo (claro/escuro, segue o sistema na primeira vez)
-app.js                cálculo, persistência, gráficos, alertas, importação
-sw.js                 service worker: offline + entrega das notificações
+auth.js               autenticação e acesso ao banco, por fetch puro
+app.js                cálculo, persistência, sincronização, gráficos, alertas
+sw.js                 service worker: offline, notificações e atualização
+supabase/             a migração que cria a tabela e as políticas de RLS
 manifest.webmanifest  PWA
 vercel.json           headers do deploy
 icons/                ícones do app

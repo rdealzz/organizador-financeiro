@@ -1,9 +1,9 @@
 /* Sobra do Mês — service worker
    Objetivo: o app abre e funciona sem internet, e as notificações
    continuam sendo entregues pelo sistema mesmo com a aba fechada. */
-const VERSAO = 'sobra-v3.0.0';
+const VERSAO = 'sobra-v4.0.0';
 const CASCA = [
-  '/', '/index.html', '/styles.css', '/app.js', '/manifest.webmanifest',
+  '/', '/index.html', '/styles.css', '/app.js', '/auth.js', '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png',
   '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png', '/icons/favicon-32.png'
 ];
@@ -13,7 +13,8 @@ self.addEventListener('install', e => {
     const c = await caches.open(VERSAO);
     // addAll falha inteiro se um item falhar; guardamos um a um
     await Promise.all(CASCA.map(u => c.add(u).catch(() => {})));
-    self.skipWaiting();
+    // Sem skipWaiting: a versão nova fica em espera e a página oferece o
+    // botão "Atualizar". Quem decide a hora de trocar é a pessoa.
   })());
 });
 
@@ -24,42 +25,64 @@ self.addEventListener('activate', e => {
     if (self.registration.navigationPreload) {
       try { await self.registration.navigationPreload.enable(); } catch (_) {}
     }
-    await self.clients.claim();
+    // Sem clients.claim(): assumir uma página que ainda está sendo lida trava
+    // o carregamento dos scripts dela. O SW passa a valer na próxima navegação,
+    // que é o comportamento padrão e seguro.
   })());
 });
 
-/* Navegação: rede primeiro (pega deploy novo), cai pro cache offline.
-   Estáticos do mesmo domínio: cache primeiro, revalida em segundo plano. */
+/* Navegação: rede primeiro (pega o deploy novo), cai pro cache offline.
+   Estáticos do mesmo domínio: cache primeiro, com atualização em segundo plano.
+
+   Regra de ouro deste arquivo: guardar a cópia SEMPRE antes de devolver a
+   resposta, e devolver a original. Clonar depois de entregar trava o corpo e
+   o navegador fica esperando um script que nunca termina. */
+function guardar(req, res) {
+  if (!res || !res.ok || res.type === 'opaque') return;
+  const copia = res.clone();
+  caches.open(VERSAO).then(c => c.put(req, copia)).catch(() => {});
+}
+
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
-  const url = new URL(req.url);
-  if (url.origin !== location.origin) return;
+
+  let url;
+  try { url = new URL(req.url); } catch (_) { return; }
+  if (url.origin !== location.origin) return;                    // Supabase e fontes passam direto
+  if (url.pathname.startsWith('/auth/') || url.pathname.startsWith('/rest/')) return;
 
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
       try {
         const pre = await e.preloadResponse;
         const res = pre || await fetch(req);
-        const c = await caches.open(VERSAO);
-        c.put('/index.html', res.clone());
+        guardar(new Request('/index.html'), res);
         return res;
       } catch (_) {
-        return (await caches.match('/index.html')) || (await caches.match('/')) ||
-               new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+        const cache = await caches.match('/index.html') || await caches.match('/');
+        return cache || new Response(
+          '<meta charset="utf-8"><p style="font:16px system-ui;padding:24px">Sem conexão e sem cópia salva. Abra o app uma vez com internet.',
+          { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
       }
     })());
     return;
   }
 
   e.respondWith((async () => {
-    const hit = await caches.match(req);
-    const rede = fetch(req).then(res => {
-      if (res && res.ok) caches.open(VERSAO).then(c => c.put(req, res.clone()));
+    const guardado = await caches.match(req);
+    if (guardado) {
+      // Revalida em segundo plano, sem prender a resposta que já foi entregue.
+      e.waitUntil(fetch(req).then(res => guardar(req, res)).catch(() => {}));
+      return guardado;
+    }
+    try {
+      const res = await fetch(req);
+      guardar(req, res);
       return res;
-    }).catch(() => null);
-    return hit || (await rede) ||
-      new Response('', { status: 504 });
+    } catch (_) {
+      return new Response('', { status: 504, statusText: 'offline' });
+    }
   })());
 });
 
@@ -81,6 +104,9 @@ self.addEventListener('message', e => {
     });
   }
   if (d.tipo === 'pular-espera') self.skipWaiting();
+  if (d.tipo === 'versao') {
+    if (e.source) e.source.postMessage({ tipo: 'versao', versao: VERSAO });
+  }
 });
 
 self.addEventListener('notificationclick', e => {

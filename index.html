@@ -19,13 +19,111 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
+<style>
+/* Splash inline: pintada no primeiro frame, sem esperar CSS externo nem JS. */
+#splash{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:18px;background:#F2F2F7;
+  transition:opacity .32s ease,visibility .32s}
+@media(prefers-color-scheme:dark){#splash{background:#000}}
+html[data-tema="escuro"] #splash{background:#000}
+#splash.sai{opacity:0;visibility:hidden}
+#splash .marca{width:74px;height:74px;border-radius:20px;background:#0B0B0C;
+  display:flex;align-items:flex-end;justify-content:center;gap:5px;padding:17px 15px;
+  box-shadow:0 8px 30px rgba(0,0,0,.18)}
+#splash .marca i{display:block;width:8px;border-radius:3px;background:#8E8E93;
+  animation:pulsa 1.15s ease-in-out infinite}
+#splash .marca i:nth-child(1){height:34%;animation-delay:0s}
+#splash .marca i:nth-child(2){height:52%;animation-delay:.12s}
+#splash .marca i:nth-child(3){height:70%;animation-delay:.24s}
+#splash .marca i:nth-child(4){height:100%;background:#34C759;animation-delay:.36s}
+@keyframes pulsa{0%,100%{opacity:.45;transform:scaleY(.82)}50%{opacity:1;transform:scaleY(1)}}
+#splash .nome{font:600 15px/1.3 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  color:#8E8E93;letter-spacing:-.01em}
+@media(prefers-reduced-motion:reduce){#splash .marca i{animation:none;opacity:1}}
+</style>
 </head>
 <body>
 
-<div class="wrap">
+<div id="splash" role="status" aria-label="Carregando">
+  <div class="marca" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <div class="nome">Sobra do Mês</div>
+</div>
+
+
+<!-- ══════════════════════ AUTENTICAÇÃO ══════════════════════ -->
+<div class="auth" id="auth" hidden>
+  <div class="auth-caixa">
+    <div class="auth-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <h1 class="auth-tit" id="authTit">Entrar</h1>
+    <p class="auth-sub" id="authSub">Seus dados ficam na sua conta, e só nela.</p>
+
+    <div class="auth-erro" id="authErro" role="alert" aria-live="assertive" hidden></div>
+    <div class="auth-ok" id="authOk" role="status" aria-live="polite" hidden></div>
+
+    <form id="authForm" novalidate>
+      <div class="campo">
+        <label for="authEmail">E-mail</label>
+        <input type="email" id="authEmail" autocomplete="email" inputmode="email"
+               autocapitalize="none" spellcheck="false" placeholder="voce@email.com"
+               aria-describedby="errEmail">
+        <p class="campo-erro" id="errEmail" hidden></p>
+      </div>
+
+      <div class="campo" id="campoSenha">
+        <label for="authSenha">Senha</label>
+        <div class="senha-caixa">
+          <input type="password" id="authSenha" autocomplete="current-password"
+                 placeholder="pelo menos 8 caracteres" aria-describedby="errSenha">
+          <button type="button" class="olho" data-ver="authSenha"
+                  aria-label="Mostrar senha" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="o-aberto" d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle class="o-aberto" cx="12" cy="12" r="3.2"/><path class="o-riscado" d="m4 4 16 16" hidden/></svg>
+          </button>
+        </div>
+        <div class="forca" id="forcaSenha" hidden>
+          <div class="forca-trilho"><i></i></div><span></span>
+        </div>
+        <p class="campo-erro" id="errSenha" hidden></p>
+      </div>
+
+      <div class="campo" id="campoConfirma" hidden>
+        <label for="authConfirma">Confirmar senha</label>
+        <div class="senha-caixa">
+          <input type="password" id="authConfirma" autocomplete="new-password"
+                 placeholder="digite a senha de novo" aria-describedby="errConfirma">
+          <button type="button" class="olho" data-ver="authConfirma"
+                  aria-label="Mostrar senha" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="o-aberto" d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle class="o-aberto" cx="12" cy="12" r="3.2"/><path class="o-riscado" d="m4 4 16 16" hidden/></svg>
+          </button>
+        </div>
+        <p class="campo-erro" id="errConfirma" hidden></p>
+      </div>
+
+      <button type="submit" class="btn auth-btn" id="authEnviar">Entrar</button>
+    </form>
+
+    <button type="button" class="link auth-link" id="authEsqueci">Esqueci minha senha</button>
+
+    <div class="auth-troca">
+      <span id="authTrocaTxt">Ainda não tem conta?</span>
+      <button type="button" class="link" id="authTroca">Criar conta</button>
+    </div>
+
+    <p class="auth-nota">
+      <svg viewBox="0 0 24 24" aria-hidden="true" class="cadeado"><path d="M6.5 10.5V8a5.5 5.5 0 0 1 11 0v2.5"/><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/></svg>
+      Cada conta enxerga só os próprios dados — a regra vive no banco, não aqui no
+      navegador. Nem com a chave pública em mãos dá pra ler a conta de outra pessoa.
+    </p>
+  </div>
+</div>
+
+<div class="wrap" id="appWrap" hidden>
 
 <header>
-  <button class="tema-btn" id="btnTema" aria-label="Alternar tema">🌙</button>
+  <div class="cab-acoes">
+    <button class="sinc" id="sinc" type="button" aria-live="polite">
+      <i aria-hidden="true"></i><span>—</span></button>
+    <button class="tema-btn" id="btnTema" aria-label="Alternar tema">🌙</button>
+  </div>
   <div class="eyebrow" id="saudacao">Controle financeiro pessoal</div>
   <h1 id="tituloArea">Hoje</h1>
 </header>
@@ -207,6 +305,7 @@
   <div class="subnav" role="tablist">
     <button class="sub" role="tab" aria-selected="true" data-s="alertas">Alertas</button>
     <button class="sub" role="tab" aria-selected="false" data-s="extrato">Importar</button>
+    <button class="sub" role="tab" aria-selected="false" data-s="conta">Conta</button>
     <button class="sub" role="tab" aria-selected="false" data-s="dados">Meus dados</button>
   </div>
 
@@ -259,6 +358,30 @@
       <button class="btn sec" id="limparPrev">Descartar</button>
     </div>
     <div id="prev"></div>
+  </section>
+
+  <section class="bloco" id="t-conta" hidden>
+    <h2>Sua conta</h2>
+    <div class="conta-topo">
+      <div class="avatar" id="contaAvatar" aria-hidden="true">?</div>
+      <div class="conta-inf"><b id="contaEmail">—</b><span id="contaDesde">—</span></div>
+    </div>
+    <div id="contaSinc"></div>
+    <div class="acoes">
+      <button class="btn sec" id="btnSincAgora">Sincronizar agora</button>
+      <button class="btn sec" id="btnTrocarSenha">Trocar a senha</button>
+      <button class="btn sec" id="btnSair" style="color:var(--vermelho)">Sair da conta</button>
+    </div>
+    <div id="trocaSenha" hidden>
+      <div class="grade g2" style="margin-top:6px">
+        <div class="full"><label for="novaSenha">Nova senha</label>
+          <div class="senha-caixa"><input type="password" id="novaSenha" autocomplete="new-password" placeholder="pelo menos 8 caracteres">
+          <button type="button" class="olho" data-ver="novaSenha" aria-label="Mostrar senha" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="o-aberto" d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle class="o-aberto" cx="12" cy="12" r="3.2"/><path class="o-riscado" d="m4 4 16 16" hidden/></svg></button></div></div>
+      </div>
+      <div class="acoes"><button class="btn" id="salvarSenha">Salvar nova senha</button></div>
+    </div>
+    <p class="ajuda" style="margin-top:14px">Os dados sobem cifrados pelo HTTPS e ficam numa linha só sua, protegida por Row Level Security no banco. Sair da conta encerra a sessão em todos os aparelhos e limpa a cópia local deste.</p>
   </section>
 
   <section class="bloco" id="t-dados" hidden>
@@ -350,9 +473,19 @@
   <div class="retro-corpo" id="retroCorpo"></div>
 </div>
 
+<div class="atualiza" id="atualiza" role="status" aria-live="polite">
+  <div class="at-ic" aria-hidden="true">
+    <svg viewBox="0 0 24 24"><path d="M12 4v10"/><path d="m8 10.5 4 4 4-4"/><path d="M5 19h14"/></svg>
+  </div>
+  <div class="at-tx"><b>Uma nova versão está disponível.</b><span id="atNota">Toque em atualizar para receber as novidades.</span></div>
+  <button class="btn" id="btnAtualizar">Atualizar</button>
+  <button class="btn-x" id="btnAtualizarDepois" aria-label="Agora não">×</button>
+</div>
+
 <div class="snack" id="snack" role="status" aria-live="polite"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<script src="/auth.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>
