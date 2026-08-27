@@ -16,10 +16,21 @@
   --r-full:999px;
   --r:var(--r-md); --r-s:var(--r-sm);          /* nomes antigos, mesmos valores */
 
-  /* ---- sombra: difusa e discreta; profundidade vem da hierarquia ---- */
-  --s1:0 1px 2px rgba(16,17,20,.04);
-  --s2:0 1px 2px rgba(16,17,20,.04), 0 8px 24px -10px rgba(16,17,20,.10);
-  --s3:0 12px 44px -14px rgba(16,17,20,.22), 0 2px 8px rgba(16,17,20,.05);
+  /* ---- movimento: uma curva para tudo ----
+     Um único conjunto de curvas e durações. Nada no app muda de estado em 0ms,
+     e nada usa a curva "linear", que é a que faz interface parecer máquina. */
+  --suave:cubic-bezier(.2,.8,.2,1);           /* padrão: entra firme, para calmo */
+  --mola:cubic-bezier(.32,.72,0,1);           /* folhas e avisos que deslizam */
+  --elastico:cubic-bezier(.34,1.56,.64,1);    /* passa do ponto e volta */
+  --t-rapido:180ms; --t-medio:280ms; --t-lento:400ms;
+
+  /* ---- sombra: longa, difusa e levemente roxa ----
+     Sombra cinza sobre fundo quente suja a tela. Puxando a sombra para o roxo
+     da marca e espalhando bastante, a profundidade aparece sem que se veja a
+     sombra: o cartão parece flutuar, não parece ter uma mancha embaixo. */
+  --s1:0 1px 2px rgba(76,44,116,.05);
+  --s2:0 1px 2px rgba(76,44,116,.05), 0 10px 28px -12px rgba(104,60,160,.18);
+  --s3:0 24px 64px -22px rgba(104,60,160,.30), 0 3px 10px rgba(76,44,116,.07);
   --sombra:var(--s2);
 
   /* ---- tipografia ---- */
@@ -27,11 +38,21 @@
   --t-lg:20px;    --t-xl:26px;  --t-2xl:32px;  --t-3xl:42px;
   --peso-n:400; --peso-m:500; --peso-sm:600; --peso-b:700;
 
-  /* ---- superfícies e texto: neutro puro, sem tingimento azulado ---- */
-  --bg:#F4F4F6; --card:#FFFFFF; --card-2:#FAFAFA;
-  --sep:rgba(16,17,20,.08);
-  --txt:#101114; --txt-2:rgba(16,17,20,.60); --txt-3:rgba(16,17,20,.40);
-  --fill:rgba(16,17,20,.045); --fill-2:rgba(16,17,20,.085);
+  /* ---- superfícies e texto ----
+     O fundo é um neutro QUENTE, com um fio de violeta: cinza puro ao lado de
+     branco puro deixa a tela com cara de papel de escritório. Aquecendo o
+     fundo, o branco dos cartões vira o ponto mais claro da tela e é ele que
+     recebe o olho — a hierarquia sai da luz, não de mais uma borda.
+
+     O texto também não é preto: é o mesmo violeta bem escuro. Preto puro
+     sobre branco puro vibra e cansa em leitura longa, e uma tela de finanças
+     é leitura longa. Contraste do corpo: 15,8:1. */
+  --bg:#F7F5FA; --card:#FFFFFF; --card-2:#F4F1F8;
+  --sep:rgba(58,38,86,.10);
+  --txt:#171320; --txt-2:rgba(23,19,32,.62); --txt-3:rgba(23,19,32,.42);
+  --fill:rgba(58,38,86,.05); --fill-2:rgba(58,38,86,.09);
+  --vidro:rgba(255,255,255,.72);        /* superfícies flutuantes translúcidas */
+  --vidro-borda:rgba(255,255,255,.85);
 
   /* ---- cor com propósito: ação, sucesso, erro, alerta. Só isso ----
      Cada cor tem duas formas: a de preencher (fundo de botão, barra, valor
@@ -113,7 +134,9 @@ h1 em{font-style:normal;color:var(--verde)}
 .ciclo .txt{flex:1;min-width:180px;font-size:14px;color:var(--txt-2)}
 .ciclo .txt b{color:var(--txt);font-weight:600}
 .pista{height:6px;background:var(--fill-2);border-radius:var(--r-full);overflow:hidden;margin-top:8px}
-.pista i{display:block;height:100%;background:var(--azul);border-radius:var(--r-full);transition:width .5s ease}
+.pista i{display:block;width:100%;height:100%;background:var(--azul);border-radius:var(--r-full);
+  transform:translateX(calc((var(--p,0) - 1) * 100%));
+  transition:transform .5s var(--suave)}
 /* régua */
 .regua{margin-top:18px}
 .barra{display:flex;height:38px;border-radius:var(--r-s);overflow:hidden;background:var(--fill)}
@@ -184,7 +207,14 @@ td input,td select{padding:7px 9px;font-size:14px;border-radius:var(--r-xs)}
 .teto-nome{font-weight:600;font-size:16px;letter-spacing:-.01em}
 .teto-n{font-size:13px;color:var(--txt-3);font-variant-numeric:tabular-nums}
 .trilho{height:8px;background:var(--fill-2);border-radius:var(--r-full);overflow:hidden;margin-top:10px}
-.trilho i{display:block;height:100%;border-radius:var(--r-full);transition:width .5s cubic-bezier(.2,.8,.2,1)}
+/* A barra tem sempre 100% de largura e desliza para dentro do trilho, que a
+   recorta. Animar `width` obrigaria o navegador a refazer o layout a cada
+   quadro; `scaleX` resolveria isso mas achataria as pontas arredondadas — uma
+   barra de 6 px esticada 20x vira uma elipse. Deslizar preserva as duas
+   coisas: nenhuma conta de layout e a ponta redonda intacta. */
+.trilho i{display:block;width:100%;height:100%;border-radius:var(--r-full);
+  transform:translateX(calc((var(--p,0) - 1) * 100%));
+  transition:transform .5s var(--suave)}
 .teto-acao{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;flex-wrap:wrap;color:var(--txt-2)}
 .teto-acao input{width:104px;padding:6px 9px;font-size:14px}
 .teto-acao label{margin:0;font-size:12px}
@@ -377,9 +407,11 @@ td input,td select{padding:7px 9px;font-size:14px;border-radius:var(--r-xs)}
 /* ==========================================================================
    v3 — app premium: navegação por área, folha de lançamento, microinterações
    ========================================================================== */
+/* As curvas viviam definidas duas vezes: aqui e no sistema de design lá em
+   cima. Como este bloco vem depois, era ele que valia — e o de cima, o que
+   documentava o sistema, não tinha efeito nenhum. Ficou uma definição só, lá
+   em cima, com estes mesmos valores. */
 :root{
-  --mola:cubic-bezier(.32,.72,0,1);
-  --suave:cubic-bezier(.2,.8,.2,1);
   --barra-h:calc(58px + env(safe-area-inset-bottom));
 }
 body{padding-bottom:calc(var(--barra-h) + 12px)}
@@ -1553,3 +1585,106 @@ body.fundo-vivo .menu-perfil{box-shadow:0 26px 70px -18px rgba(0,0,0,.9)}
   .cena.mergulha #capaCena{transform:none}
   body.tem-cena .auth-caixa{animation:none}
 }
+
+/* ==========================================================================
+   v6 — Física de interface (a parte visual)
+   O JavaScript só escreve quatro números: --rx e --ry (-1 a 1, onde o cursor
+   está em relação ao centro) e --mx/--my (a posição dele, em %). Todo o resto
+   é CSS. Isso mantém a animação em transform/opacity, que o navegador resolve
+   sem recalcular o layout da página.
+   ========================================================================== */
+.card, .hero, .corte, .re-card{
+  transform-style:preserve-3d;
+  transition:transform var(--t-lento) var(--suave), box-shadow var(--t-medio) ease;
+  will-change:auto;
+}
+/* Enquanto o cursor está em cima, quem manda é o laço de animação: nada de
+   transição, senão os dois brigam e o movimento fica pastoso. */
+.tilt-ativo{
+  transition:box-shadow var(--t-medio) ease !important;
+  will-change:transform;
+}
+.tilt-ativo{
+  transform:
+    perspective(900px)
+    rotateY(calc(var(--rx,0) * 5.5deg))
+    rotateX(calc(var(--ry,0) * -5.5deg))
+    translateZ(0);
+}
+.card.tilt-ativo, .re-card.tilt-ativo{box-shadow:var(--s3)}
+
+/* Profundidade real: cada camada anda uma distância diferente. É a diferença
+   entre "o cartão inclinou" e "o cartão tem dentro". */
+.tilt-ativo .l{transform:translate3d(calc(var(--rx,0)*3px), calc(var(--ry,0)*3px), 0)}
+.tilt-ativo .v{transform:translate3d(calc(var(--rx,0)*7px), calc(var(--ry,0)*7px), 0)}
+.tilt-ativo .n{transform:translate3d(calc(var(--rx,0)*4px), calc(var(--ry,0)*4px), 0)}
+.card .l, .card .v, .card .n{transition:transform var(--t-lento) var(--suave)}
+
+/* Brilho seguindo o cursor. Fica atrás do conteúdo e não intercepta clique. */
+.card, .hero, .re-card{position:relative;overflow:hidden;isolation:isolate}
+.card::after, .hero::after, .re-card::after{
+  content:''; position:absolute; inset:0; z-index:-1; pointer-events:none;
+  opacity:0; transition:opacity var(--t-medio) ease;
+  background:radial-gradient(240px circle at var(--mx,50%) var(--my,50%),
+             rgba(124,77,190,.13), transparent 62%);
+}
+.tilt-ativo::after{opacity:1}
+[data-tema="escuro"] .card::after,
+[data-tema="escuro"] .hero::after,
+[data-tema="escuro"] .re-card::after,
+body.fundo-vivo .card::after,
+body.fundo-vivo .hero::after,
+body.fundo-vivo .re-card::after{
+  background:radial-gradient(240px circle at var(--mx,50%) var(--my,50%),
+             rgba(255,138,190,.14), transparent 62%);
+}
+
+/* ---- Compressão no clique ----
+   Aperta rápido, volta passando um pouco do ponto. É o gesto que faz o botão
+   parecer um objeto e não uma área colorida. */
+.btn, .sub, .aba, .tb, .chip-s, .card, .re-card{
+  transition:transform var(--t-rapido) var(--suave),
+             box-shadow var(--t-medio) ease,
+             background-color var(--t-rapido) ease,
+             color var(--t-rapido) ease;
+}
+.btn:active, .sub:active, .aba:active, .chip-s:active{transform:scale(.965)}
+.btn:not(:active):hover{transform:translateY(-1px)}
+.btn{transition-timing-function:var(--elastico)}
+
+/* ---- Inputs: borda que cresce e brilho de acento ---- */
+input, select, textarea{
+  transition:border-color var(--t-medio) var(--suave),
+             box-shadow var(--t-medio) var(--suave),
+             background-color var(--t-medio) ease;
+}
+input:hover:not(:focus), select:hover:not(:focus){border-color:var(--txt-3)}
+input:focus, select:focus, textarea:focus{
+  outline:none;
+  border-color:var(--azul);
+  box-shadow:0 0 0 3px var(--azul-fraco), 0 4px 16px -6px rgba(11,105,239,.35);
+}
+
+@media (prefers-reduced-motion:reduce){
+  .card, .hero, .corte, .re-card, .btn, .sub, .aba, .tb, .chip-s,
+  input, select, textarea{transition-duration:.01ms !important}
+  .tilt-ativo{transform:none}
+  .card::after, .hero::after, .re-card::after{display:none}
+}
+
+/* ---- Vidro no tema claro ----
+   Só onde a superfície FLUTUA sobre o conteúdo: a barra e o menu. Nos painéis
+   da página não há nada atrás para desfocar — seria custo de renderização sem
+   efeito nenhum. E nada disso vale com a esfera ligada: ali o desfoque teria
+   de ser refeito a cada quadro, para cada painel, e já custou 16 fps uma vez. */
+:root:not([data-tema="escuro"]) body:not(.fundo-vivo) .menu-perfil{
+  background:var(--vidro);
+  backdrop-filter:saturate(180%) blur(24px);
+  -webkit-backdrop-filter:saturate(180%) blur(24px);
+  border:1px solid var(--vidro-borda);
+  box-shadow:var(--s3);
+}
+
+/* Tabelas dentro dos gráficos rolam sozinhas em vez de empurrar a página. */
+.tab-rol{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.tab-rol table{min-width:100%}

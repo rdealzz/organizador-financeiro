@@ -369,7 +369,7 @@ function renderHist(){
       return `<div class="teto" style="padding:10px 0">
         <div class="teto-l"><span class="teto-nome" style="font-size:15px"><span class="pt" style="background:${CATS[k]?CATS[k].c:'var(--cout)'}"></span>${CATS[k]?CATS[k].n:k}</span>
         <span class="teto-n">${brl(v)}${d===null?'':' <b style="color:'+(d>0?'var(--vermelho)':'var(--verde)')+'">'+(d>0?'+':'−')+brl(Math.abs(d))+'</b>'}</span></div>
-        <div class="trilho"><i style="width:${x.meu>0?Math.min(v/x.meu*100,100):0}%;background:${CATS[k]?CATS[k].c:'var(--cout)'}"></i></div>
+        <div class="trilho"><i style="--p:${x.meu>0?Math.min(v/x.meu,1).toFixed(4):0};background:${CATS[k]?CATS[k].c:'var(--cout)'}"></i></div>
       </div>`;}).join(''):''}
    ${itens.length?`<h3>${itens.length} lançamentos</h3>
      <table><thead><tr><th>Descrição</th><th>Categoria</th><th style="text-align:right">Fatura</th><th style="text-align:right">Meu</th></tr></thead><tbody>`+
@@ -391,7 +391,7 @@ function renderTetos(c){
     return `<div class="teto">
       <div class="teto-l"><span class="teto-nome"><span class="pt" style="background:${cat.c}"></span>${cat.n}</span>
       <span class="teto-n">${brl(g)} de ${brl(t)}${c.renda?' · '+pct(t/c.renda)+' da renda':''}</span></div>
-      <div class="trilho"><i style="width:${p}%;background:${cor}"></i></div>
+      <div class="trilho"><i style="--p:${(p/100).toFixed(4)};background:${cor}"></i></div>
       <div class="teto-acao"><span class="veredito ${dif>=0?'ok':'ruim'}">${dif>=0?'cabe mais '+brl(dif):'passou '+brl(-dif)}</span>
       <span style="color:var(--txt-3)">· ${cat.dica}</span>
       <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
@@ -479,7 +479,7 @@ function renderCortes(c){
            <b style="color:${x.alvo>0?'var(--verde)':'var(--alerta)'}">
              ${x.alvo>0?'gaste no máximo '+brl(x.alvo):'ZERE ISSO'}</b>
          </div>
-         <div class="trilho"><i style="width:100%;background:var(--alerta)"></i></div>
+         <div class="trilho"><i style="--p:1;background:var(--alerta)"></i></div>
          <div class="det" style="margin-top:5px">${esc(x.itens.join(' · '))}</div>
        </div>
        <div class="ano">−${brl(x.valor)}<div class="det" style="font-weight:400">por mês</div>
@@ -844,9 +844,13 @@ const brlCurto=v=>{ v=+v||0;
 const DICA_ROL='<p class="viz-dica">Arraste o gráfico pro lado pra ver tudo.</p>';
 function rolagem(inner){ return '<div class="viz-rol">'+inner+'</div>'+DICA_ROL; }
 function tabela(cab,linhas){
+  /* A tabela vai dentro de um container que rola no eixo x. Numa tela de
+     320 px ela é mais larga que a janela, e sem isto empurrava a página
+     inteira para o lado. Rolar dentro da própria tabela resolve sem espremer
+     as colunas até virarem ilegíveis. */
   return `<details class="viz-tab"><summary>ver os números em tabela</summary>
-   <table><thead><tr>${cab.map((c,i)=>`<th${i?' style="text-align:right"':''}>${c}</th>`).join('')}</tr></thead>
-   <tbody>${linhas.map(l=>`<tr>${l.map((c,i)=>`<td${i?' class="v"':''}>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></details>`;
+   <div class="tab-rol"><table><thead><tr>${cab.map((c,i)=>`<th${i?' style="text-align:right"':''}>${c}</th>`).join('')}</tr></thead>
+   <tbody>${linhas.map(l=>`<tr>${l.map((c,i)=>`<td${i?' class="v"':''}>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details>`;
 }
 
 /* ---------- 1. rosca: para onde foi o meu dinheiro ---------- */
@@ -1548,7 +1552,7 @@ function renderHero(c){
   document.querySelector('.hero-mini').hidden=!c.renda;
   document.querySelector('.hero-pista').hidden=!c.renda;
   const ant=ultimoFechPassado(), total=Math.max(Math.round((proximoFech()-ant)/86400000),1);
-  $('#hoje-pista').style.width=Math.round((total-dias)/total*100)+'%';
+  $('#hoje-pista').style.setProperty('--p', ((total-dias)/total).toFixed(4));
   $('#hoje-sobra').textContent=brl(c.sobra);
   $('#hoje-sobra').style.color=c.sobra<0?'var(--vermelho)':'';
   $('#hoje-meta').textContent=brl(c.meta);
@@ -1567,7 +1571,7 @@ function renderTopCats(c){
           <span class="pt" style="background:${CATS[k].c}"></span>${CATS[k].n}</span>
         <span class="num" style="font-size:13px;color:${passou?'var(--vermelho)':'var(--txt-2)'};font-weight:600;white-space:nowrap">
           ${brl(v)}${t>0?' <span style="color:var(--txt-3);font-weight:500">/ '+brl(t)+'</span>':''}</span></div>
-      <div class="trilho" style="margin-top:7px"><i style="width:${p}%;background:${passou?'var(--vermelho)':CATS[k].c}"></i></div>
+      <div class="trilho" style="margin-top:7px"><i style="--p:${(p/100).toFixed(4)};background:${passou?'var(--vermelho)':CATS[k].c}"></i></div>
     </div>`;}).join('')+'</div>';
 }
 
@@ -2912,3 +2916,104 @@ $('#swFundo').onclick=()=>{
   if(ligar) cenaAoFundo(); else encerrarCena();
   toast(ligar?'Esfera ligada atrás do app':'Esfera desligada');
 };
+
+/* ==========================================================================
+   v6 — Física de interface
+
+   O que separa uma interface "animada" de uma que parece ter peso é ela
+   responder ao ponteiro de forma contínua, e não em degraus. Aqui isso é
+   feito com interpolação: a cada quadro o valor atual anda uma fração do
+   caminho até o alvo. É o que elimina o serrilhado de mover direto para a
+   posição do mouse.
+
+   Três regras que este arquivo respeita, e que são o motivo de ele não pesar:
+
+   1. UM ouvinte de ponteiro para a página inteira, não um por cartão. Um
+      cartão entra e sai da tela o tempo todo; prender ouvintes neles seria
+      criar e destruir centenas por sessão, e é assim que se vaza memória.
+   2. O laço de animação NÃO fica rodando à toa. Ele começa quando o ponteiro
+      encontra um cartão e para sozinho quando tudo voltou ao lugar.
+   3. Só `transform` e `opacity` são animados. Mexer em width, margin ou top
+      obriga o navegador a recalcular o layout da página a cada quadro, e aí
+      não existe 60 fps que resista.
+
+   Nada disso vale no toque: sem cursor não há inclinação a seguir, e gastar
+   bateria com isso num celular seria só desperdício.
+   ========================================================================== */
+const ALVOS_TILT = '.card, .hero, .corte, .re-card';
+
+function ligarFisica(){
+  let fino=false, quieto=false;
+  try{
+    fino = matchMedia('(hover:hover) and (pointer:fine)').matches;
+    quieto = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }catch(e){}
+  if(!fino || quieto) return;          // toque ou "menos movimento": nada disso
+
+  let alvo=null;                       // elemento sob o ponteiro
+  let ax=0, ay=0;                      // para onde ele deve inclinar (-1..1)
+  let cx=0, cy=0;                      // onde ele está agora
+  let rodando=false;
+
+  function passo(){
+    // Anda 16% do caminho por quadro: rápido o bastante para acompanhar o
+    // mouse, lento o bastante para o movimento ter inércia.
+    cx += (ax-cx)*0.16;
+    cy += (ay-cy)*0.16;
+
+    if(alvo){
+      alvo.style.setProperty('--rx', cx.toFixed(4));
+      alvo.style.setProperty('--ry', cy.toFixed(4));
+    }
+
+    // Parou de valer a pena continuar? Encerra o laço em vez de girar à toa.
+    if(!alvo && Math.abs(cx)<0.002 && Math.abs(cy)<0.002){
+      rodando=false;
+      return;
+    }
+    requestAnimationFrame(passo);
+  }
+  function acordar(){ if(!rodando){ rodando=true; requestAnimationFrame(passo); } }
+
+  function soltar(){
+    if(alvo){
+      /* Ao sair, o elemento volta ao lugar por CSS, não pelo laço: assim o
+         ponteiro pode entrar noutro cartão no quadro seguinte sem que os dois
+         disputem a mesma variável. */
+      alvo.classList.remove('tilt-ativo');
+      alvo.style.removeProperty('--rx');
+      alvo.style.removeProperty('--ry');
+      alvo.style.removeProperty('--mx');
+      alvo.style.removeProperty('--my');
+      alvo=null;
+    }
+    ax=ay=cx=cy=0;
+  }
+
+  document.addEventListener('pointermove', e=>{
+    const el = e.target.closest ? e.target.closest(ALVOS_TILT) : null;
+    if(el!==alvo){
+      soltar();
+      if(el){ alvo=el; el.classList.add('tilt-ativo'); }
+    }
+    if(!alvo) return;
+
+    const r=alvo.getBoundingClientRect();
+    if(!r.width || !r.height) return;
+    const px=(e.clientX-r.left)/r.width;      // 0..1 dentro do elemento
+    const py=(e.clientY-r.top)/r.height;
+    ax=Math.max(-1,Math.min(1,(px-0.5)*2));
+    ay=Math.max(-1,Math.min(1,(py-0.5)*2));
+    // Posição do brilho que segue o cursor — direto, sem suavizar: ele é luz,
+    // e luz não tem inércia.
+    alvo.style.setProperty('--mx', (px*100).toFixed(1)+'%');
+    alvo.style.setProperty('--my', (py*100).toFixed(1)+'%');
+    acordar();
+  }, {passive:true});
+
+  // Sair da janela, trocar de aba ou rolar a página tira a mão do cartão.
+  document.addEventListener('pointerleave', soltar, {passive:true});
+  window.addEventListener('blur', soltar);
+  document.addEventListener('scroll', ()=>{ if(alvo) soltar(); }, {passive:true});
+}
+ligarFisica();
