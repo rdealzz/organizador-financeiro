@@ -1,7 +1,7 @@
 /* Sobra do Mês — service worker
    Objetivo: o app abre e funciona sem internet, e as notificações
    continuam sendo entregues pelo sistema mesmo com a aba fechada. */
-const VERSAO = 'sobra-v5.3.0';
+const VERSAO = 'sobra-v5.4.0';
 const CASCA = [
   '/', '/index.html', '/styles.css', '/app.js', '/auth.js', '/intro.js', '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png',

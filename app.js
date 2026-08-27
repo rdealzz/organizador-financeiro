@@ -2085,12 +2085,19 @@ function mostrarAuth(){
   $('#tabbar').hidden=true;
   $('#fab').hidden=true;
   pintarModo();
-  // Só busca o foco quando a capa não estiver por cima, senão o teclado do
-  // celular abre atrás dela.
+  focarEntrada();
+}
+
+/* Coloca o cursor no primeiro campo — mas nunca por trás da capa, senão o
+   teclado do celular abre escondido. Enquanto a capa estiver por cima, o foco
+   fica adiado; quem chama de novo é a saída da capa. */
+function focarEntrada(){
   setTimeout(()=>{
     const capa=$('#capa');
-    if(capa && !capa.hidden) return;
-    $a('authEmail').focus();
+    if(capa && !capa.hidden) return;          // a capa chama isto ao sair
+    if($('#auth').hidden) return;             // já entrou no app
+    const alvo=$a(modoAuth==='cadastrar'?'authNome':'authEmail');
+    if(alvo) alvo.focus();
   },380);
 }
 
@@ -2595,6 +2602,7 @@ function mostrarCapa(){
         setTimeout(()=>{
           capa.hidden=true;
           if(cena){ cena.encerrar(); cena=null; }
+          focarEntrada();          // o foco estava adiado enquanto a capa cobria
         },760);
         resolve();
       };
