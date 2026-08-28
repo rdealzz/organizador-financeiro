@@ -81,6 +81,12 @@ async function chamar(caminho, opcoes){
     const e = new Error((corpo && (corpo.msg || corpo.error_description || corpo.message || corpo.error)) || ('HTTP '+r.status));
     e.status = r.status;
     e.codigo = (corpo && (corpo.error_code || corpo.code)) || '';
+    /* Token recusado pelo servidor: a sessão local não vale mais nada. Guardar
+       um token morto no aparelho só serve para o app tentar de novo em loop e
+       para o token ficar guardado além do tempo — some com ele na hora. */
+    if((r.status === 401 || r.status === 403) && o.comToken && caminho.indexOf('/auth/v1/token') < 0){
+      guardarSessao(null);
+    }
     throw e;
   }
   return corpo;
@@ -113,10 +119,56 @@ async function tokenValido(){
   return renovando;
 }
 
+/* ---------- freio de tentativas ----------
+   O Supabase já limita tentativas do lado dele, e é ele quem manda. Este
+   freio é o degrau anterior: segura a força bruta feita PELO app, no próprio
+   aparelho, antes de a rede ser usada. Cresce a cada erro (1s, 2s, 4s… até
+   5 min), zera no acerto, e vale por e-mail para não punir quem só errou a
+   senha uma vez. Não substitui o limite do servidor: soma. */
+const CHAVE_FREIO = 'sobra:freio';
+const FREIO_MAX = 300000;                     // 5 minutos
+function lerFreio(){
+  try{ return JSON.parse(localStorage.getItem(CHAVE_FREIO) || '{}') || {}; }
+  catch(e){ return {}; }
+}
+function gravarFreio(f){
+  try{ localStorage.setItem(CHAVE_FREIO, JSON.stringify(f)); }catch(e){}
+}
+function chaveFreio(email){ return String(email || '').trim().toLowerCase(); }
+function esperaDoFreio(email){
+  const f = lerFreio()[chaveFreio(email)];
+  if(!f || !f.ate) return 0;
+  return Math.max(0, f.ate - Date.now());
+}
+function registrarErroDeLogin(email){
+  const f = lerFreio(), k = chaveFreio(email);
+  const n = ((f[k] && f[k].n) || 0) + 1;
+  // 3 tentativas de graça; a partir daí dobra.
+  const espera = n <= 3 ? 0 : Math.min(FREIO_MAX, 1000 * Math.pow(2, n - 4));
+  f[k] = {n, ate: Date.now() + espera};
+  gravarFreio(f);
+}
+function limparFreio(email){
+  const f = lerFreio(); delete f[chaveFreio(email)]; gravarFreio(f);
+}
+
 /* ---------- entrar, cadastrar, recuperar, sair ---------- */
 async function entrar(email, senha){
-  const r = await chamar('/auth/v1/token?grant_type=password',
-    {method:'POST', body:{email:String(email).trim().toLowerCase(), password:senha}});
+  const espera = esperaDoFreio(email);
+  if(espera > 0){
+    const e = erro('freio');
+    e.segundos = Math.ceil(espera / 1000);
+    throw e;
+  }
+  let r;
+  try{
+    r = await chamar('/auth/v1/token?grant_type=password',
+      {method:'POST', body:{email:String(email).trim().toLowerCase(), password:senha}});
+  }catch(e){
+    if(e.codigo !== 'sem_rede') registrarErroDeLogin(email);
+    throw e;
+  }
+  limparFreio(email);
   const s = montarSessao(r);
   if(!s) throw erro('sem_sessao');
   guardarSessao(s);
@@ -192,8 +244,16 @@ async function puxarEstado(){
     {comToken:true});
   return (Array.isArray(linhas) && linhas[0]) ? linhas[0] : null;
 }
+/* O banco recusa acima de 512 KB (constraint estado_dados_tamanho). O app
+   avisa ANTES de gastar a rede — e, mais importante, avisa com uma frase que
+   se entende, em vez de deixar o erro cru do Postgres chegar à tela. */
+const TETO_ESTADO = 512 * 1024;
 async function enviarEstado(dados){
   const u = usuario(); if(!u) throw erro('sem_sessao');
+  try{
+    const tamanho = new Blob([JSON.stringify(dados)]).size;
+    if(tamanho > TETO_ESTADO) throw erro('estado_grande');
+  }catch(e){ if(e.codigo === 'estado_grande') throw e; }
   const linhas = await chamar('/rest/v1/estado', {
     method:'POST', comToken:true,
     headers:{'Prefer':'resolution=merge-duplicates,return=representation'},
@@ -210,6 +270,17 @@ async function apagarEstadoNaNuvem(){
 function mensagemDeErro(e){
   const cru = String((e && (e.codigo || e.message)) || '').toLowerCase();
   if(cru.includes('sem_rede'))            return 'Sem internet agora. Verifique a conexão e tente de novo.';
+  if(cru.includes('freio')){
+    const s = (e && e.segundos) || 0;
+    if(s > 60){ const m=Math.ceil(s/60);
+      return 'Muitas tentativas seguidas. Espere '+m+(m===1?' minuto':' minutos')+' e tente de novo.'; }
+    const seg=Math.max(1,s);
+    return 'Muitas tentativas seguidas. Espere '+seg+(seg===1?' segundo':' segundos')+' e tente de novo.';
+  }
+  if(cru.includes('estado_grande'))       return 'Seus dados passaram do tamanho que a nuvem aceita. Arquive meses antigos ou baixe um backup.';
+  if(cru.includes('estado_dados_tamanho'))return 'Seus dados passaram do tamanho que a nuvem aceita. Arquive meses antigos ou baixe um backup.';
+  if(cru.includes('permission denied')||cru.includes('42501'))
+                                          return 'O servidor recusou essa gravação. Se continuar, entre de novo.';
   if(cru.includes('invalid login'))       return 'E-mail ou senha não conferem. Confira e tente de novo.';
   if(cru.includes('email not confirmed')) return 'Confirme seu e-mail antes de entrar — o link está na sua caixa de entrada.';
   if(cru.includes('already registered')||cru.includes('already been registered'))
@@ -243,10 +314,25 @@ function validarNome(v){
   if(/^[\d\s\W]+$/.test(n)) return 'Use letras — é assim que vamos te chamar.';
   return '';
 }
+/* As senhas que aparecem primeiro em toda lista de vazamento. A checagem
+   contra a base do HaveIBeenPwned está desligada no painel do Supabase, então
+   esta lista curta é o que existe entre uma conta e a senha mais óbvia do
+   mundo. É pouco, e é honesto dizer que é pouco: o certo é ligar a proteção
+   de senha vazada no painel. */
+const SENHAS_OBVIAS = new Set([
+  '12345678','123456789','1234567890','12345678910','senha123','password',
+  'password1','password123','qwerty123','qwertyui','abc12345','11111111',
+  '00000000','iloveyou','princesa','brasil123','flamengo','corinthians',
+  'sobradomes','admin123','letmein1','sunshine','football','trustno1'
+]);
 function validarSenha(v){
   const s = String(v||'');
   if(!s) return 'Digite uma senha.';
   if(s.length < 8) return 'A senha precisa de pelo menos 8 caracteres.';
+  if(s.length > 72) return 'Senha longa demais — use até 72 caracteres.';
+  if(SENHAS_OBVIAS.has(s.toLowerCase()))
+    return 'Essa senha é das mais usadas do mundo. Escolha outra.';
+  if(/^(.)\1+$/.test(s)) return 'Uma letra repetida não protege nada. Misture.';
   return '';
 }
 function forcaDaSenha(v){

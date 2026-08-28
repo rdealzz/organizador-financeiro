@@ -66,6 +66,14 @@ html[data-tema="escuro"] #splash{background:#000}
   <div class="holo-piso"></div>
 </div>
 
+<!-- ══════════════════════ TEMA, EM QUALQUER TELA ══════════════════════
+     Fica acima da capa e do login (z-index 180) e FORA da capa: assim o
+     clique nele troca o tema sem contar como "clique em qualquer lugar para
+     entrar". Dentro do app quem assume são os botões do cabeçalho e da tela
+     de cartas. -->
+<button class="tecla tecla-ic tema-flutua" id="temaFlutua" type="button"
+        aria-label="Alternar tema"><span class="tecla-face"></span></button>
+
 <!-- ══════════════════════ ABERTURA ══════════════════════
      Sem botão: a tela inteira é a área de clique. -->
 <div class="capa" id="capa" hidden role="button" tabindex="0"

@@ -55,7 +55,12 @@ let saindo=false;   // logout em andamento: nada mais pode gravar em disco
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const pct=v=>(v*100).toFixed(0)+'%';
-const esc=s=>String(s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+/* Escapa TUDO que muda de significado dentro de HTML, aspas simples e crase
+   incluídas: um atributo escrito com aspas simples em alguma linha futura não
+   pode virar uma porta. Um caractere esquecido aqui vale por todas as
+   validações do resto do arquivo. */
+const ESCAPES={'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;','`':'&#96;','=':'&#61;'};
+const esc=s=>String(s).replace(/[<>&"'`=]/g,c=>ESCAPES[c]);
 const meuValor=l=>Math.max(l.valor-(+l.pai||0),0);
 const iso=d=>d.toISOString().slice(0,10);
 const hojeD=()=>{const d=new Date(); d.setHours(0,0,0,0); return d;};
@@ -630,33 +635,74 @@ $('#lPagador').onchange=e=>{ const v=+$('#lValor').value||0;
   else if(e.target.value==='pai') $('#lPai').value=v||'';
   else if(v) $('#lPai').value=(v/2).toFixed(2); };
 $('#lTipo').onchange=e=>{ $('#lParc').disabled=(e.target.value!=='parc'); if(e.target.value!=='parc') $('#lParc').value=''; };
-function alternarTema(){
-  S.tema=(S.tema==='escuro')?'claro':'escuro';
-  aplicarTema(); salvar(); vibrar(8);
+/* ==========================================================================
+   Tema: uma preferência do APARELHO, aplicada antes de qualquer tela
+
+   Antes o tema morava só no estado da conta, que só é lido depois do login —
+   então a abertura e o login abriam sempre no claro, com o texto branco da
+   capa sobre um fundo claro. Agora a escolha fica também no localStorage,
+   como as outras preferências de aparelho, e é aplicada no primeiro quadro.
+   O valor da conta continua existindo e mandando quando ela carrega: quem
+   troca de aparelho leva o gosto junto.
+   ========================================================================== */
+const CHAVE_TEMA='sobra:tema';
+function temaGuardado(){
+  try{ const t=localStorage.getItem(CHAVE_TEMA); return (t==='claro'||t==='escuro')?t:null; }
+  catch(e){ return null; }
 }
-$('#btnTema').onclick=alternarTema;
-$('#portalTema').onclick=alternarTema;
+function temaDoSistema(){
+  try{ return (window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro'; }
+  catch(e){ return 'claro'; }
+}
+function alternarTema(){
+  S.tema=(temaAtual()==='escuro')?'claro':'escuro';
+  aplicarTema();
+  /* Só grava o estado da conta se houver conta. Na capa e no login o tema já
+     ficou guardado no aparelho por aplicarTema(); chamar salvar() aqui
+     escreveria o estado VAZIO por cima dos dados que existiam neste aparelho
+     antes de alguém entrar. */
+  if(window.Auth && Auth.logado()) salvar();
+  vibrar(8);
+}
+function temaAtual(){
+  if(S.tema==='claro'||S.tema==='escuro') return S.tema;
+  return temaGuardado()||temaDoSistema();
+}
+/* Todos os botões de tema do app — cabeçalho, tela de cartas e o flutuante da
+   abertura — são a mesma função. Um botão de tema que existe só em algumas
+   telas é um botão que a pessoa procura e não acha. */
+const BOTOES_TEMA=['#btnTema','#portalTema','#temaFlutua'];
+BOTOES_TEMA.forEach(id=>{ const b=$(id); if(b) b.onclick=alternarTema; });
+
 function aplicarTema(){
-  if(!S.tema||S.tema==='auto'){
-    S.tema=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';
-  }
+  S.tema=temaAtual();
   const esc=(S.tema==='escuro');
-  const cor=esc?'#000000':'#F2F2F7';
+  try{ localStorage.setItem(CHAVE_TEMA,S.tema); }catch(e){}
+  const cor=esc?'#0B0B0D':'#F7F5FA';
   document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute('content',cor));
   document.documentElement.setAttribute('data-tema',esc?'escuro':'claro');
-  const b=$('#btnTema');
-  b.innerHTML=icone(esc?'sol':'lua',20);
-  b.setAttribute('aria-label',esc?'Mudar para o tema claro':'Mudar para o tema escuro');
-  const pb=$('#portalTema');
-  if(pb){
-    pb.innerHTML='<span class="tecla-face">'+icone(esc?'sol':'lua',20)+'</span>';
-    pb.setAttribute('aria-label',esc?'Mudar para o tema claro':'Mudar para o tema escuro');
-  }
+  const rotulo=esc?'Mudar para o tema claro':'Mudar para o tema escuro';
+  /* Esta função roda ANTES do resto do arquivo — é o que evita a abertura
+     piscar no tema errado —, e nesse instante a tabela de ícones ainda não
+     existe. Sem o try, o erro de acesso antecipado derrubava o script inteiro
+     e o app não abria. O desenho entra na segunda chamada, no fim do arquivo. */
+  let ic='';
+  try{ ic=icone(esc?'sol':'lua',20); }catch(e){}
+  BOTOES_TEMA.forEach(id=>{
+    const b=$(id); if(!b) return;
+    // O botão do cabeçalho é liso; os outros dois têm a face da tecla.
+    if(ic) b.innerHTML = b.classList.contains('tecla') ? '<span class="tecla-face">'+ic+'</span>' : ic;
+    b.setAttribute('aria-label',rotulo);
+    b.setAttribute('title',rotulo);
+  });
   /* A esfera atrás do app também tem tema. Sem esta linha o botão parecia
      quebrado: as variáveis de cor trocavam, mas o fundo — que ocupa a tela
      inteira — continuava escuro, e a impressão era de que nada acontecia. */
   if(cena && cena.repintar) cena.repintar();
 }
+// Antes da capa, antes do login, antes de qualquer pintura.
+aplicarTema();
+
 $('#lParc').disabled=true;
 $('#resetTetos').onclick=()=>{ S.tetos={}; render(); salvar(); };
 $('#fecharAgora').onclick=()=>{
@@ -869,11 +915,23 @@ const NS='http://www.w3.org/2000/svg';
 function svg(w,h,extra){
   return `<svg viewBox="0 0 ${w} ${h}" role="img" preserveAspectRatio="xMidYMid meet"${extra||''}>`;
 }
+/* Deixa passar só <b>, </b> e <br>. Todo o resto vira texto. */
+function soNegritoEQuebra(html){
+  return String(html==null?'':html)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/&lt;(\/?b)&gt;/gi,'<$1>')
+    .replace(/&lt;br\s*\/?&gt;/gi,'<br>');
+}
 function ligarTip(fig){
   const tip=fig.querySelector('.viz-tip'); if(!tip) return;
   fig.querySelectorAll('[data-tip]').forEach(el=>{
     const mostra=ev=>{
-      tip.innerHTML=el.dataset.tip;
+      /* O texto do balão faz o caminho atributo → dataset → innerHTML, e nesse
+         caminho o navegador DESFAZ o escape uma vez: um nome com "<script" que
+         entrou escapado sai cru do outro lado. Hoje só entram nomes de
+         categoria, que são do app; a lista branca abaixo garante que isso
+         continue verdade mesmo quando alguém passar um nome digitado por aqui. */
+      tip.innerHTML=soNegritoEQuebra(el.dataset.tip);
       const r=fig.getBoundingClientRect();
       const x=(ev.touches?ev.touches[0].clientX:ev.clientX)-r.left;
       const y=(ev.touches?ev.touches[0].clientY:ev.clientY)-r.top;
@@ -3326,3 +3384,8 @@ function ligarVoltarPortal(){
 ligarVoltarPortal();
 
 // As cartas entram na mesma física dos cartões: inclinação, parallax e brilho.
+
+/* Segunda passada, agora com a tabela de ícones já montada: é ela que desenha
+   o sol e a lua nos botões. A primeira, lá em cima, serve para o tema já
+   estar certo no primeiro quadro. */
+aplicarTema();

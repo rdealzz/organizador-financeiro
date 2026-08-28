@@ -2471,3 +2471,115 @@ body.com-portal:not(.fundo-vivo) .holo i{opacity:.5}
   .cab-txt{flex:1 0 100%;padding-right:0}
   .cab-txt h1{font-size:clamp(26px,7.4vw,34px)}
 }
+
+/* ==========================================================================
+   v9 — Tema em todas as telas, e contraste na abertura
+
+   O defeito: a capa e o login foram desenhados só para o fundo escuro. Com a
+   esfera clara, texto branco sobre rosa-claro — ilegível, e sem botão nenhum
+   ali para trocar o tema. Duas correções, e as duas precisam existir juntas:
+   o botão em toda tela, e cada tela sabendo se ler nos dois temas.
+   ========================================================================== */
+
+/* ---- o botão de tema que acompanha a abertura ---- */
+.tema-flutua{
+  position:fixed; top:calc(env(safe-area-inset-top) + 14px); right:14px; z-index:180;
+  display:none;
+}
+body.capa-aberta .tema-flutua,
+body.sem-barra .tema-flutua{display:block}
+.tema-flutua{--b3d-cor:rgba(255,255,255,.12);--b3d-txt:#fff}
+.tema-flutua .tecla-face{border:1px solid rgba(255,255,255,.18)}
+[data-tema="claro"] .tema-flutua{--b3d-cor:#FFFFFF;--b3d-txt:var(--txt)}
+[data-tema="claro"] .tema-flutua .tecla-face{border-color:rgba(58,38,86,.14)}
+@media(min-width:900px){ .tema-flutua{top:20px;right:20px} }
+
+/* ---- a capa no tema claro ----
+   Texto escuro, e não texto branco com sombra: sombra é remendo, contraste é
+   solução. Este par de cores dá 12:1 sobre o rosa-claro da esfera. */
+[data-tema="claro"] .capa{color:#1B0F1E}
+[data-tema="claro"] .capa-tit{color:#1B0F1E;text-shadow:0 1px 24px rgba(255,255,255,.85)}
+[data-tema="claro"] .capa-sub{color:rgba(27,15,30,.72);text-shadow:0 1px 18px rgba(255,255,255,.9)}
+[data-tema="claro"] .capa-dica span{color:rgba(27,15,30,.58)}
+[data-tema="claro"] .capa:hover .capa-dica span{color:#1B0F1E}
+[data-tema="claro"] .capa-dica::before{
+  background:linear-gradient(90deg,transparent,rgba(27,15,30,.28),transparent);
+}
+[data-tema="claro"] .capa-marca{
+  background:rgba(255,255,255,.86);
+  border:1px solid rgba(58,38,86,.14);
+  box-shadow:0 10px 34px -12px rgba(201,50,127,.45);
+}
+[data-tema="claro"] .capa-marca i{background:rgba(27,15,30,.45)}
+[data-tema="claro"] .capa-marca i:nth-child(4){background:#c9327f}
+[data-tema="claro"] .capa:focus-visible{outline-color:rgba(27,15,30,.45)}
+
+/* ---- o painel de vidro do login no tema claro ----
+   Mesmo componente, vidro claro: fundo branco translúcido, texto escuro e o
+   acento rosa da marca no foco. */
+[data-tema="claro"] body.tem-cena .auth-caixa{
+  background:rgba(255,255,255,.72);
+  border:1px solid rgba(58,38,86,.12);
+  box-shadow:0 30px 80px -30px rgba(76,44,116,.35), inset 0 1px 0 rgba(255,255,255,.9);
+}
+[data-tema="claro"] body.tem-cena .auth-tit{color:var(--txt)}
+[data-tema="claro"] body.tem-cena .auth-sub,
+[data-tema="claro"] body.tem-cena .auth-nota{color:var(--txt-2)}
+[data-tema="claro"] body.tem-cena .auth .campo label{color:var(--txt-2)}
+[data-tema="claro"] body.tem-cena .auth-marca{
+  background:rgba(255,255,255,.9);border:1px solid rgba(58,38,86,.14);
+}
+[data-tema="claro"] body.tem-cena .auth-marca i{background:rgba(27,15,30,.42)}
+[data-tema="claro"] body.tem-cena .auth-marca i:nth-child(4){background:#c9327f}
+[data-tema="claro"] body.tem-cena .auth input{
+  background:rgba(255,255,255,.86);
+  border:1px solid rgba(58,38,86,.16);
+  color:var(--txt);
+}
+[data-tema="claro"] body.tem-cena .auth input::placeholder{color:var(--txt-3)}
+[data-tema="claro"] body.tem-cena .auth input:hover{background:#fff}
+[data-tema="claro"] body.tem-cena .auth input:focus{
+  background:#fff; border-color:rgba(201,50,127,.75);
+  box-shadow:0 0 0 3px rgba(201,50,127,.18);
+}
+[data-tema="claro"] body.tem-cena .forca-trilho{background:rgba(58,38,86,.14)}
+[data-tema="claro"] body.tem-cena .forca span{color:var(--txt-2)}
+[data-tema="claro"] body.tem-cena .campo-erro{color:var(--vermelho-txt)}
+[data-tema="claro"] body.tem-cena .auth .olho{color:var(--txt-3)}
+[data-tema="claro"] body.tem-cena .auth .olho:hover{color:var(--txt)}
+/* Os links do login estavam em branco para o vidro escuro: sobre o vidro
+   claro eles sumiam por completo — "Esqueci minha senha" e "Criar conta"
+   viravam um espaço em branco. */
+[data-tema="claro"] body.tem-cena .auth .link{color:var(--azul-txt)}
+[data-tema="claro"] body.tem-cena .auth .link:hover{color:var(--txt)}
+[data-tema="claro"] body.tem-cena .auth-troca{
+  border-top-color:rgba(58,38,86,.14); color:var(--txt-2);
+}
+[data-tema="claro"] body.tem-cena .auth-erro{background:rgba(213,53,43,.12);color:var(--vermelho-txt)}
+[data-tema="claro"] body.tem-cena .auth-ok{background:rgba(15,157,88,.14);color:var(--verde-txt)}
+/* A dica da capa pisca entre dois valores de opacidade; no claro o mínimo
+   precisa ser mais alto, senão a frase some no meio da respiração. */
+[data-tema="claro"] .capa-dica span{animation-name:respiraClaro}
+@keyframes respiraClaro{0%,100%{opacity:.72}50%{opacity:1}}
+
+/* ==========================================================================
+   Letras cortadas
+
+   Três lugares tinham texto encostando na borda da própria caixa: título de
+   área (recorte por ellipsis com altura de linha de 1,06 — o "j" de
+   Planejamento perdia a perna), título de carta e os passos. A altura de
+   linha de um título com acento e descida precisa de folga: nenhuma letra
+   pode depender de o navegador arredondar a favor.
+   ========================================================================== */
+h1, .capa-tit, .portal-tit, .carta-tit, .auth-tit, .etapa h2{
+  line-height:1.18; padding-bottom:.06em;
+}
+.cab-txt h1{overflow:visible}
+.cab-txt .eyebrow{line-height:1.35}
+/* O recorte que restou é só o horizontal, e com folga embaixo. */
+.cab-txt h1{
+  overflow-x:clip; overflow-y:visible;
+  text-overflow:ellipsis; white-space:nowrap;
+}
+.carta-tit{padding-bottom:.08em}
+.big{line-height:1.12;padding-bottom:.04em}
