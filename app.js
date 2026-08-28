@@ -2201,7 +2201,7 @@ async function enviarAuth(ev){
   try{
     if(modoAuth==='entrar'){
       await Auth.entrar(email,senha);
-      await abrirApp(true);
+      await abrirApp(true,false);
     }else if(modoAuth==='cadastrar'){
       const r=await Auth.cadastrar(email,senha,nome);
       if(r.confirmar){
@@ -2221,7 +2221,7 @@ async function enviarAuth(ev){
         if(nome && !(Auth.usuario()||{}).nome){
           try{ await Auth.definirNome(nome); }catch(e2){}
         }
-        await abrirApp(true);
+        await abrirApp(true,true);
       }
     }else{
       await Auth.recuperarSenha(email, location.origin+'/?recuperar=1');
@@ -2298,7 +2298,12 @@ function focarEntrada(){
 /* ==========================================================================
    Entrar no app depois de autenticado
    ========================================================================== */
-async function abrirApp(recemLogado){
+/* `recemLogado` quer dizer "autenticou nesta sessão", e vale tanto para quem
+   entrou quanto para quem se cadastrou — é o que dispara a importação dos
+   dados de antes do login. Quem acabou de CRIAR a conta é outra coisa, e vem
+   em `contaNova`: para essa pessoa o caminho útil é o passo a passo em Hoje,
+   não uma escolha de área. */
+async function abrirApp(recemLogado, contaNova){
   /* Espera a capa sair antes de revelar o app. Reabrindo com sessão salva,
      abrirApp() é chamada na partida, com a capa ainda na tela: sem esta linha
      o app aparecia atrás dela e as duas telas se sobrepunham. Depois de um
@@ -2312,6 +2317,10 @@ async function abrirApp(recemLogado){
   $('#appWrap').hidden=false;
   $('#tabbar').hidden=false;
   $('#fab').hidden=false;
+  /* O portal só na entrada, e não para quem acabou de criar a conta: ali o
+     caminho útil é o passo a passo em Hoje, não uma escolha de área. */
+  if(!contaNova) abrirPortal();
+  ligarVoltarPortal();
 
   await carregar();
 
@@ -2342,7 +2351,7 @@ async function abrirApp(recemLogado){
   const ir=new URLSearchParams(location.search).get('ir');
   irPara(ir||'hoje');
   renderAgenda(); renderAlertas(calc()); renderChips(); pintarConta();
-  renderAssinatura(); pintarMenuPerfil(); pintarSwitchCapa(); pintarSwitchFundo();
+  renderAssinatura(); pintarMenuPerfil(); pintarSwitchCapa(); pintarSwitchFundo(); pintarSwitchPortal();
 
   // Local primeiro: o app já está pronto com o que estava no aparelho. A nuvem
   // é consultada em segundo plano, sem segurar a tela. Se vier algo mais novo,
@@ -2598,7 +2607,7 @@ function esconderSplash(){
       if(s){
         Auth.guardarSessao(s);
         history.replaceState(null,'',location.pathname);
-        await abrirApp(true);
+        await abrirApp(true,true);
         irPara('ajustes:conta');
         $('#trocaSenha').hidden=false;
         toast('Agora escolha uma senha nova');
@@ -2904,6 +2913,17 @@ $('#swCapa').onclick=()=>{
   toast(ligar?'Abertura animada ligada':'Abertura animada desligada');
 };
 
+function pintarSwitchPortal(){
+  const b=$('#swPortal'); if(!b) return;
+  b.setAttribute('aria-checked', portalLigado()?'true':'false');
+}
+$('#swPortal').onclick=()=>{
+  const ligar=!portalLigado();
+  try{ localStorage.setItem(PORTAL_OFF, ligar?'0':'1'); }catch(e){}
+  pintarSwitchPortal();
+  toast(ligar?'Cartas ligadas na entrada':'Cartas desligadas');
+};
+
 function pintarSwitchFundo(){
   const b=$('#swFundo'); if(!b) return;
   b.setAttribute('aria-checked', fundoLigado()?'true':'false');
@@ -2940,7 +2960,7 @@ $('#swFundo').onclick=()=>{
    Nada disso vale no toque: sem cursor não há inclinação a seguir, e gastar
    bateria com isso num celular seria só desperdício.
    ========================================================================== */
-const ALVOS_TILT = '.card, .hero, .corte, .re-card';
+const ALVOS_TILT = '.carta, .card, .hero, .corte, .re-card';
 
 function ligarFisica(){
   let fino=false, quieto=false;
@@ -3017,3 +3037,160 @@ function ligarFisica(){
   document.addEventListener('scroll', ()=>{ if(alvo) soltar(); }, {passive:true});
 }
 ligarFisica();
+
+/* ==========================================================================
+   v6.1 — Portal de cartas
+
+   Quatro cartas, uma por área que existe de verdade no app. Aparece uma vez
+   por abertura, depois do login; a partir daí a barra de navegação assume.
+   É o meio-termo entre as duas coisas que foram pedidas: as cartas dão a
+   entrada, e trocar de aba durante o dia continua custando um toque só.
+
+   A arte de cada carta é DESENHADA AQUI, em SVG. Não é imagem baixada: são
+   quatro composições geométricas com o degradê da marca, cada uma falando do
+   que a área faz. Isso mantém o app funcionando offline, sem licença de
+   terceiro, sem um único quilobyte de download — e, ao contrário de uma foto
+   de banco de imagens, casa com a esfera da abertura.
+   ========================================================================== */
+const CARTAS = [
+  { a:'hoje',    rotulo:'Hoje',     titulo:'Quanto posso gastar',
+    sub:'O número do dia, já descontado o que você quer guardar.' },
+  { a:'plano',   rotulo:'Plano',    titulo:'Renda, tetos e metas',
+    sub:'O que entra, quanto cada categoria pode levar e o que você quer juntar.' },
+  { a:'analise', rotulo:'Análises', titulo:'Para onde foi o dinheiro',
+    sub:'O mês em números, o que estourou e o que dá para cortar.' },
+  { a:'ajustes', rotulo:'Ajustes',  titulo:'Alertas, conta e dados',
+    sub:'Quando o app te avisa, seus dados e as preferências deste aparelho.' }
+];
+
+/* As artes. Cada uma é um SVG de 400×260 que preenche a carta inteira.
+   Todas partem do mesmo degradê para as quatro se lerem como um conjunto. */
+function arteCarta(qual){
+  const id='g'+qual;
+  const base=`<defs>
+    <linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff2d6b"/><stop offset=".55" stop-color="#c9327f"/>
+      <stop offset="1" stop-color="#ffd36b"/></linearGradient>
+    <radialGradient id="${id}b" cx=".3" cy=".2" r=".9">
+      <stop offset="0" stop-color="#5a1040"/><stop offset="1" stop-color="#170410"/></radialGradient>
+  </defs>
+  <rect width="400" height="260" fill="url(#${id}b)"/>`;
+
+  const arte={
+    // Anéis concêntricos, um deles preenchido: o dia em progresso.
+    hoje:`<g fill="none" stroke="url(#${id})" stroke-linecap="round">
+      <circle cx="200" cy="130" r="86" stroke="#ffffff" stroke-opacity=".07" stroke-width="16"/>
+      <circle cx="200" cy="130" r="86" stroke-width="16" stroke-dasharray="352 540"
+              transform="rotate(-90 200 130)"/>
+      <circle cx="200" cy="130" r="56" stroke="#ffffff" stroke-opacity=".10" stroke-width="2"/>
+      <circle cx="200" cy="130" r="118" stroke="#ffffff" stroke-opacity=".05" stroke-width="1.5"/>
+    </g>
+    <circle cx="200" cy="44" r="6" fill="#ffd36b"/>`,
+
+    // Barras de alturas diferentes: o plano, categoria a categoria.
+    plano:`<g>
+      ${[[96,150],[140,96],[184,190],[228,124],[272,70]].map((b,i)=>
+        `<rect x="${b[0]}" y="${232-b[1]}" width="34" height="${b[1]}" rx="10"
+               fill="url(#${id})" opacity="${(0.42+i*0.14).toFixed(2)}"/>`).join('')}
+      <path d="M78 232h250" stroke="#ffffff" stroke-opacity=".14" stroke-width="1.5"/>
+      <path d="M96 62h64" stroke="url(#${id})" stroke-width="4" stroke-linecap="round"/>
+    </g>`,
+
+    // Malha de nós ligados: o dado analisado.
+    analise:(()=>{
+      const ns=[[92,72],[168,132],[124,196],[236,68],[292,148],[214,210],[330,96]];
+      const ls=[[0,1],[1,2],[1,3],[3,4],[4,5],[1,5],[3,6],[4,6]];
+      return `<g>
+        ${ls.map(([a,b])=>`<path d="M${ns[a][0]} ${ns[a][1]}L${ns[b][0]} ${ns[b][1]}"
+          stroke="url(#${id})" stroke-opacity=".45" stroke-width="1.5"/>`).join('')}
+        ${ns.map((n,i)=>`<circle cx="${n[0]}" cy="${n[1]}" r="${i%3===0?7:4.5}"
+          fill="url(#${id})"/>`).join('')}
+      </g>`;
+    })(),
+
+    // Arcos concêntricos interrompidos: mecanismo, sem virar desenho de engrenagem.
+    ajustes:`<g fill="none" stroke="url(#${id})" stroke-linecap="round">
+      <path d="M200 46a84 84 0 0 1 84 84" stroke-width="9"/>
+      <path d="M284 130a84 84 0 0 1-84 84" stroke-width="9" stroke-opacity=".45"/>
+      <path d="M200 214a84 84 0 0 1-84-84" stroke-width="9" stroke-opacity=".7"/>
+      <path d="M116 130a84 84 0 0 1 40-72" stroke-width="9" stroke-opacity=".3"/>
+      <circle cx="200" cy="130" r="30" stroke-width="9"/>
+    </g>`
+  }[qual]||'';
+
+  return `<svg class="carta-arte" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice"
+     aria-hidden="true" focusable="false">${base}${arte}</svg>`;
+}
+
+const PORTAL_OFF='sobra:portal-off';
+function portalLigado(){
+  try{ return localStorage.getItem('sobra:portal-off')!=='1'; }catch(e){ return true; }
+}
+
+function montarPortal(){
+  const g=$('#portalGrade'); if(!g || g.dataset.pronto) return;
+  g.innerHTML=CARTAS.map(c=>`
+    <button class="carta" type="button" data-carta="${c.a}"
+            aria-label="${esc(c.rotulo)}: ${esc(c.titulo)}">
+      ${arteCarta(c.a)}
+      <span class="carta-veu" aria-hidden="true"></span>
+      <span class="carta-txt">
+        <span class="carta-rot">${esc(c.rotulo)}</span>
+        <span class="carta-tit">${esc(c.titulo)}</span>
+        <span class="carta-sub">${esc(c.sub)}</span>
+      </span>
+    </button>`).join('');
+  g.dataset.pronto='1';
+
+  g.addEventListener('click', e=>{
+    const b=e.target.closest('[data-carta]'); if(!b) return;
+    /* Compressão e volta antes de trocar de tela: o toque tem de ter resposta
+       física ANTES da navegação, senão parece que o app travou por um quadro. */
+    b.classList.add('carta-aperta');
+    vibrar(10);
+    setTimeout(()=>{
+      b.classList.remove('carta-aperta');
+      fecharPortal();
+      irPara(b.dataset.carta);
+    },170);
+  });
+}
+
+function abrirPortal(){
+  if(!portalLigado()) return false;
+  montarPortal();
+  const p=$('#portal'); if(!p) return false;
+  const o=$('#portalOlho');
+  if(o){
+    const h=new Date().getHours();
+    const hora=h<5?'Boa madrugada':h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';
+    const nome=Auth.primeiroNome();
+    o.textContent=hora+(nome?', '+nome:'');
+  }
+  p.hidden=false;
+  document.body.classList.add('com-portal');
+  requestAnimationFrame(()=>p.classList.add('abre'));
+  return true;
+}
+function fecharPortal(){
+  const p=$('#portal'); if(!p || p.hidden) return;
+  p.classList.remove('abre');
+  document.body.classList.remove('com-portal');
+  setTimeout(()=>{ p.hidden=true; },360);
+}
+
+$('#portalPular').onclick=()=>{ fecharPortal(); irPara('hoje'); };
+document.addEventListener('keydown',e=>{
+  const p=$('#portal');
+  if(e.key==='Escape' && p && !p.hidden){ fecharPortal(); irPara(AREA||'hoje'); }
+});
+
+/* Voltar às cartas. Fica no cabeçalho, ancorado, com estado de hover próprio —
+   é o caminho de volta que a navegação espacial exige para a pessoa nunca se
+   sentir teletransportada. */
+function ligarVoltarPortal(){
+  const b=$('#voltarPortal'); if(!b) return;
+  b.onclick=()=>{ abrirPortal(); };
+}
+
+// As cartas entram na mesma física dos cartões: inclinação, parallax e brilho.

@@ -1688,3 +1688,150 @@ input:focus, select:focus, textarea:focus{
 /* Tabelas dentro dos gráficos rolam sozinhas em vez de empurrar a página. */
 .tab-rol{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
 .tab-rol table{min-width:100%}
+
+/* ==========================================================================
+   v6.1 — Portal de cartas
+   ========================================================================== */
+.portal{
+  position:fixed; inset:0; z-index:120; overflow-y:auto;
+  /* Centralizado por margem automática, NÃO por justify-content: quando o
+     conteúdo é mais alto que a tela, `center` empurra o topo para fora da área
+     rolável e a saudação fica cortada, sem jeito de alcançar. Margem auto
+     distribui a folga quando ela existe e some quando não existe. */
+  display:flex; flex-direction:column;
+  padding:var(--e7) var(--e5) calc(var(--e8) + env(safe-area-inset-bottom));
+  background:var(--bg);
+  opacity:0; transition:opacity var(--t-medio) ease;
+}
+.portal.abre{opacity:1}
+body.fundo-vivo .portal{background:transparent}
+body.com-portal .tabbar,
+body.com-portal .fab{opacity:0;pointer-events:none;transition:opacity var(--t-medio) ease}
+
+.portal-topo{max-width:960px;margin:auto auto var(--e6);width:100%;text-align:center}
+.portal-olho{font-size:var(--t-sm);color:var(--txt-2);margin:0 0 var(--e1);font-weight:var(--peso-sm)}
+.portal-tit{font-size:clamp(24px,4.5vw,32px);font-weight:var(--peso-b);
+  letter-spacing:-.028em;margin:0}
+.portal-pular{display:block;margin:var(--e6) auto auto;font-size:var(--t-sm)}
+
+.portal-grade{
+  display:grid; gap:var(--e4); width:100%; max-width:960px; margin:0 auto;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+@media (max-width:640px){ .portal-grade{grid-template-columns:1fr;gap:var(--e3)} }
+
+/* ---- A carta ----
+   perspective fica no elemento e o conteúdo em preserve-3d: é isso que faz as
+   camadas internas terem distância focal de verdade em vez de só escorregarem. */
+.carta{
+  position:relative; display:block; width:100%; overflow:hidden;
+  aspect-ratio:16/10; min-height:150px;
+  border:1px solid var(--sep); border-radius:var(--r-lg);
+  background:#170410; padding:0; cursor:pointer; font:inherit; color:#fff;
+  box-shadow:var(--s2);
+  transform-style:preserve-3d;
+  transition:transform var(--t-lento) var(--suave), box-shadow var(--t-medio) ease;
+  -webkit-tap-highlight-color:transparent;
+  /* `backwards`, e NÃO `both`. Com `both` o último quadro da animação fica
+     grudado no elemento para sempre, e como animação vence declaração normal,
+     o `transform:none` do fim engolia a inclinação do cursor — a carta nunca
+     inclinava. Esta é a quarta vez que esse detalhe morde este projeto (antes:
+     o FAB, o login atrás da capa e a entrada do painel de vidro). `backwards`
+     dá a mesma entrada e devolve o elemento às regras normais ao terminar. */
+  animation:cartaEntra .5s var(--suave) backwards;
+}
+.carta:nth-child(2){animation-delay:.06s}
+.carta:nth-child(3){animation-delay:.12s}
+.carta:nth-child(4){animation-delay:.18s}
+@keyframes cartaEntra{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
+@media (max-width:640px){ .carta{aspect-ratio:2.1/1;min-height:0} }
+
+.carta:focus-visible{outline:2px solid var(--azul);outline-offset:3px}
+.carta.tilt-ativo{box-shadow:var(--s3);border-color:rgba(255,255,255,.22)}
+
+/* A arte preenche a carta inteira e recua um pouco no fundo. */
+.carta-arte{
+  position:absolute; inset:0; width:100%; height:100%; display:block;
+  transition:transform var(--t-lento) var(--suave);
+}
+.carta.tilt-ativo .carta-arte{
+  transform:scale(1.06) translate3d(calc(var(--rx,0)*-9px), calc(var(--ry,0)*-9px), 0);
+}
+/* Véu: garante o contraste do texto sobre qualquer ponto da arte. */
+.carta-veu{
+  position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(180deg, rgba(10,2,8,.15) 0%, rgba(10,2,8,.62) 58%, rgba(10,2,8,.90) 100%);
+}
+/* Brilho seguindo o cursor, por cima da arte e por baixo do texto. */
+.carta::after{
+  content:''; position:absolute; inset:0; pointer-events:none; opacity:0;
+  transition:opacity var(--t-medio) ease;
+  background:radial-gradient(320px circle at var(--mx,50%) var(--my,50%),
+             rgba(255,138,190,.20), transparent 60%);
+}
+.carta.tilt-ativo::after{opacity:1}
+
+.carta-txt{
+  position:absolute; left:0; right:0; bottom:0; z-index:2;
+  display:flex; flex-direction:column; gap:2px; text-align:left;
+  padding:var(--e5);
+  transition:transform var(--t-lento) var(--suave);
+}
+/* Cada camada anda uma distância diferente — a profundidade que o texto tem
+   em relação à arte é o que faz a carta parecer uma janela, e não um adesivo. */
+.carta.tilt-ativo .carta-txt{
+  transform:translate3d(calc(var(--rx,0)*10px), calc(var(--ry,0)*10px), 26px);
+}
+.carta-rot{
+  font-size:var(--t-cap); font-weight:var(--peso-b); letter-spacing:.09em;
+  text-transform:uppercase; color:#ffd36b;
+}
+.carta-tit{font-size:var(--t-lg);font-weight:var(--peso-b);letter-spacing:-.022em;line-height:1.15}
+.carta-sub{font-size:var(--t-sm);color:rgba(255,255,255,.72);line-height:1.4;
+  max-width:34ch;
+  opacity:0; max-height:0; overflow:hidden;
+  transition:opacity var(--t-medio) ease, max-height var(--t-medio) var(--suave);
+}
+/* A frase de apoio só aparece na carta em foco: fechada, a grade fica limpa. */
+.carta.tilt-ativo .carta-sub,
+.carta:focus-visible .carta-sub{opacity:1;max-height:4em;margin-top:var(--e1)}
+@media (max-width:640px){ .carta-sub{display:none} .carta-txt{padding:var(--e4)} }
+
+/* Compressão física no toque. */
+.carta:active, .carta.carta-aperta{
+  transform:scale(.965) !important;
+  transition:transform 140ms var(--suave) !important;
+}
+
+/* ---- Voltar para as cartas ---- */
+.voltar-portal{
+  width:38px;height:38px;flex:none;display:grid;place-items:center;
+  margin-right:var(--e2);
+  border:1px solid var(--sep);border-radius:var(--r-sm);
+  background:var(--fill);color:var(--txt-2);cursor:pointer;
+  transition:background var(--t-rapido) ease, color var(--t-rapido) ease,
+             transform var(--t-rapido) var(--elastico), border-color var(--t-rapido) ease;
+}
+.voltar-portal svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.75}
+.voltar-portal:hover{background:var(--fill-2);color:var(--txt);
+  border-color:var(--txt-3);transform:translateY(-1px)}
+.voltar-portal:active{transform:scale(.94)}
+.voltar-portal:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+
+@media (prefers-reduced-motion:reduce){
+  .carta,.carta-arte,.carta-txt,.portal{animation:none;transition-duration:.01ms}
+  .carta.tilt-ativo{transform:none}
+  .carta.tilt-ativo .carta-arte{transform:none}
+  .carta.tilt-ativo .carta-txt{transform:none}
+  .carta-sub{opacity:1;max-height:none}
+}
+
+/* O título da área precisa poder encolher. Sem isto ele empurrava a linha do
+   cabeçalho para além da tela a 320 px depois que o botão de voltar entrou —
+   e uma rolagem horizontal na página inteira é dos defeitos mais feios que
+   existem num app de celular. */
+.cab-txt h1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+@media (max-width:360px){
+  .voltar-portal{width:34px;height:34px;margin-right:var(--e1)}
+  .cab-linha{gap:var(--e2)}
+}

@@ -159,6 +159,10 @@ html[data-tema="escuro"] #splash{background:#000}
         <circle cx="12" cy="8.4" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/>
       </svg>
     </button>
+    <button class="voltar-portal" id="voltarPortal" type="button"
+            aria-label="Voltar para a escolha de áreas" title="Voltar para as áreas">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>
+    </button>
     <div class="cab-txt">
       <span class="eyebrow" id="saudacao">Controle financeiro pessoal</span>
       <h1 id="tituloArea">Hoje</h1>
@@ -488,6 +492,13 @@ html[data-tema="escuro"] #splash{background:#000}
       <button class="sw" role="switch" id="swFundo" aria-checked="true" aria-label="Esfera atrás do app"></button>
     </div>
 
+    <div class="alerta-linha" style="border-top:1px solid var(--sep);margin-top:var(--e4);padding-top:var(--e4)">
+      <div class="ai"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg></div>
+      <div class="at"><div class="an">Cartas na entrada</div>
+        <div class="ad">A escolha de área em cartas, uma vez a cada abertura. Desligado, o app abre direto em Hoje. Vale por aparelho.</div></div>
+      <button class="sw" role="switch" id="swPortal" aria-checked="true" aria-label="Cartas na entrada"></button>
+    </div>
+
     <div id="trocaSenha" hidden>
       <div class="grade g2" style="margin-top:6px">
         <div class="full"><label for="novaSenha">Nova senha</label>
@@ -524,6 +535,19 @@ html[data-tema="escuro"] #splash{background:#000}
 </div><!-- /wrap -->
 
 <!-- ══════════════════════ NAVEGAÇÃO ══════════════════════ -->
+<!-- ══════════════════════ PORTAL DE CARTAS ══════════════════════
+     Aparece uma vez por abertura, depois do login. A partir daí a barra de
+     navegação assume: assim as cartas dão a entrada sem cobrar um toque a
+     mais em toda troca de aba durante o dia. -->
+<div class="portal" id="portal" hidden>
+  <div class="portal-topo">
+    <p class="portal-olho" id="portalOlho">Boa noite</p>
+    <h2 class="portal-tit">Por onde começamos?</h2>
+  </div>
+  <div class="portal-grade" id="portalGrade"></div>
+  <button class="link portal-pular" id="portalPular" type="button">Ir direto para Hoje</button>
+</div>
+
 <nav class="tabbar" id="tabbar" role="tablist" aria-label="Áreas do app">
   <button class="tb" role="tab" aria-selected="true" data-a="hoje">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5 12 5l8 7.5"/><path d="M6.5 11v8h11v-8"/></svg><span>Hoje</span></button>
