@@ -45,7 +45,7 @@ const ALERTAS_PADRAO={
   variavel:  {on:true,  icone:'lapis',      nome:'Lançamento variável zerado',   desc:'Depois da virada do ciclo, lembra de preencher mercado, gasolina e afins.'},
   parcela:   {on:false, icone:'festa',      nome:'Última parcela',               desc:'Quando um parcelado chega na última — dinheiro que volta pro seu bolso.'}
 };
-let S={versao:2,tema:'auto',salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:5,ultimoFech:null,hist:[],
+let S={versao:2,tema:'auto',avatar:'',salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:5,ultimoFech:null,hist:[],
        tetos:{},lanc:SEED,div:[],obj:[],meses:6,jaTem:0,
        alertas:{teto:true,gasto:true,meta:true,fechamento:true,vencimento:true,contas:true,variavel:true,parcela:false},
        aTetoPct:85,aDiasFech:3,aDiasVenc:2,notifLog:{},_ultimoSalvo:0};
@@ -239,6 +239,8 @@ async function carregar(){
   $('#metaPct').value=S.metaPct||''; $('#metaVal').value=S.metaVal||'';
   $('#meses').value=S.meses||6; $('#jaTem').value=S.jaTem||'';
   $('#diaFech').value=S.diaFech||5; $('#diaVenc').value=S.diaVenc||S.diaFech||5;
+  // O rosto escolhido vem no estado da conta: pinta assim que ele chega.
+  pintarAvatares();
   render(); salvar(); avisoModo();
 }
 
@@ -2536,6 +2538,8 @@ function pintarConta(){
   $('#contaEmail').textContent=u.email||'—';
   $('#contaAvatar').textContent=(nome||u.email||'?').charAt(0);
   $('#contaApelido').value=(u.nome||'').trim();
+  montarEscolhaAvatar();
+  pintarAvatares();
   pintarSinc();
 }
 
@@ -2843,6 +2847,7 @@ function pintarMenuPerfil(){
   const inicial=(nome||u.email||'?').charAt(0);
   $('#perfilBtn').classList.add('logado');
   $('#mpAvatar').textContent=inicial;
+  pintarAvatares();
   $('#mpNome').textContent=(u.nome||'').trim()||'Sem nome ainda';
   $('#mpEmail').textContent=u.email||'—';
   const p=planoAtual();
@@ -3212,33 +3217,39 @@ const CARTAS = [
    Todas partem do mesmo degradê para as quatro se lerem como um conjunto. */
 function arteCarta(qual){
   const id='g'+qual;
+  /* As cores saem de variáveis CSS, não de códigos fixos aqui dentro — e por
+     isso a arte troca de tema junto com o app, sem precisar redesenhar nada.
+     `var()` não vale em atributo de apresentação (fill="..."), só em style:
+     é por isso que cada peça abaixo usa style= em vez do atributo. */
   const base=`<defs>
     <linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ff2d6b"/><stop offset=".55" stop-color="#c9327f"/>
-      <stop offset="1" stop-color="#ffd36b"/></linearGradient>
+      <stop offset="0" style="stop-color:var(--arte-1)"/>
+      <stop offset=".55" style="stop-color:var(--arte-2)"/>
+      <stop offset="1" style="stop-color:var(--arte-3)"/></linearGradient>
     <radialGradient id="${id}b" cx=".3" cy=".2" r=".9">
-      <stop offset="0" stop-color="#5a1040"/><stop offset="1" stop-color="#170410"/></radialGradient>
+      <stop offset="0" style="stop-color:var(--arte-fundo-1)"/>
+      <stop offset="1" style="stop-color:var(--arte-fundo-2)"/></radialGradient>
   </defs>
-  <rect width="400" height="260" fill="url(#${id}b)"/>`;
+  <rect width="400" height="260" style="fill:url(#${id}b)"/>`;
 
   const arte={
     // Anéis concêntricos, um deles preenchido: o dia em progresso.
-    hoje:`<g fill="none" stroke="url(#${id})" stroke-linecap="round">
-      <circle cx="200" cy="130" r="86" stroke="#ffffff" stroke-opacity=".07" stroke-width="16"/>
+    hoje:`<g fill="none" style="stroke:url(#${id})" stroke-linecap="round">
+      <circle cx="200" cy="130" r="86" style="stroke:var(--arte-fio-forte)" stroke-width="16"/>
       <circle cx="200" cy="130" r="86" stroke-width="16" stroke-dasharray="352 540"
               transform="rotate(-90 200 130)"/>
-      <circle cx="200" cy="130" r="56" stroke="#ffffff" stroke-opacity=".10" stroke-width="2"/>
-      <circle cx="200" cy="130" r="118" stroke="#ffffff" stroke-opacity=".05" stroke-width="1.5"/>
+      <circle cx="200" cy="130" r="56" style="stroke:var(--arte-fio)" stroke-width="2"/>
+      <circle cx="200" cy="130" r="118" style="stroke:var(--arte-fio-fraco)" stroke-width="1.5"/>
     </g>
-    <circle cx="200" cy="44" r="6" fill="#ffd36b"/>`,
+    <circle cx="200" cy="44" r="6" style="fill:var(--arte-3)"/>`,
 
     // Barras de alturas diferentes: o plano, categoria a categoria.
     plano:`<g>
       ${[[96,150],[140,96],[184,190],[228,124],[272,70]].map((b,i)=>
         `<rect x="${b[0]}" y="${232-b[1]}" width="34" height="${b[1]}" rx="10"
-               fill="url(#${id})" opacity="${(0.42+i*0.14).toFixed(2)}"/>`).join('')}
-      <path d="M78 232h250" stroke="#ffffff" stroke-opacity=".14" stroke-width="1.5"/>
-      <path d="M96 62h64" stroke="url(#${id})" stroke-width="4" stroke-linecap="round"/>
+               style="fill:url(#${id})" opacity="${(0.42+i*0.14).toFixed(2)}"/>`).join('')}
+      <path d="M78 232h250" style="stroke:var(--arte-fio-forte)" stroke-width="1.5"/>
+      <path d="M96 62h64" style="stroke:url(#${id})" stroke-width="4" stroke-linecap="round"/>
     </g>`,
 
     // Malha de nós ligados: o dado analisado.
@@ -3247,14 +3258,14 @@ function arteCarta(qual){
       const ls=[[0,1],[1,2],[1,3],[3,4],[4,5],[1,5],[3,6],[4,6]];
       return `<g>
         ${ls.map(([a,b])=>`<path d="M${ns[a][0]} ${ns[a][1]}L${ns[b][0]} ${ns[b][1]}"
-          stroke="url(#${id})" stroke-opacity=".45" stroke-width="1.5"/>`).join('')}
+          style="stroke:url(#${id})" stroke-opacity=".45" stroke-width="1.5"/>`).join('')}
         ${ns.map((n,i)=>`<circle cx="${n[0]}" cy="${n[1]}" r="${i%3===0?7:4.5}"
-          fill="url(#${id})"/>`).join('')}
+          style="fill:url(#${id})"/>`).join('')}
       </g>`;
     })(),
 
     // Arcos concêntricos interrompidos: mecanismo, sem virar desenho de engrenagem.
-    ajustes:`<g fill="none" stroke="url(#${id})" stroke-linecap="round">
+    ajustes:`<g fill="none" style="stroke:url(#${id})" stroke-linecap="round">
       <path d="M200 46a84 84 0 0 1 84 84" stroke-width="9"/>
       <path d="M284 130a84 84 0 0 1-84 84" stroke-width="9" stroke-opacity=".45"/>
       <path d="M200 214a84 84 0 0 1-84-84" stroke-width="9" stroke-opacity=".7"/>
@@ -3265,6 +3276,170 @@ function arteCarta(qual){
 
   return `<svg class="carta-arte" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice"
      aria-hidden="true" focusable="false">${base}${arte}</svg>`;
+}
+
+/* ==========================================================================
+   Avatares
+
+   Dez bichos e companhia, desenhados aqui em SVG. Nenhuma imagem baixada:
+   são formas geométricas simples, o que resolve três coisas de uma vez — o
+   app continua funcionando offline, o avatar fica nítido em qualquer tela
+   (36 px no cabeçalho, 52 px na conta) e não há licença de terceiro no meio.
+
+   Cada um traz o próprio fundo colorido, então eles se leem igual no tema
+   claro e no escuro sem precisar de duas versões.
+
+   A escolha vive no estado da CONTA, não do aparelho: o rosto que a pessoa
+   escolheu acompanha ela no celular e no computador.
+   ========================================================================== */
+const AVATARES={
+  raposa:{nome:'Raposa', cor:'#F2872C', arte:`
+    <path d="M8 17 L13 3 L22 12 Z" fill="#C7621B"/><path d="M40 17 L35 3 L26 12 Z" fill="#C7621B"/>
+    <path d="M24 25c7 0 11 4 11 8s-5 8-11 8-11-3-11-8 4-8 11-8z" fill="#FFF1E2"/>
+    <circle cx="17" cy="23" r="2.7" fill="#2A1608"/><circle cx="31" cy="23" r="2.7" fill="#2A1608"/>
+    <ellipse cx="24" cy="31" rx="2.8" ry="2.2" fill="#2A1608"/>
+    <path d="M24 33v3" stroke="#2A1608" stroke-width="1.6" stroke-linecap="round"/>`},
+
+  gato:{nome:'Gato', cor:'#8B8CA7', arte:`
+    <path d="M9 16 L12 3 L22 11 Z" fill="#6D6E88"/><path d="M39 16 L36 3 L26 11 Z" fill="#6D6E88"/>
+    <path d="M12.5 13 L14 6.5 L18.5 11 Z" fill="#F2909F"/><path d="M35.5 13 L34 6.5 L29.5 11 Z" fill="#F2909F"/>
+    <ellipse cx="17" cy="24" rx="3" ry="3.4" fill="#20223A"/><ellipse cx="31" cy="24" rx="3" ry="3.4" fill="#20223A"/>
+    <circle cx="18" cy="23" r="1" fill="#fff"/><circle cx="32" cy="23" r="1" fill="#fff"/>
+    <path d="M24 30l3 2-3 2-3-2z" fill="#F2909F"/>
+    <g stroke="#FFFFFF" stroke-opacity=".62" stroke-width="1.3" stroke-linecap="round">
+      <path d="M8 29h7M8 33h7M40 29h-7M40 33h-7"/></g>`},
+
+  coruja:{nome:'Coruja', cor:'#8A6A4B', arte:`
+    <path d="M11 11 L15 2 L22 10 Z" fill="#6D5238"/><path d="M37 11 L33 2 L26 10 Z" fill="#6D5238"/>
+    <circle cx="17" cy="23" r="7.5" fill="#FFF4E4"/><circle cx="31" cy="23" r="7.5" fill="#FFF4E4"/>
+    <circle cx="17.6" cy="23" r="3.4" fill="#2A1608"/><circle cx="30.4" cy="23" r="3.4" fill="#2A1608"/>
+    <circle cx="18.6" cy="22" r="1.1" fill="#fff"/><circle cx="31.4" cy="22" r="1.1" fill="#fff"/>
+    <path d="M24 28l4.5 4.5L24 37l-4.5-4.5z" fill="#F2B23C"/>
+    <path d="M14 40c3-2 7-3 10-3s7 1 10 3" stroke="#6D5238" stroke-width="2" fill="none" stroke-linecap="round"/>`},
+
+  panda:{nome:'Panda', cor:'#F0ECEA', arte:`
+    <circle cx="11" cy="12" r="6.5" fill="#2E2C33"/><circle cx="37" cy="12" r="6.5" fill="#2E2C33"/>
+    <ellipse cx="16.5" cy="24" rx="6" ry="7" fill="#2E2C33" transform="rotate(-14 16.5 24)"/>
+    <ellipse cx="31.5" cy="24" rx="6" ry="7" fill="#2E2C33" transform="rotate(14 31.5 24)"/>
+    <circle cx="16.5" cy="24" r="2.4" fill="#FFFFFF"/><circle cx="31.5" cy="24" r="2.4" fill="#FFFFFF"/>
+    <ellipse cx="24" cy="32" rx="3.4" ry="2.6" fill="#2E2C33"/>
+    <path d="M24 35c0 2-2 3-3.6 2.6M24 35c0 2 2 3 3.6 2.6" stroke="#2E2C33" stroke-width="1.5"
+          fill="none" stroke-linecap="round"/>`},
+
+  sapo:{nome:'Sapo', cor:'#4FA83C', arte:`
+    <circle cx="15" cy="14" r="7" fill="#7BC96A"/><circle cx="33" cy="14" r="7" fill="#7BC96A"/>
+    <circle cx="15" cy="14" r="4.6" fill="#FFFFFF"/><circle cx="33" cy="14" r="4.6" fill="#FFFFFF"/>
+    <circle cx="15.8" cy="14.6" r="2.4" fill="#1F3A16"/><circle cx="32.2" cy="14.6" r="2.4" fill="#1F3A16"/>
+    <path d="M12 28q12 11 24 0" stroke="#1F5A18" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+    <circle cx="21" cy="24" r="1.1" fill="#1F5A18"/><circle cx="27" cy="24" r="1.1" fill="#1F5A18"/>
+    <circle cx="10" cy="31" r="2.6" fill="#7BC96A" opacity=".8"/>
+    <circle cx="38" cy="31" r="2.6" fill="#7BC96A" opacity=".8"/>`},
+
+  pinguim:{nome:'Pinguim', cor:'#2B3245', arte:`
+    <path d="M24 12c7 0 12 7 12 15s-5 14-12 14-12-6-12-14 5-15 12-15z" fill="#F7F7FA"/>
+    <circle cx="19" cy="23" r="2.6" fill="#20243A"/><circle cx="29" cy="23" r="2.6" fill="#20243A"/>
+    <circle cx="19.8" cy="22.2" r="0.9" fill="#fff"/><circle cx="29.8" cy="22.2" r="0.9" fill="#fff"/>
+    <path d="M24 27l5.5 3.5L24 34l-5.5-3.5z" fill="#F5A623"/>
+    <path d="M9 26c-1 6 1 11 4 13" stroke="#20243A" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M39 26c1 6-1 11-4 13" stroke="#20243A" stroke-width="3" fill="none" stroke-linecap="round"/>`},
+
+  urso:{nome:'Urso', cor:'#A3714A', arte:`
+    <circle cx="11" cy="13" r="6.5" fill="#845838"/><circle cx="37" cy="13" r="6.5" fill="#845838"/>
+    <circle cx="11" cy="13" r="3.2" fill="#C79A72"/><circle cx="37" cy="13" r="3.2" fill="#C79A72"/>
+    <ellipse cx="24" cy="32" rx="9.5" ry="7" fill="#E8CBA9"/>
+    <circle cx="17.5" cy="23" r="2.6" fill="#3A2416"/><circle cx="30.5" cy="23" r="2.6" fill="#3A2416"/>
+    <ellipse cx="24" cy="29" rx="3.2" ry="2.4" fill="#3A2416"/>
+    <path d="M24 31.5v2.5M24 34c0 1.6-1.7 2.6-3 2.2M24 34c0 1.6 1.7 2.6 3 2.2"
+          stroke="#3A2416" stroke-width="1.5" fill="none" stroke-linecap="round"/>`},
+
+  dragao:{nome:'Dragão', cor:'#2FA88C', arte:`
+    <path d="M13 13 L8 1 L20 8 Z" fill="#1B6E5B"/><path d="M35 13 L40 1 L28 8 Z" fill="#1B6E5B"/>
+    <path d="M24 6 l3 5 -6 0 z" fill="#1B6E5B"/>
+    <ellipse cx="24" cy="33" rx="7.6" ry="5.6" fill="#6FD9BE"/>
+    <circle cx="21.4" cy="32" r="1.3" fill="#134539"/><circle cx="26.6" cy="32" r="1.3" fill="#134539"/>
+    <path d="M20 36.4l1.6 2.4 1.6-2.4M24.8 36.4l1.6 2.4 1.6-2.4" fill="#FFFFFF"/>
+    <ellipse cx="17" cy="22" rx="3.4" ry="4.4" fill="#FFD36B"/><ellipse cx="31" cy="22" rx="3.4" ry="4.4" fill="#FFD36B"/>
+    <path d="M17 19.2v5.6M31 19.2v5.6" stroke="#134539" stroke-width="2.1" stroke-linecap="round"/>
+    <path d="M11 27c1.6 1.6 3.4 2.4 5.4 2.6M37 27c-1.6 1.6-3.4 2.4-5.4 2.6"
+          stroke="#1B6E5B" stroke-width="1.6" fill="none" stroke-linecap="round"/>`},
+
+  robo:{nome:'Robô', cor:'#5A6BE8', arte:`
+    <path d="M24 3v6" stroke="#FFD36B" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="24" cy="4" r="2.6" fill="#FFD36B"/>
+    <rect x="9" y="11" width="30" height="27" rx="9" fill="#E9EDFF"/>
+    <rect x="13.5" y="18" width="21" height="11" rx="5.5" fill="#1E2445"/>
+    <circle cx="19.5" cy="23.5" r="2.4" fill="#62E6FF"/><circle cx="28.5" cy="23.5" r="2.4" fill="#62E6FF"/>
+    <path d="M18 33h12" stroke="#9AA3C7" stroke-width="2" stroke-linecap="round"/>
+    <rect x="4" y="20" width="4" height="9" rx="2" fill="#3D4CBF"/>
+    <rect x="40" y="20" width="4" height="9" rx="2" fill="#3D4CBF"/>`},
+
+  astronauta:{nome:'Astronauta', cor:'#8FA2C4', arte:`
+    <rect x="3" y="19" width="5.5" height="11" rx="2.75" fill="#6E7F9E"/>
+    <rect x="39.5" y="19" width="5.5" height="11" rx="2.75" fill="#6E7F9E"/>
+    <circle cx="24" cy="24" r="16" fill="#F6F8FF"/>
+    <circle cx="24" cy="24" r="16" fill="none" stroke="#D3DBEC" stroke-width="1.6"/>
+    <rect x="12" y="17" width="24" height="15" rx="7.5" fill="#16233D"/>
+    <path d="M16.6 26.6c-.6-3.4 1.6-6.6 5-7.6" stroke="#79A6F2" stroke-width="2.6"
+          fill="none" stroke-linecap="round"/>
+    <path d="M21 29.4c-1.4-.6-2.4-1.6-2.8-3" stroke="#79A6F2" stroke-width="1.8"
+          fill="none" stroke-linecap="round" opacity=".7"/>
+    <path d="M18 9.6h12" stroke="#FFD36B" stroke-width="2.6" stroke-linecap="round"/>
+    <rect x="20" y="37" width="8" height="5" rx="2.5" fill="#6E7F9E"/>`}
+};
+
+/* A letra é o padrão e continua sendo uma opção: nem todo mundo quer um bicho. */
+function avatarEscolhido(){ return AVATARES[S.avatar] ? S.avatar : ''; }
+function avatarSVG(chave){
+  const a=AVATARES[chave]; if(!a) return '';
+  return `<svg class="av" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+    <circle cx="24" cy="24" r="24" fill="${a.cor}"/>${a.arte}
+    <circle cx="24" cy="24" r="23.2" fill="none" stroke="rgba(0,0,0,.10)" stroke-width="1.6"/>
+  </svg>`;
+}
+/* O ícone genérico de pessoa, para quando nenhum bicho foi escolhido. */
+const ICONE_PESSOA='<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">'+
+  '<circle cx="12" cy="8.4" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>';
+
+/* Um único lugar pinta o rosto em todos os cantos onde ele aparece: cabeçalho,
+   tela de cartas, menu e a aba da conta. */
+function pintarAvatares(){
+  const chave=avatarEscolhido();
+  const svg=chave?avatarSVG(chave):'';
+  const botao=svg||ICONE_PESSOA;
+  const pb=$('#perfilBtn');
+  if(pb){ pb.innerHTML=botao; pb.classList.toggle('com-bicho',!!chave); }
+  const pp=$('#portalPerfil');
+  if(pp){
+    pp.innerHTML='<span class="tecla-face">'+botao+'</span>';
+    pp.classList.toggle('com-bicho',!!chave);
+  }
+  const u=(window.Auth&&Auth.usuario())||null;
+  const inicial=((Auth&&Auth.primeiroNome())||(u&&u.email)||'?').charAt(0);
+  [['#mpAvatar',true],['#contaAvatar',true]].forEach(([id])=>{
+    const el=$(id); if(!el) return;
+    el.innerHTML=svg||esc(inicial);
+    el.classList.toggle('com-bicho',!!chave);
+  });
+  document.querySelectorAll('#gradeAvatares [data-av]').forEach(b=>{
+    b.setAttribute('aria-pressed', b.dataset.av===(chave||'letra') ? 'true':'false');
+  });
+}
+
+function montarEscolhaAvatar(){
+  const g=$('#gradeAvatares'); if(!g || g.dataset.pronto) return;
+  const opcoes=[['letra','Letra do seu nome',ICONE_PESSOA]]
+    .concat(Object.keys(AVATARES).map(k=>[k,AVATARES[k].nome,avatarSVG(k)]));
+  g.innerHTML=opcoes.map(([k,nome,arte])=>`
+    <button type="button" class="av-op" data-av="${esc(k)}" aria-pressed="false"
+            title="${esc(nome)}" aria-label="${esc(nome)}">${arte}</button>`).join('');
+  g.dataset.pronto='1';
+  g.addEventListener('click',e=>{
+    const b=e.target.closest('[data-av]'); if(!b) return;
+    S.avatar = b.dataset.av==='letra' ? '' : b.dataset.av;
+    vibrar(10);
+    pintarAvatares();
+    salvar();
+  });
 }
 
 const PORTAL_OFF='sobra:portal-off';

@@ -2583,3 +2583,112 @@ h1, .capa-tit, .portal-tit, .carta-tit, .auth-tit, .etapa h2{
 }
 .carta-tit{padding-bottom:.08em}
 .big{line-height:1.12;padding-bottom:.04em}
+
+/* ==========================================================================
+   v10 — A arte das cartas também tem tema
+
+   A tela clareava, e as quatro cartas continuavam quatro retângulos pretos:
+   só o fundo da página tinha mudado. A arte é desenhada em SVG pelo app, e
+   agora as cores dela saem daqui — o mesmo desenho, duas paletas. Nada é
+   redesenhado na troca de tema: é o navegador recalculando as variáveis.
+   ========================================================================== */
+:root{
+  /* escuro é o padrão da carta, como sempre foi */
+  --arte-1:#ff2d6b; --arte-2:#c9327f; --arte-3:#ffd36b;
+  --arte-fundo-1:#5a1040; --arte-fundo-2:#170410;
+  --arte-fio:rgba(255,255,255,.10);
+  --arte-fio-forte:rgba(255,255,255,.07);
+  --arte-fio-fraco:rgba(255,255,255,.05);
+  --carta-fundo:#170410;
+  --carta-veu:linear-gradient(180deg, rgba(10,2,8,.15) 0%, rgba(10,2,8,.62) 58%, rgba(10,2,8,.90) 100%);
+  --carta-tit:#fff;
+  --carta-rot:#ffd36b;
+  --carta-sub:rgba(255,255,255,.72);
+  --carta-brilho:rgba(255,138,190,.20);
+}
+:root[data-tema="claro"]{
+  /* Claro não é o escuro clareado: o fundo vira leitoso, os traços escurecem
+     para continuar existindo sobre ele, e o dourado cede lugar ao vinho —
+     ouro sobre branco é o par que menos se lê da paleta. */
+  --arte-1:#c8004d; --arte-2:#7d1a6b; --arte-3:#a06510;
+  --arte-fundo-1:#ffe0ee; --arte-fundo-2:#ecdcee;
+  --arte-fio:rgba(58,38,86,.22);
+  --arte-fio-forte:rgba(58,38,86,.14);
+  --arte-fio-fraco:rgba(58,38,86,.10);
+  --carta-fundo:#f6ecf4;
+  /* O véu existe para o texto se ler sobre o desenho, e só. No escuro ele
+     precisa ser pesado (texto branco sobre arte clara); no claro, leve — se
+     copiar a força do escuro, apaga a arte inteira e sobra um cartão branco. */
+  --carta-veu:linear-gradient(180deg, rgba(255,255,255,0) 34%, rgba(255,250,253,.52) 72%, rgba(255,252,254,.86) 100%);
+  --carta-tit:#1B0F1E;
+  --carta-rot:#a3175e;
+  --carta-sub:rgba(27,15,30,.70);
+  --carta-brilho:rgba(201,50,127,.16);
+}
+.carta{background:var(--carta-fundo); color:var(--carta-tit)}
+.carta-veu{background:var(--carta-veu)}
+.carta-rot{color:var(--carta-rot)}
+.carta-tit{color:var(--carta-tit)}
+.carta-sub{color:var(--carta-sub)}
+.carta::after{
+  background:radial-gradient(320px circle at var(--mx,50%) var(--my,50%),
+             var(--carta-brilho), transparent 60%);
+}
+/* No claro a moldura da carta precisa existir: sem ela, carta clara sobre
+   fundo claro vira um borrão sem começo nem fim. */
+:root[data-tema="claro"] .carta{border-color:rgba(58,38,86,.14)}
+
+/* O texto da carta saía pela borda de baixo quando a carta se aproximava:
+   translateZ aumenta o tamanho aparente, e o que cresce dentro de uma caixa
+   com overflow:hidden é cortado. Menos avanço, mesma profundidade. */
+.carta.tilt-ativo .carta-txt{
+  transform:translate3d(calc(var(--rx,0)*8px), calc(var(--ry,0)*8px), 12px);
+}
+
+/* ==========================================================================
+   Avatares
+   O rosto aparece em quatro lugares — cabeçalho, tela de cartas, menu e a aba
+   da conta — e em três tamanhos. Um só desenho serve para todos: SVG não tem
+   tamanho nativo, então quem manda é a caixa.
+   ========================================================================== */
+.av{width:100%;height:100%;display:block;border-radius:50%}
+
+/* Com bicho escolhido, o botão vira a moldura do rosto: sem preenchimento,
+   sem borda dupla, e o desenho encosta na borda do círculo. */
+.perfil-btn.com-bicho{padding:0;overflow:hidden;background:none;border-color:transparent}
+.perfil-btn.com-bicho .av{width:44px;height:44px}
+.tecla-ic.com-bicho .tecla-face{padding:0;overflow:hidden}
+.tecla-ic.com-bicho .av{width:100%;height:100%}
+.avatar.com-bicho{background:none;padding:0;overflow:hidden}
+.avatar.com-bicho .av{width:100%;height:100%}
+.mp-cabeca .avatar.com-bicho{background:none}
+
+/* ---- a grade de escolha ---- */
+.av-escolha{margin:var(--e4) 0 var(--e5)}
+.av-titulo{
+  font-size:var(--t-cap); font-weight:var(--peso-sm); letter-spacing:.06em;
+  text-transform:uppercase; color:var(--txt-3); margin-bottom:var(--e3);
+}
+.avatares{display:flex;flex-wrap:wrap;gap:var(--e3)}
+.av-op{
+  width:52px;height:52px;flex:0 0 52px;padding:0;cursor:pointer;
+  border-radius:50%; border:2px solid transparent; background:var(--fill);
+  display:grid;place-items:center;overflow:hidden;color:var(--txt-2);
+  box-shadow:0 3px 0 color-mix(in srgb,var(--b3d-base) 45%,transparent);
+  transition:transform 140ms var(--elastico), box-shadow 140ms ease,
+             border-color 140ms ease, filter 140ms ease;
+  -webkit-tap-highlight-color:transparent;
+}
+.av-op .av{width:52px;height:52px}
+.av-op .ico{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8}
+.av-op:hover{transform:translateY(-3px);
+  box-shadow:0 6px 0 color-mix(in srgb,var(--b3d-base) 45%,transparent)}
+.av-op:active{transform:translateY(3px);box-shadow:none;transition-duration:70ms}
+/* Escolhido: afunda e ganha o anel — a mesma gramática das outras teclas. */
+.av-op[aria-pressed="true"]{
+  border-color:var(--azul); transform:translateY(2px);
+  box-shadow:0 0 0 3px var(--azul-fraco);
+}
+.av-op[aria-pressed="false"]{filter:saturate(.82) opacity(.88)}
+.av-op:focus-visible{outline:2px solid var(--azul);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){ .av-op{transition-duration:.01ms} }
