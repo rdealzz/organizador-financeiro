@@ -1835,3 +1835,317 @@ body.com-portal .fab{opacity:0;pointer-events:none;transition:opacity var(--t-me
   .voltar-portal{width:34px;height:34px;margin-right:var(--e1)}
   .cab-linha{gap:var(--e2)}
 }
+
+/* ==========================================================================
+   v7 — Holografia de fundo, foco por área e botões com relevo
+
+   Três coisas entram aqui, e todas dependem uma da outra:
+
+   1. O fundo holográfico. Formas iridescentes desfocadas e um piso em
+      perspectiva, atrás de TUDO. Sem imagem, sem biblioteca: é gradiente e
+      transform, que o navegador resolve na GPU sem refazer layout.
+   2. O modo foco. Ao entrar por uma carta, a barra de abas sai da tela: a
+      pessoa fica só naquela área, e o caminho para outra é o botão de voltar.
+   3. O relevo dos botões. Um botão chapado não diz que é apertável. Aqui a
+      face fica sobre uma base mais escura, sobe no hover e AFUNDA no clique —
+      o mesmo curso de 4 px que um botão de verdade tem.
+   ========================================================================== */
+
+/* Cantos mais redondos em toda a interface. Os componentes continuam sem
+   inventar número: só os quatro degraus da escala mudaram de valor. */
+:root{
+  --r-xs:10px; --r-sm:14px; --r-md:20px; --r-lg:28px;
+
+  /* Relevo dos botões: a altura da base e a cor de cada camada.
+     Um só lugar decide o quanto tudo no app "levanta" da tela. */
+  --b3d-curso:4px;                       /* altura da base, em repouso */
+  --b3d-base:rgba(24,10,44,.34);         /* a lateral, vista de cima */
+  --b3d-luz:rgba(255,255,255,.34);       /* o brilho especular no topo */
+  --b3d-halo:rgba(104,60,160,.28);       /* a sombra projetada no chão */
+}
+[data-tema="escuro"]{
+  --b3d-base:rgba(0,0,0,.55); --b3d-luz:rgba(255,255,255,.16); --b3d-halo:rgba(0,0,0,.6);
+}
+
+/* --------------------------------------------------------------- holografia
+   z-index negativo: a camada fica acima do fundo da página e ABAIXO de todo
+   o conteúdo em fluxo, sem precisar empilhar o app inteiro. `contain` prende
+   o cálculo dentro dela — nada aqui pode sujar o layout do resto. */
+.holo{
+  position:fixed; inset:0; z-index:-1; overflow:hidden;
+  pointer-events:none; contain:strict;
+}
+.holo i{
+  position:absolute; display:block; border-radius:50%;
+  filter:blur(58px); opacity:.42; will-change:transform;
+  animation:holoOrbita 34s linear infinite;
+}
+/* Cada bolha é um degradê cônico: é a rotação dele que dá o efeito de
+   película holográfica, com a cor mudando conforme o ângulo. */
+.holo .h1{
+  width:52vmax; height:52vmax; top:-18vmax; left:-14vmax;
+  background:conic-gradient(from 20deg,#ff2d6b,#ffd36b,#57e3d4,#6a5cff,#ff2d6b);
+}
+.holo .h2{
+  width:44vmax; height:44vmax; top:34%; right:-16vmax; left:auto;
+  background:conic-gradient(from 140deg,#6a5cff,#ff2d6b,#ffd36b,#57e3d4,#6a5cff);
+  animation-duration:46s; animation-direction:reverse; opacity:.34;
+}
+.holo .h3{
+  width:38vmax; height:38vmax; bottom:-14vmax; left:8%; top:auto;
+  background:conic-gradient(from 260deg,#57e3d4,#6a5cff,#ff2d6b,#ffd36b,#57e3d4);
+  animation-duration:58s; opacity:.30;
+}
+.holo .h4{
+  width:26vmax; height:26vmax; top:12%; left:38%;
+  background:conic-gradient(from 60deg,#ffd36b,#ff2d6b,#6a5cff,#57e3d4,#ffd36b);
+  animation-duration:40s; animation-direction:reverse; opacity:.22;
+}
+@keyframes holoOrbita{
+  from{transform:rotate(0turn) translate3d(0,0,0) scale(1)}
+  50% {transform:rotate(.5turn) translate3d(3vmax,-2vmax,0) scale(1.08)}
+  to  {transform:rotate(1turn) translate3d(0,0,0) scale(1)}
+}
+
+/* O piso: uma grade deitada em perspectiva de verdade (rotateX), esmaecendo
+   ao longe. É o que dá eixo de profundidade à tela — sem ele as bolhas ficam
+   sendo só manchas coloridas. */
+.holo-piso{
+  position:absolute; left:-40%; right:-40%; bottom:-6%; height:62%;
+  transform:perspective(520px) rotateX(72deg); transform-origin:50% 100%;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.5) 0 1px, transparent 1px 84px),
+    repeating-linear-gradient(0deg,  rgba(255,255,255,.5) 0 1px, transparent 1px 84px);
+  opacity:.16;
+  -webkit-mask-image:linear-gradient(to top, #000 0%, transparent 78%);
+  mask-image:linear-gradient(to top, #000 0%, transparent 78%);
+  animation:holoAnda 9s linear infinite;
+}
+@keyframes holoAnda{ from{background-position:0 0,0 0} to{background-position:0 0,0 84px} }
+
+/* No claro a grade branca some no branco: ali ela é escura. */
+:root:not([data-tema="escuro"]) .holo-piso{
+  background-image:
+    repeating-linear-gradient(90deg, rgba(58,38,86,.55) 0 1px, transparent 1px 84px),
+    repeating-linear-gradient(0deg,  rgba(58,38,86,.55) 0 1px, transparent 1px 84px);
+  opacity:.10;
+}
+:root:not([data-tema="escuro"]) .holo i{opacity:.20;filter:blur(72px)}
+
+/* Com a esfera ligada já existe movimento atrás do app: a holografia recua
+   para não virar sopa de cor. */
+body.fundo-vivo .holo{opacity:.5}
+/* E na abertura (capa/login) ela não aparece: aquela tela é da esfera. */
+body.sem-barra .holo{display:none}
+
+/* ------------------------------------------------------------- modo foco
+   Entrou por uma carta: a barra de abas sai de cena. Sai por transform, não
+   por display — assim ela volta deslizando quando a pessoa retoma a
+   navegação livre, e o leitor de tela para de alcançá-la enquanto está fora. */
+body.modo-foco .tabbar{
+  transform:translateY(115%); opacity:0; pointer-events:none;
+  transition:transform var(--t-medio) var(--mola), opacity var(--t-rapido) ease;
+}
+@media(min-width:900px){
+  body.modo-foco .tabbar{transform:translate(-50%,-160%)}
+  /* Sem a barra no topo, o vão que ela ocupava não pode continuar reservado. */
+  body.modo-foco .wrap{padding-top:var(--e5)}
+}
+.tabbar{transition:transform var(--t-medio) var(--mola), opacity var(--t-rapido) ease}
+
+/* ---------------------------------------------------------- botões 3D
+   A estrutura é sempre a mesma: o BOTÃO é a base (a lateral escura, que não
+   se mexe) e a FACE é a tampa (que sobe, afunda e recebe o brilho). Dois
+   elementos, porque animar só a sombra não convence: o olho precisa ver a
+   tampa percorrer a altura da base. */
+.btn3d{
+  position:relative; border:0; padding:0; background:none;
+  font:inherit; color:inherit; cursor:pointer;
+  border-radius:calc(var(--r-sm) + 2px);
+  filter:drop-shadow(0 10px 18px var(--b3d-halo));
+  -webkit-tap-highlight-color:transparent; touch-action:manipulation;
+  -webkit-user-select:none; user-select:none;
+}
+.b3d-face{
+  position:relative; display:flex; align-items:center; justify-content:center; gap:var(--e2);
+  padding:12px 20px; border-radius:inherit;
+  background:linear-gradient(180deg,
+    color-mix(in srgb, var(--b3d-cor, var(--azul)) 88%, #fff) 0%,
+    var(--b3d-cor, var(--azul)) 55%,
+    color-mix(in srgb, var(--b3d-cor, var(--azul)) 88%, #000) 100%);
+  color:var(--b3d-txt,#fff); font-weight:var(--peso-sm); letter-spacing:-.01em;
+  box-shadow:
+    0 var(--b3d-curso) 0 var(--b3d-base),                 /* a lateral */
+    inset 0 1px 0 var(--b3d-luz),                         /* o topo iluminado */
+    inset 0 -1px 0 rgba(0,0,0,.18);
+  transform:translateY(0);
+  transition:transform 140ms var(--elastico), box-shadow 140ms ease, filter 140ms ease;
+}
+/* A película holográfica: uma faixa iridescente que atravessa a face quando o
+   cursor chega. Fica por cima da cor e por baixo do texto. */
+.b3d-face::after{
+  content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  background:linear-gradient(115deg, transparent 34%,
+    rgba(255,255,255,.42) 46%, rgba(160,220,255,.30) 52%, transparent 64%);
+  background-size:260% 100%; background-position:130% 0;
+  opacity:0; transition:background-position .6s var(--suave), opacity .2s ease;
+}
+.btn3d:hover .b3d-face{
+  transform:translateY(-2px);
+  box-shadow:
+    0 calc(var(--b3d-curso) + 2px) 0 var(--b3d-base),
+    inset 0 1px 0 var(--b3d-luz),
+    inset 0 -1px 0 rgba(0,0,0,.18);
+}
+.btn3d:hover .b3d-face::after{opacity:1;background-position:-30% 0}
+/* O clique afunda a tampa até encostar na base: curso inteiro, zero sombra. */
+.btn3d:active .b3d-face{
+  transform:translateY(var(--b3d-curso));
+  box-shadow:0 0 0 var(--b3d-base), inset 0 1px 0 rgba(255,255,255,.12);
+  transition-duration:70ms;
+}
+.btn3d:active{filter:drop-shadow(0 3px 6px var(--b3d-halo))}
+.btn3d:focus-visible{outline:none}
+.btn3d:focus-visible .b3d-face{outline:2px solid var(--azul);outline-offset:3px}
+.btn3d[disabled]{opacity:.5;pointer-events:none}
+.b3d-face svg{width:19px;height:19px;flex:none;fill:none;stroke:currentColor;
+  stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* Os botões comuns do app ganham o mesmo relevo, sem trocar o HTML de lugar
+   nenhum: a própria caixa vira a tampa e a base vem da sombra. */
+.btn{
+  position:relative; display:inline-flex; align-items:center; justify-content:center;
+  gap:var(--e2); border-radius:var(--r-sm); overflow:hidden;
+  background:linear-gradient(180deg,
+    color-mix(in srgb, var(--azul) 88%, #fff), var(--azul) 58%,
+    color-mix(in srgb, var(--azul) 90%, #000));
+  box-shadow:0 var(--b3d-curso) 0 var(--b3d-base), inset 0 1px 0 var(--b3d-luz),
+             0 10px 20px -10px var(--b3d-halo);
+  transition:transform 140ms var(--elastico), box-shadow 140ms ease;
+}
+.btn::after{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(115deg, transparent 34%, rgba(255,255,255,.40) 46%,
+             rgba(160,220,255,.28) 52%, transparent 64%);
+  background-size:260% 100%; background-position:130% 0; opacity:0;
+  transition:background-position .6s var(--suave), opacity .2s ease;
+}
+.btn:hover{
+  transform:translateY(-2px);
+  box-shadow:0 calc(var(--b3d-curso) + 2px) 0 var(--b3d-base),
+             inset 0 1px 0 var(--b3d-luz), 0 14px 24px -10px var(--b3d-halo);
+}
+.btn:hover::after{opacity:1;background-position:-30% 0}
+.btn:active{
+  opacity:1;                                   /* o afundar substitui o antigo esmaecer */
+  transform:translateY(var(--b3d-curso));
+  box-shadow:0 0 0 var(--b3d-base), inset 0 1px 0 rgba(255,255,255,.12);
+  transition-duration:70ms;
+}
+.btn.sec{
+  background:linear-gradient(180deg,
+    color-mix(in srgb, var(--fill) 60%, var(--card)), var(--fill-2));
+  color:var(--azul-txt);
+  box-shadow:0 var(--b3d-curso) 0 color-mix(in srgb, var(--b3d-base) 55%, transparent),
+             inset 0 1px 0 var(--b3d-luz);
+}
+
+/* O flutuante é redondo e por isso o relevo dele é anel, não faixa. */
+.fab{
+  background:linear-gradient(180deg,
+    color-mix(in srgb, var(--azul) 86%, #fff), var(--azul) 60%,
+    color-mix(in srgb, var(--azul) 88%, #000));
+  box-shadow:0 5px 0 var(--b3d-base), inset 0 2px 0 var(--b3d-luz),
+             0 16px 30px -12px rgba(0,122,255,.55);
+  transition:transform .2s var(--elastico), box-shadow .2s ease;
+}
+.fab:hover{transform:translateY(-3px);
+  box-shadow:0 8px 0 var(--b3d-base), inset 0 2px 0 var(--b3d-luz),
+             0 22px 38px -14px rgba(0,122,255,.55)}
+.fab:active{transform:translateY(5px) scale(.98);
+  box-shadow:0 0 0 var(--b3d-base), inset 0 2px 0 rgba(255,255,255,.14)}
+
+/* A aba escolhida também levanta: a barra deixa de ser uma fileira de ícones
+   chapados e passa a ter uma tecla afundada e as outras no plano. */
+.tb[aria-selected="true"]::before{
+  box-shadow:0 3px 0 color-mix(in srgb, var(--b3d-base) 60%, transparent),
+             inset 0 1px 0 var(--b3d-luz);
+  transform:translateY(-2px);
+  transition:transform var(--t-rapido) var(--elastico), box-shadow var(--t-rapido) ease;
+}
+.tb:active::before{transform:translateY(1px);box-shadow:none}
+
+/* O botão de voltar do cabeçalho, com o mesmo relevo dos demais. */
+.voltar-portal{
+  background:linear-gradient(180deg, color-mix(in srgb,var(--fill) 45%,var(--card)), var(--fill-2));
+  box-shadow:0 3px 0 color-mix(in srgb,var(--b3d-base) 50%,transparent),
+             inset 0 1px 0 var(--b3d-luz);
+}
+.voltar-portal:active{transform:translateY(3px) scale(1);box-shadow:none}
+
+/* -------------------------------------------- voltar às áreas (modo foco)
+   Canto oposto ao botão de adicionar gasto, para os dois nunca disputarem o
+   polegar. Só existe quando a pessoa entrou por uma carta. */
+.voltar-foco{
+  position:fixed; left:16px; bottom:calc(env(safe-area-inset-bottom) + 16px);
+  z-index:46; --b3d-cor:#2a1030; --b3d-txt:#fff;
+  animation:focoEntra .32s var(--elastico) backwards;
+}
+.voltar-foco .b3d-face{
+  padding:12px 18px; font-size:var(--t-base);
+  border:1px solid rgba(255,255,255,.14);
+}
+:root:not([data-tema="escuro"]) body:not(.fundo-vivo) .voltar-foco{--b3d-cor:#FFFFFF;--b3d-txt:var(--txt)}
+:root:not([data-tema="escuro"]) body:not(.fundo-vivo) .voltar-foco .b3d-face{border-color:var(--sep)}
+@keyframes focoEntra{from{opacity:0;transform:translateY(14px) scale(.92)}to{opacity:1;transform:none}}
+@media(min-width:900px){ .voltar-foco{left:24px;bottom:24px} }
+/* Enquanto as cartas estão na tela, o botão de voltar para elas não faz sentido. */
+body.com-portal .voltar-foco{opacity:0;pointer-events:none;transition:opacity var(--t-medio) ease}
+
+/* ------------------------------------------------- o portal cobre mesmo
+   O defeito: com fundo transparente (para a esfera aparecer) o app inteiro
+   continuava legível ATRÁS das cartas — cabeçalho, painéis, tudo. Some com o
+   conteúdo enquanto as cartas estão na tela e trava a rolagem da página de
+   baixo: a escolha de área passa a ser uma tela, não uma camada por cima. */
+.wrap{position:relative;z-index:1;
+  transition:opacity var(--t-medio) ease, transform var(--t-medio) var(--suave)}
+body.com-portal{overflow:hidden}
+body.com-portal .wrap{
+  opacity:0; transform:scale(.97) translateY(10px); pointer-events:none;
+  visibility:hidden; transition:opacity var(--t-medio) ease,
+    transform var(--t-medio) var(--suave), visibility 0s linear var(--t-medio);
+}
+/* O véu vai por baixo das cartas e por cima de tudo o que sobrar (menus,
+   folhas, avisos). Ele NÃO é opaco de propósito: a holografia do fundo
+   continua aparecendo por trás das cartas, que é o volume que a tela pedia.
+   Quem esconde o conteúdo é a regra acima, não este véu. */
+.portal{background:transparent}
+.portal::before{
+  content:''; position:fixed; inset:0; z-index:-1;
+  background:radial-gradient(120% 90% at 50% 40%, rgba(13,2,9,.58), rgba(13,2,9,.86));
+}
+:root:not([data-tema="escuro"]) body:not(.fundo-vivo) .portal::before{
+  background:radial-gradient(120% 90% at 50% 40%,
+    color-mix(in srgb,var(--bg) 72%,transparent),
+    color-mix(in srgb,var(--bg) 92%,transparent));
+}
+/* Sem a esfera, a holografia é o fundo da escolha de área: ganha corpo. */
+body.com-portal:not(.fundo-vivo) .holo i{opacity:.5}
+:root:not([data-tema="escuro"]) body.com-portal:not(.fundo-vivo) .holo i{opacity:.30}
+
+/* As cartas, mais redondas e com a mesma película das teclas. */
+.carta{border-radius:var(--r-lg)}
+.carta::before{
+  content:''; position:absolute; inset:0; z-index:3; pointer-events:none;
+  border-radius:inherit; opacity:0; transition:opacity var(--t-medio) ease;
+  background:linear-gradient(118deg, transparent 40%, rgba(255,255,255,.16) 50%,
+             rgba(150,210,255,.12) 56%, transparent 66%);
+}
+.carta.tilt-ativo::before{opacity:1}
+
+@media (prefers-reduced-motion:reduce){
+  .holo i,.holo-piso{animation:none}
+  .btn3d .b3d-face,.btn,.fab{transition-duration:.01ms}
+  .b3d-face::after,.btn::after{display:none}
+  .voltar-foco{animation:none}
+}

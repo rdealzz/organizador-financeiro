@@ -2276,6 +2276,7 @@ function mostrarAuth(){
   $('#appWrap').hidden=true;
   $('#tabbar').hidden=true;
   $('#fab').hidden=true;
+  sairFoco();                      // sair da conta desfaz qualquer área em foco
   pintarModo();
   focarEntrada();
 }
@@ -2319,6 +2320,7 @@ async function abrirApp(recemLogado, contaNova){
   $('#fab').hidden=false;
   /* O portal só na entrada, e não para quem acabou de criar a conta: ali o
      caminho útil é o passo a passo em Hoje, não uma escolha de área. */
+  sairFoco();
   if(!contaNova) abrirPortal();
   ligarVoltarPortal();
 
@@ -3152,6 +3154,11 @@ function montarPortal(){
       b.classList.remove('carta-aperta');
       fecharPortal();
       irPara(b.dataset.carta);
+      /* A carta abre UMA área e fecha a porta atrás de si: a barra de abas
+         sai de cena e o único caminho para outra área é o botão de voltar.
+         É o pedido de navegação espacial — quem entra por uma porta sai
+         por ela, em vez de se teletransportar entre telas. */
+      entrarFoco();
     },170);
   });
 }
@@ -3179,18 +3186,60 @@ function fecharPortal(){
   setTimeout(()=>{ p.hidden=true; },360);
 }
 
-$('#portalPular').onclick=()=>{ fecharPortal(); irPara('hoje'); };
+/* "Ir direto para Hoje" é a saída para quem não quer a navegação por portas:
+   entra sem foco, com a barra de abas no lugar de sempre. */
+$('#portalPular').onclick=()=>{ fecharPortal(); sairFoco(); irPara('hoje'); };
 document.addEventListener('keydown',e=>{
   const p=$('#portal');
-  if(e.key==='Escape' && p && !p.hidden){ fecharPortal(); irPara(AREA||'hoje'); }
+  if(e.key!=='Escape') return;
+  if(p && !p.hidden){ fecharPortal(); irPara(AREA||'hoje'); return; }
+  // Dentro de uma área aberta por carta, Esc é o mesmo que o botão de voltar.
+  if(document.body.classList.contains('modo-foco') && !$('#sheet').classList.contains('abre')){
+    voltarAsAreas();
+  }
 });
+
+/* ==========================================================================
+   Modo foco — uma área de cada vez
+
+   Entrando por uma carta, a barra de abas sai da tela. A pessoa fica só na
+   área que escolheu, e para ir a outra volta primeiro para as cartas. Isso
+   troca dois toques por um caminho que se enxerga: existe um lugar de onde se
+   veio, e um botão que leva de volta a ele.
+
+   Quem prefere a navegação livre continua tendo: "Ir direto para Hoje" nas
+   cartas, e o ajuste que desliga a tela de entrada por completo. */
+function entrarFoco(){
+  document.body.classList.add('modo-foco');
+  const b=$('#voltarFoco'); if(b) b.hidden=false;
+  // A barra sai da ordem de leitura enquanto não está na tela.
+  const t=$('#tabbar'); if(t) t.setAttribute('aria-hidden','true');
+}
+function sairFoco(){
+  document.body.classList.remove('modo-foco');
+  const b=$('#voltarFoco'); if(b) b.hidden=true;
+  const t=$('#tabbar'); if(t) t.removeAttribute('aria-hidden');
+}
+function voltarAsAreas(){
+  vibrar(8);
+  sairFoco();
+  /* Se as cartas estiverem desligadas nos ajustes não há para onde voltar:
+     nesse caso a barra de abas simplesmente reaparece. */
+  abrirPortal();
+}
 
 /* Voltar às cartas. Fica no cabeçalho, ancorado, com estado de hover próprio —
    é o caminho de volta que a navegação espacial exige para a pessoa nunca se
    sentir teletransportada. */
 function ligarVoltarPortal(){
-  const b=$('#voltarPortal'); if(!b) return;
-  b.onclick=()=>{ abrirPortal(); };
+  const b=$('#voltarPortal');
+  if(b) b.onclick=voltarAsAreas;
+  const f=$('#voltarFoco');
+  if(f) f.onclick=voltarAsAreas;
 }
+/* Os dois botões existem no HTML desde a partida: ligar aqui, e não só ao
+   entrar no app, garante que o caminho de volta nunca dependa de por qual
+   porta a sessão começou (login novo, sessão salva ou recarga da página). */
+ligarVoltarPortal();
 
 // As cartas entram na mesma física dos cartões: inclinação, parallax e brilho.

@@ -57,6 +57,15 @@ html[data-tema="escuro"] #splash{background:#000}
   <div class="cena-veu"></div>
 </div>
 
+<!-- ══════════════════════ HOLOGRAFIA DE FUNDO ══════════════════════
+     Puro enfeite: fica ATRÁS de tudo (z-index negativo) e não recebe nem
+     clique nem leitor de tela. São formas iridescentes desfocadas e um piso
+     em perspectiva — o volume vem do 3D do CSS, não de imagem baixada. -->
+<div class="holo" aria-hidden="true">
+  <i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i>
+  <div class="holo-piso"></div>
+</div>
+
 <!-- ══════════════════════ ABERTURA ══════════════════════
      Sem botão: a tela inteira é a área de clique. -->
 <div class="capa" id="capa" hidden role="button" tabindex="0"
@@ -495,7 +504,7 @@ html[data-tema="escuro"] #splash{background:#000}
     <div class="alerta-linha" style="border-top:1px solid var(--sep);margin-top:var(--e4);padding-top:var(--e4)">
       <div class="ai"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg></div>
       <div class="at"><div class="an">Cartas na entrada</div>
-        <div class="ad">A escolha de área em cartas, uma vez a cada abertura. Desligado, o app abre direto em Hoje. Vale por aparelho.</div></div>
+        <div class="ad">A escolha de área em cartas, uma vez a cada abertura. Entrando por uma carta o app fica só naquela área, e o botão <b>Áreas</b>, no canto, é o caminho de volta para as outras. Desligado, o app abre direto em Hoje com a barra de abas de sempre. Vale por aparelho.</div></div>
       <button class="sw" role="switch" id="swPortal" aria-checked="true" aria-label="Cartas na entrada"></button>
     </div>
 
@@ -558,6 +567,16 @@ html[data-tema="escuro"] #splash{background:#000}
   <button class="tb" role="tab" aria-selected="false" data-a="ajustes">
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/></svg><span>Ajustes</span></button>
 </nav>
+
+<!-- Volta para as cartas. No modo foco é o ÚNICO caminho para outra área:
+     por isso ele é grande, fixo e tem relevo de verdade. -->
+<button class="btn3d voltar-foco" id="voltarFoco" type="button" hidden
+        aria-label="Voltar para a escolha de áreas">
+  <span class="b3d-face">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 5.5 4 12l6.5 6.5"/><path d="M4 12h9.5a6.5 6.5 0 0 1 6.5 6.5"/></svg>
+    <span>Áreas</span>
+  </span>
+</button>
 
 <button class="fab" id="fab">
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
