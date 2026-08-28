@@ -1527,12 +1527,15 @@ body.tem-cena .auth-ok{background:rgba(52,199,89,.20);color:#8ff0b0}
 .cena.fundo .cena-veu{opacity:.45}
 
 html:has(body.fundo-vivo){background:#0d0209}
-body.fundo-vivo{
-  background:transparent;
-  /* A esfera é escura por natureza: o app inteiro passa a usar a paleta
-     escura. Tema claro sobre ela seria ilegível — e é isto que o texto do
-     ajuste avisa antes de a pessoa ligar. */
-  --bg:transparent; --card:rgba(24,8,22,.80); --card-2:rgba(34,14,32,.86);
+html[data-tema="claro"]:has(body.fundo-vivo){background:#f4eef8}
+body.fundo-vivo{background:transparent; --bg:transparent}
+
+/* A esfera TEM tema. Antes ela era escura por natureza e o app inteiro era
+   forçado ao escuro junto — o botão de tema virava enfeite, porque clarear
+   não mudava um pixel. Agora a esfera se repinta (paleta clara, degradê
+   claro, no intro.js) e cada tema tem aqui as suas superfícies. */
+[data-tema="escuro"] body.fundo-vivo{
+  --card:rgba(24,8,22,.80); --card-2:rgba(34,14,32,.86);
   --sep:rgba(255,255,255,.11);
   --txt:#F6F6F7; --txt-2:rgba(246,246,247,.66); --txt-3:rgba(246,246,247,.46);
   --fill:rgba(255,255,255,.07); --fill-2:rgba(255,255,255,.12);
@@ -1545,6 +1548,47 @@ body.fundo-vivo{
   --s1:none;
   --s2:0 1px 0 rgba(255,255,255,.05) inset, 0 8px 26px rgba(0,0,0,.45);
   --s3:0 18px 54px -18px rgba(0,0,0,.75);
+}
+/* O mesmo, do lado claro: superfícies brancas translúcidas sobre a esfera
+   clara, e texto escuro. A esfera continua aparecendo entre os painéis. */
+[data-tema="claro"] body.fundo-vivo{
+  --card:rgba(255,255,255,.86); --card-2:rgba(246,241,250,.92);
+  --sep:rgba(58,38,86,.13);
+  --txt:#171320; --txt-2:rgba(23,19,32,.66); --txt-3:rgba(23,19,32,.46);
+  --fill:rgba(58,38,86,.06); --fill-2:rgba(58,38,86,.11);
+  --s1:none;
+  --s2:0 1px 0 rgba(255,255,255,.7) inset, 0 8px 26px rgba(76,44,116,.14);
+  --s3:0 18px 54px -18px rgba(76,44,116,.32);
+}
+[data-tema="claro"] body.fundo-vivo .painel,
+[data-tema="claro"] body.fundo-vivo .painel-aba,
+[data-tema="claro"] body.fundo-vivo .bloco,
+[data-tema="claro"] body.fundo-vivo .hero,
+[data-tema="claro"] body.fundo-vivo .re-card,
+[data-tema="claro"] body.fundo-vivo .insight,
+[data-tema="claro"] body.fundo-vivo #instalar{border:1px solid rgba(58,38,86,.10)}
+[data-tema="claro"] body.fundo-vivo .tabbar{
+  background:rgba(255,255,255,.92); border-top:1px solid rgba(58,38,86,.10);
+}
+[data-tema="claro"] body.fundo-vivo .menu-perfil,
+[data-tema="claro"] body.fundo-vivo .sheet,
+[data-tema="claro"] body.fundo-vivo .snack,
+[data-tema="claro"] body.fundo-vivo .toast,
+[data-tema="claro"] body.fundo-vivo .atualiza{
+  background:#FFFFFF; border:1px solid rgba(58,38,86,.12);
+}
+/* O véu da cena escurece o fundo para o login se ler. No claro ele precisa
+   CLAREAR, senão a tela de entrada fica cinza-suja. */
+[data-tema="claro"] .cena{
+  background:radial-gradient(125% 95% at 50% 52%, #fdf7fb 0%, #f4eef8 46%, #e9e2f2 100%), #f4eef8;
+}
+[data-tema="claro"] .cena-veu{
+  background:
+    radial-gradient(88% 68% at 50% 48%, rgba(255,255,255,.10) 0%, rgba(255,255,255,.55) 100%),
+    linear-gradient(180deg, rgba(255,255,255,.30) 0%, rgba(255,255,255,.05) 45%, rgba(255,255,255,.45) 100%);
+}
+[data-tema="claro"] .portal::before{
+  background:radial-gradient(120% 90% at 50% 40%, rgba(250,246,252,.72), rgba(244,238,248,.92));
 }
 /* Painéis translúcidos, mas SEM backdrop-filter. Desfocar o que está atrás
    obriga o navegador a refazer o desfoque a cada quadro da esfera, para cada
@@ -1875,66 +1919,96 @@ body.com-portal .fab{opacity:0;pointer-events:none;transition:opacity var(--t-me
   position:fixed; inset:0; z-index:-1; overflow:hidden;
   pointer-events:none; contain:strict;
 }
+/* SEM filter:blur(). A primeira versão desfocava bolhas de meia tela e as
+   animava girando e escalando: medido aqui, sozinha ela derrubou a página de
+   116 para 15 fps, porque escalar uma camada desfocada obriga o navegador a
+   refazer o desfoque a cada quadro. A maciez agora vem do próprio degradê —
+   que é pintado UMA vez, vira textura e depois só é transformada. Mesmo
+   visual, e o quadro volta a sobrar. */
 .holo i{
   position:absolute; display:block; border-radius:50%;
-  filter:blur(58px); opacity:.42; will-change:transform;
+  opacity:.42; will-change:transform;
   animation:holoOrbita 34s linear infinite;
 }
-/* Cada bolha é um degradê cônico: é a rotação dele que dá o efeito de
-   película holográfica, com a cor mudando conforme o ângulo. */
+/* A iridescência vem de três degraus radiais deslocados entre si: cada um
+   domina um pedaço da bolha, e a mistura muda conforme ela gira. */
 .holo .h1{
-  width:52vmax; height:52vmax; top:-18vmax; left:-14vmax;
-  background:conic-gradient(from 20deg,#ff2d6b,#ffd36b,#57e3d4,#6a5cff,#ff2d6b);
+  width:56vmax; height:56vmax; top:-20vmax; left:-16vmax;
+  background:
+    radial-gradient(circle at 32% 30%, rgba(255,45,107,.55) 0%, rgba(255,45,107,0) 62%),
+    radial-gradient(circle at 68% 40%, rgba(255,211,107,.42) 0%, rgba(255,211,107,0) 58%),
+    radial-gradient(circle at 50% 72%, rgba(106,92,255,.45) 0%, rgba(106,92,255,0) 64%);
 }
 .holo .h2{
-  width:44vmax; height:44vmax; top:34%; right:-16vmax; left:auto;
-  background:conic-gradient(from 140deg,#6a5cff,#ff2d6b,#ffd36b,#57e3d4,#6a5cff);
+  width:48vmax; height:48vmax; top:32%; right:-18vmax; left:auto;
+  background:
+    radial-gradient(circle at 40% 34%, rgba(106,92,255,.46) 0%, rgba(106,92,255,0) 62%),
+    radial-gradient(circle at 66% 62%, rgba(255,45,107,.40) 0%, rgba(255,45,107,0) 60%),
+    radial-gradient(circle at 30% 70%, rgba(87,227,212,.36) 0%, rgba(87,227,212,0) 62%);
   animation-duration:46s; animation-direction:reverse; opacity:.34;
 }
 .holo .h3{
-  width:38vmax; height:38vmax; bottom:-14vmax; left:8%; top:auto;
-  background:conic-gradient(from 260deg,#57e3d4,#6a5cff,#ff2d6b,#ffd36b,#57e3d4);
-  animation-duration:58s; opacity:.30;
+  width:42vmax; height:42vmax; bottom:-16vmax; left:6%; top:auto;
+  background:
+    radial-gradient(circle at 38% 36%, rgba(87,227,212,.42) 0%, rgba(87,227,212,0) 60%),
+    radial-gradient(circle at 64% 58%, rgba(201,50,127,.42) 0%, rgba(201,50,127,0) 62%),
+    radial-gradient(circle at 46% 78%, rgba(255,211,107,.30) 0%, rgba(255,211,107,0) 60%);
+  animation-duration:58s; opacity:.32;
 }
 .holo .h4{
-  width:26vmax; height:26vmax; top:12%; left:38%;
-  background:conic-gradient(from 60deg,#ffd36b,#ff2d6b,#6a5cff,#57e3d4,#ffd36b);
-  animation-duration:40s; animation-direction:reverse; opacity:.22;
+  width:30vmax; height:30vmax; top:10%; left:36%;
+  background:
+    radial-gradient(circle at 42% 38%, rgba(255,211,107,.40) 0%, rgba(255,211,107,0) 60%),
+    radial-gradient(circle at 62% 64%, rgba(255,45,107,.34) 0%, rgba(255,45,107,0) 62%);
+  animation-duration:40s; animation-direction:reverse; opacity:.26;
 }
+/* Só rotação e deslocamento — nada de scale, que é o que forçava o repintar. */
 @keyframes holoOrbita{
-  from{transform:rotate(0turn) translate3d(0,0,0) scale(1)}
-  50% {transform:rotate(.5turn) translate3d(3vmax,-2vmax,0) scale(1.08)}
-  to  {transform:rotate(1turn) translate3d(0,0,0) scale(1)}
+  from{transform:rotate(0turn) translate3d(0,0,0)}
+  50% {transform:rotate(.5turn) translate3d(4vmax,-3vmax,0)}
+  to  {transform:rotate(1turn) translate3d(0,0,0)}
 }
 
 /* O piso: uma grade deitada em perspectiva de verdade (rotateX), esmaecendo
    ao longe. É o que dá eixo de profundidade à tela — sem ele as bolhas ficam
-   sendo só manchas coloridas. */
+   sendo só manchas coloridas. A grade anda por TRANSFORM dentro de uma
+   moldura que a recorta; animar `background-position` repintava a faixa
+   inteira a cada quadro. */
 .holo-piso{
   position:absolute; left:-40%; right:-40%; bottom:-6%; height:62%;
   transform:perspective(520px) rotateX(72deg); transform-origin:50% 100%;
+  overflow:hidden; opacity:.16;
+  -webkit-mask-image:linear-gradient(to top, #000 0%, transparent 78%);
+  mask-image:linear-gradient(to top, #000 0%, transparent 78%);
+}
+.holo-piso::before{
+  content:''; position:absolute; left:0; right:0; top:-84px; height:calc(100% + 168px);
   background-image:
     repeating-linear-gradient(90deg, rgba(255,255,255,.5) 0 1px, transparent 1px 84px),
     repeating-linear-gradient(0deg,  rgba(255,255,255,.5) 0 1px, transparent 1px 84px);
-  opacity:.16;
-  -webkit-mask-image:linear-gradient(to top, #000 0%, transparent 78%);
-  mask-image:linear-gradient(to top, #000 0%, transparent 78%);
+  will-change:transform;
   animation:holoAnda 9s linear infinite;
 }
-@keyframes holoAnda{ from{background-position:0 0,0 0} to{background-position:0 0,0 84px} }
+@keyframes holoAnda{ from{transform:translate3d(0,0,0)} to{transform:translate3d(0,84px,0)} }
 
 /* No claro a grade branca some no branco: ali ela é escura. */
-:root:not([data-tema="escuro"]) .holo-piso{
+:root:not([data-tema="escuro"]) .holo-piso::before{
   background-image:
     repeating-linear-gradient(90deg, rgba(58,38,86,.55) 0 1px, transparent 1px 84px),
     repeating-linear-gradient(0deg,  rgba(58,38,86,.55) 0 1px, transparent 1px 84px);
-  opacity:.10;
 }
-:root:not([data-tema="escuro"]) .holo i{opacity:.20;filter:blur(72px)}
+:root:not([data-tema="escuro"]) .holo-piso{opacity:.10}
+:root:not([data-tema="escuro"]) .holo i{opacity:.30}
 
 /* Com a esfera ligada já existe movimento atrás do app: a holografia recua
-   para não virar sopa de cor. */
+   para não virar sopa de cor — e PARA de se mover. Duas camadas animadas em
+   tela cheia ao mesmo tempo dividem o mesmo quadro, e a esfera é a que a
+   pessoa escolheu ligar; a holografia continua ali, parada, dando cor e
+   profundidade sem disputar o compositor. Medido: as duas em movimento
+   custavam 36 fps num aparelho sem placa de vídeo, e 59 com esta linha. */
 body.fundo-vivo .holo{opacity:.5}
+body.fundo-vivo .holo i,
+body.fundo-vivo .holo-piso::before{animation-play-state:paused}
 /* E na abertura (capa/login) ela não aparece: aquela tela é da esfera. */
 body.sem-barra .holo{display:none}
 
@@ -2095,8 +2169,10 @@ body.modo-foco .tabbar{
   padding:12px 18px; font-size:var(--t-base);
   border:1px solid rgba(255,255,255,.14);
 }
-:root:not([data-tema="escuro"]) body:not(.fundo-vivo) .voltar-foco{--b3d-cor:#FFFFFF;--b3d-txt:var(--txt)}
-:root:not([data-tema="escuro"]) body:not(.fundo-vivo) .voltar-foco .b3d-face{border-color:var(--sep)}
+:root:not([data-tema="escuro"]) body:not(.fundo-vivo) .voltar-foco,
+[data-tema="claro"] body.fundo-vivo .voltar-foco{--b3d-cor:#FFFFFF;--b3d-txt:var(--txt)}
+:root:not([data-tema="escuro"]) body:not(.fundo-vivo) .voltar-foco .b3d-face,
+[data-tema="claro"] body.fundo-vivo .voltar-foco .b3d-face{border-color:var(--sep)}
 @keyframes focoEntra{from{opacity:0;transform:translateY(14px) scale(.92)}to{opacity:1;transform:none}}
 @media(min-width:900px){ .voltar-foco{left:24px;bottom:24px} }
 /* Enquanto as cartas estão na tela, o botão de voltar para elas não faz sentido. */
@@ -2148,4 +2224,250 @@ body.com-portal:not(.fundo-vivo) .holo i{opacity:.5}
   .btn3d .b3d-face,.btn,.fab{transition-duration:.01ms}
   .b3d-face::after,.btn::after{display:none}
   .voltar-foco{animation:none}
+}
+
+/* ==========================================================================
+   v8 — Teclas: o botão como objeto físico
+
+   O que estava genérico: relevo desenhado com sombra, mas nada acontecia
+   ENQUANTO o dedo/cursor está em cima. Um botão de verdade tem quatro
+   estados que se sentem — parado, sob a mão, sob pressão e solto — e o
+   caminho entre eles é contínuo, não um pulo.
+
+   Como funciona, e por que assim:
+   • O mesmo laço de física dos cartões (um requestAnimationFrame, quatro
+     números por quadro, escritos como variáveis CSS) agora também escreve
+     nas teclas. Nada aqui anima cor, largura ou sombra a cada quadro: só
+     transform e opacity, que o compositor resolve sozinho — é o que segura
+     60 fps num celular modesto, mesmo com muitos botões na tela.
+   • A tecla inclina PARA o cursor (rotateX/rotateY de verdade, dentro de uma
+     perspectiva), a luz especular anda junto na posição do ponteiro, e a
+     compressão do clique percorre a mesma altura de base que o relevo mostra.
+     Inclinação, luz e sombra saem do mesmo par de números — por isso a tecla
+     parece um objeto só, e não três efeitos empilhados.
+   ========================================================================== */
+
+/* .tecla e .btn3d são o mesmo componente com dois nomes: o HTML antigo não
+   precisa ser reescrito para ganhar o comportamento novo. */
+.tecla{
+  position:relative; border:0; padding:0; background:none;
+  font:inherit; color:inherit; cursor:pointer;
+  border-radius:calc(var(--r-sm) + 2px);
+  filter:drop-shadow(0 10px 18px var(--b3d-halo));
+  -webkit-tap-highlight-color:transparent; touch-action:manipulation;
+  -webkit-user-select:none; user-select:none;
+}
+.tecla-face{
+  position:relative; display:flex; align-items:center; justify-content:center; gap:var(--e2);
+  padding:12px 20px; border-radius:inherit;
+  background:linear-gradient(180deg,
+    color-mix(in srgb, var(--b3d-cor, var(--card)) 92%, #fff) 0%,
+    var(--b3d-cor, var(--card)) 55%,
+    color-mix(in srgb, var(--b3d-cor, var(--card)) 92%, #000) 100%);
+  color:var(--b3d-txt, var(--txt)); font-weight:var(--peso-sm); letter-spacing:-.01em;
+  box-shadow:0 var(--b3d-curso) 0 var(--b3d-base), inset 0 1px 0 var(--b3d-luz),
+             inset 0 -1px 0 rgba(0,0,0,.14);
+  transition:transform 140ms var(--elastico), box-shadow 140ms ease;
+}
+.tecla-face svg{width:19px;height:19px;flex:none;fill:none;stroke:currentColor;
+  stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.tecla:focus-visible{outline:none}
+.tecla:focus-visible .tecla-face{outline:2px solid var(--azul);outline-offset:3px}
+.tecla[disabled]{opacity:.5;pointer-events:none}
+
+/* ---- a inclinação, comum a todas as teclas ----
+   `perspective` no próprio transform (e não no pai) porque cada tecla é uma
+   peça independente: uma perspectiva compartilhada faria as teclas das
+   pontas se deformarem, que é o defeito clássico desse efeito. */
+/* `:not(:active)` não é enfeite de especificidade: a v6 já tinha um
+   `.btn:not(:active):hover{translateY(-1px)}` com peso maior, e sem igualar
+   esse peso a inclinação nunca chegava aos botões comuns — eles continuavam
+   só subindo 1 px, que é exatamente o "genérico" que se queria tirar. */
+.tecla.tilt-ativo:not(:active) .tecla-face,
+.btn3d.tilt-ativo:not(:active) .b3d-face,
+.btn.tilt-ativo:not(:active), .sub.tilt-ativo:not(:active),
+.fab.tilt-ativo:not(:active), .tb.tilt-ativo:not(:active){
+  transform:
+    perspective(620px)
+    rotateX(calc(var(--ry,0) * -7deg))
+    rotateY(calc(var(--rx,0) * 9deg))
+    translateY(-2px);
+}
+/* A luz nasce onde o ponteiro está, e não numa faixa fixa: é o que faz a
+   superfície parecer curva quando a tecla gira. */
+.tecla-face::after, .b3d-face::before{
+  content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  opacity:0; transition:opacity .18s ease;
+  background:radial-gradient(140px circle at var(--mx,50%) var(--my,50%),
+             rgba(255,255,255,.34), transparent 62%);
+}
+.tecla.tilt-ativo .tecla-face::after,
+.btn3d.tilt-ativo .b3d-face::before{opacity:1}
+.btn.tilt-ativo::before, .fab.tilt-ativo::before, .sub.tilt-ativo::before{
+  content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  background:radial-gradient(140px circle at var(--mx,50%) var(--my,50%),
+             rgba(255,255,255,.30), transparent 62%);
+}
+.btn, .fab, .sub, .tb{transform-style:flat}
+
+/* ---- a compressão ----
+   A tampa percorre a altura inteira da base e a sombra vai a zero: parado, o
+   olho vê a tecla encostada na página. 70 ms para descer e a curva elástica
+   para subir — é a assimetria que faz o clique parecer mecânico. */
+.tecla:active .tecla-face{
+  transform:translateY(var(--b3d-curso)) scale(.99);
+  box-shadow:0 0 0 var(--b3d-base), inset 0 1px 0 rgba(255,255,255,.12);
+  transition-duration:70ms;
+}
+.tecla:active{filter:drop-shadow(0 3px 6px var(--b3d-halo))}
+
+/* ---- variações de tamanho ---- */
+.tecla-ic .tecla-face{width:44px;height:44px;padding:0;border-radius:var(--r-full)}
+.tecla-ic{border-radius:var(--r-full)}
+.tecla-chip .tecla-face{padding:10px 16px;font-size:var(--t-sm)}
+/* Escolhido = afundado e mais claro. O estado não é "outra cor": é outra
+   posição no eixo Z, que se lê antes de qualquer cor. */
+.tecla-chip[aria-pressed="true"] .tecla-face{
+  transform:translateY(calc(var(--b3d-curso) - 1px));
+  box-shadow:0 1px 0 var(--b3d-base), inset 0 2px 5px rgba(0,0,0,.16);
+  background:var(--azul); color:#fff;
+}
+.tecla-chip[aria-pressed="true"].tilt-ativo .tecla-face{
+  transform:translateY(calc(var(--b3d-curso) - 1px));
+}
+
+/* ---- a barra de segmentos vira um teclado ---- */
+.subnav{background:var(--fill);padding:var(--e1);gap:var(--e1);border-radius:var(--r-sm)}
+.sub{
+  position:relative; border-radius:calc(var(--r-sm) - 4px);
+  background:linear-gradient(180deg, color-mix(in srgb,var(--card) 70%,transparent), transparent);
+  box-shadow:none; color:var(--txt-2);
+  transition:transform 140ms var(--elastico), box-shadow 140ms ease,
+             background 140ms ease, color 140ms ease;
+}
+.sub[aria-selected="true"]{
+  background:linear-gradient(180deg, color-mix(in srgb,var(--card) 96%,#fff), var(--card));
+  color:var(--txt);
+  box-shadow:0 3px 0 color-mix(in srgb,var(--b3d-base) 55%,transparent),
+             inset 0 1px 0 var(--b3d-luz);
+}
+.sub[aria-selected="true"].tilt-ativo{
+  box-shadow:0 5px 0 color-mix(in srgb,var(--b3d-base) 55%,transparent),
+             inset 0 1px 0 var(--b3d-luz);
+}
+.sub:active{transform:translateY(3px) !important;box-shadow:none;transition-duration:70ms}
+
+/* ---- os botões redondos do cabeçalho ganham o mesmo corpo ---- */
+.tema-btn, .perfil-btn, .sinc{
+  transition:transform 140ms var(--elastico), box-shadow 140ms ease, background 140ms ease;
+}
+.tema-btn, .perfil-btn{
+  background:linear-gradient(180deg, color-mix(in srgb,var(--card) 96%,#fff), var(--card));
+  box-shadow:0 3px 0 color-mix(in srgb,var(--b3d-base) 45%,transparent),
+             inset 0 1px 0 var(--b3d-luz);
+}
+.tema-btn:hover, .perfil-btn:hover{transform:translateY(-2px);
+  box-shadow:0 5px 0 color-mix(in srgb,var(--b3d-base) 45%,transparent),
+             inset 0 1px 0 var(--b3d-luz)}
+.tema-btn:active, .perfil-btn:active{transform:translateY(3px);box-shadow:none;transition-duration:70ms}
+.sinc{border-radius:var(--r-full)}
+.sinc:active{transform:translateY(2px)}
+
+/* ---- barra de cima da tela de cartas ---- */
+.portal-barra{
+  width:100%; max-width:960px; margin:0 auto var(--e5);
+  display:flex; align-items:center; justify-content:space-between; gap:var(--e2);
+}
+.portal-barra .tecla{--b3d-cor:rgba(255,255,255,.10);--b3d-txt:#fff}
+:root:not([data-tema="escuro"]) body:not(.fundo-vivo) .portal-barra .tecla{
+  --b3d-cor:#FFFFFF; --b3d-txt:var(--txt);
+}
+[data-tema="claro"] body.fundo-vivo .portal-barra .tecla{--b3d-cor:#FFFFFF;--b3d-txt:var(--txt)}
+.portal-barra .tecla-face{border:1px solid var(--sep)}
+.portal-topo{margin-top:0}
+
+/* ---- o menu de perfil agora flutua sobre tudo ----
+   Saiu do cabeçalho (para poder abrir também sobre a tela de cartas), então
+   deixou de ser `absolute` dentro dele: é `fixed`, e quem o coloca embaixo do
+   botão certo é o JavaScript. */
+.menu-perfil{
+  position:fixed; top:0; left:0; z-index:130;
+  transform-origin:top left;
+}
+
+/* ==========================================================================
+   Planejamento em passos
+   Dois passos numerados, o resultado logo abaixo e o detalhe numa gaveta.
+   ========================================================================== */
+.etapa{display:flex;align-items:flex-start;gap:var(--e3);margin:var(--e5) 0 var(--e3)}
+.etapa:first-child{margin-top:0}
+.etapa-n{
+  flex:0 0 30px; width:30px; height:30px; border-radius:var(--r-full);
+  display:grid; place-items:center; font-size:var(--t-sm); font-weight:var(--peso-b);
+  color:#fff; background:linear-gradient(180deg,#ff2d6b,#c9327f);
+  box-shadow:0 3px 0 var(--b3d-base), inset 0 1px 0 rgba(255,255,255,.35);
+}
+.etapa h2{margin:0;font-size:var(--t-md);letter-spacing:-.02em}
+.etapa-d{margin:2px 0 0;font-size:var(--t-sm);color:var(--txt-2)}
+.opc{font-style:normal;font-size:var(--t-cap);color:var(--txt-3);font-weight:var(--peso-m)}
+
+.metas-rapidas{display:flex;flex-wrap:wrap;gap:var(--e2);margin-bottom:var(--e3)}
+@media(max-width:420px){ .metas-rapidas .tecla{flex:1 1 calc(50% - var(--e2))}
+  .metas-rapidas .tecla-face{width:100%} }
+
+/* A gaveta: o que é detalhe fica fechado, mas nunca escondido. */
+.gaveta{margin-top:var(--e5);border-top:1px solid var(--sep);padding-top:var(--e3)}
+.gaveta>summary{
+  list-style:none; cursor:pointer; display:flex; align-items:center; gap:var(--e2);
+  font-size:var(--t-sm); font-weight:var(--peso-sm); color:var(--txt-2);
+  padding:var(--e2) 0; -webkit-tap-highlight-color:transparent;
+}
+.gaveta>summary::-webkit-details-marker{display:none}
+.gaveta>summary::before{
+  content:''; width:8px; height:8px; flex:none; border-right:2px solid currentColor;
+  border-bottom:2px solid currentColor; transform:rotate(-45deg); margin-left:3px;
+  transition:transform var(--t-rapido) var(--suave);
+}
+.gaveta[open]>summary::before{transform:rotate(45deg)}
+.gaveta>summary:hover{color:var(--txt)}
+.gaveta .ajuda{margin-top:var(--e3)}
+
+@media (prefers-reduced-motion:reduce){
+  .tecla-face,.sub,.tema-btn,.perfil-btn{transition-duration:.01ms}
+  .tecla.tilt-ativo .tecla-face,.btn.tilt-ativo,.sub.tilt-ativo,
+  .fab.tilt-ativo,.tb.tilt-ativo,.btn3d.tilt-ativo .b3d-face{transform:none}
+  .tecla-face::after,.b3d-face::before{display:none}
+}
+
+/* A pressão vence a inclinação, sempre.
+   Sem isto, uma tecla sob o cursor (que já está inclinada) não afundava ao
+   ser clicada: as duas regras têm o mesmo peso e a última do arquivo ganhava.
+   O clique é a resposta mais importante que um botão dá — ela não pode
+   depender da ordem em que as regras foram escritas. */
+.tecla:active .tecla-face,
+.btn3d:active .b3d-face{
+  transform:translateY(var(--b3d-curso)) scale(.99) !important;
+  transition-duration:70ms !important;
+}
+.btn:active{
+  transform:translateY(var(--b3d-curso)) !important;
+  transition-duration:70ms !important;
+}
+.fab:active{transform:translateY(5px) scale(.97) !important;transition-duration:70ms !important}
+.tb:active{transform:translateY(2px) !important;transition-duration:70ms !important}
+
+/* O título da área não pode passar por baixo dos botões do canto. As ações
+   são posicionadas por cima do cabeçalho (absolute), então o texto precisa
+   reservar essa faixa — senão "Planejamento" some atrás do botão de tema no
+   celular, que é onde a linha é mais apertada. */
+.cab-txt{padding-right:104px}
+@media(min-width:900px){ .cab-txt{padding-right:132px} }
+/* No celular não há largura para os dois botões da esquerda, os dois do canto
+   e um título como "Planejamento" na MESMA linha — encolher a fonte até caber
+   deixaria o título menor que o subtítulo. Então a linha quebra: os botões em
+   cima, o título inteiro embaixo, com a largura toda para ele. */
+@media(max-width:520px){
+  .cab-linha{flex-wrap:wrap;row-gap:var(--e2)}
+  .cab-txt{flex:1 0 100%;padding-right:0}
+  .cab-txt h1{font-size:clamp(26px,7.4vw,34px)}
 }

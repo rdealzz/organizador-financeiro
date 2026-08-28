@@ -315,6 +315,7 @@ function render(){
 }
 
 function renderMeta(c){
+  pintarChipsMeta();
   $('#cardsMeta').innerHTML=`
    <div class="card"><div class="l">Guardar por mês</div><div class="v" style="color:var(--verde)">${brl(c.meta)}</div><div class="n">${c.renda>0?pct(c.meta/c.renda)+' da renda':''}</div></div>
    <div class="card"><div class="l">Sobra pra viver</div><div class="v">${brl(c.disponivel)}</div><div class="n">vira teto das categorias</div></div>
@@ -586,12 +587,55 @@ function agendarRender(){ clearTimeout(tDeb); tDeb=setTimeout(()=>{ render(); sa
   if(id==='diaFech') S.ultimoFech=iso(ultimoFechPassado());
   agendarRender();
 }));
+/* ---------- atalhos de quanto guardar ----------
+   O caso comum — 10%, 20% ou 30% da renda — vira um toque. Os campos exatos
+   continuam existindo, mas fechados: quem só quer começar não precisa mais
+   decidir entre dois campos numa tela que já tinha seis. */
+function pintarChipsMeta(){
+  const usaValor=(+S.metaVal>0);
+  const pct=usaValor?null:(+S.metaPct||0);
+  let algumMarcado=false;
+  document.querySelectorAll('#chipsMeta [data-meta]').forEach(b=>{
+    const v=b.dataset.meta;
+    const on = v==='ajustar' ? !$('#camposMeta').hidden : (!usaValor && pct===+v);
+    if(on && v!=='ajustar') algumMarcado=true;
+    b.setAttribute('aria-pressed', on?'true':'false');
+  });
+  // Valor fixo ou percentual fora dos atalhos: os campos precisam estar à vista.
+  if(!algumMarcado && (usaValor || (pct && ![10,20,30].includes(pct)))) abrirCamposMeta(true);
+}
+function abrirCamposMeta(abrir){
+  const g=$('#camposMeta'); if(!g) return;
+  g.hidden=!abrir;
+  const b=document.querySelector('#chipsMeta [data-meta="ajustar"]');
+  if(b) b.setAttribute('aria-pressed', abrir?'true':'false');
+}
+document.querySelectorAll('#chipsMeta [data-meta]').forEach(b=>b.onclick=()=>{
+  vibrar(8);
+  if(b.dataset.meta==='ajustar'){
+    const abrir=$('#camposMeta').hidden;
+    abrirCamposMeta(abrir);
+    if(abrir) setTimeout(()=>$('#metaPct').focus(),60);
+    return;
+  }
+  S.metaPct=+b.dataset.meta; S.metaVal=0;
+  $('#metaPct').value=S.metaPct; $('#metaVal').value='';
+  abrirCamposMeta(false);
+  pintarChipsMeta();
+  render(); salvar();
+});
+
 $('#lPagador').onchange=e=>{ const v=+$('#lValor').value||0;
   if(e.target.value==='eu') $('#lPai').value='';
   else if(e.target.value==='pai') $('#lPai').value=v||'';
   else if(v) $('#lPai').value=(v/2).toFixed(2); };
 $('#lTipo').onchange=e=>{ $('#lParc').disabled=(e.target.value!=='parc'); if(e.target.value!=='parc') $('#lParc').value=''; };
-$('#btnTema').onclick=()=>{ S.tema=(S.tema==='escuro')?'claro':'escuro'; aplicarTema(); salvar(); };
+function alternarTema(){
+  S.tema=(S.tema==='escuro')?'claro':'escuro';
+  aplicarTema(); salvar(); vibrar(8);
+}
+$('#btnTema').onclick=alternarTema;
+$('#portalTema').onclick=alternarTema;
 function aplicarTema(){
   if(!S.tema||S.tema==='auto'){
     S.tema=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro';
@@ -603,6 +647,15 @@ function aplicarTema(){
   const b=$('#btnTema');
   b.innerHTML=icone(esc?'sol':'lua',20);
   b.setAttribute('aria-label',esc?'Mudar para o tema claro':'Mudar para o tema escuro');
+  const pb=$('#portalTema');
+  if(pb){
+    pb.innerHTML='<span class="tecla-face">'+icone(esc?'sol':'lua',20)+'</span>';
+    pb.setAttribute('aria-label',esc?'Mudar para o tema claro':'Mudar para o tema escuro');
+  }
+  /* A esfera atrás do app também tem tema. Sem esta linha o botão parecia
+     quebrado: as variáveis de cor trocavam, mas o fundo — que ocupa a tela
+     inteira — continuava escuro, e a impressão era de que nada acontecia. */
+  if(cena && cena.repintar) cena.repintar();
 }
 $('#lParc').disabled=true;
 $('#resetTetos').onclick=()=>{ S.tetos={}; render(); salvar(); };
@@ -2738,30 +2791,54 @@ function pintarMenuPerfil(){
   $('#mpPlano').innerHTML=`<span>Plano <b>${PLANOS[p].nome}</b></span>`+
     (p==='gratuito'?'<em class="selo">Grátis</em>':'');
 }
-function abrirMenu(){
+/* O menu vive fora do app (no fim do body) para poder abrir também por cima
+   da tela de cartas, onde o conteúdo do app está escondido. Como ele não está
+   mais ancorado no cabeçalho por CSS, quem o posiciona é esta função: embaixo
+   do botão que o chamou, e nunca para fora da tela. */
+let menuDono=null;
+function ancorarMenu(botao){
+  const m=$('#menuPerfil'); if(!m||!botao) return;
+  const r=botao.getBoundingClientRect();
+  const larg=m.offsetWidth||300;
+  const x=Math.max(12, Math.min(r.left, window.innerWidth-larg-12));
+  m.style.left=Math.round(x)+'px';
+  m.style.top=Math.round(r.bottom+8)+'px';
+}
+function abrirMenu(botao){
   pintarMenuPerfil();
   menuAberto=true;
+  menuDono=botao||$('#perfilBtn');
   $('#menuPerfil').hidden=false;
-  $('#perfilBtn').setAttribute('aria-expanded','true');
+  ancorarMenu(menuDono);
+  menuDono.setAttribute('aria-expanded','true');
   const primeiro=$('#menuPerfil').querySelector('.mp-item');
   if(primeiro) setTimeout(()=>primeiro.focus(),40);
 }
+window.addEventListener('resize',()=>{ if(menuAberto) ancorarMenu(menuDono); });
 function fecharMenu(devolverFoco){
   if(!menuAberto) return;
   menuAberto=false;
   $('#menuPerfil').hidden=true;
-  $('#perfilBtn').setAttribute('aria-expanded','false');
-  if(devolverFoco) $('#perfilBtn').focus();
+  ['#perfilBtn','#portalPerfil'].forEach(id=>{
+    const b=$(id); if(b) b.setAttribute('aria-expanded','false');
+  });
+  if(devolverFoco && menuDono) menuDono.focus();
+  menuDono=null;
 }
-$('#perfilBtn').onclick=()=>{ menuAberto?fecharMenu(true):abrirMenu(); };
+$('#perfilBtn').onclick=()=>{ menuAberto?fecharMenu(true):abrirMenu($('#perfilBtn')); };
+$('#portalPerfil').onclick=()=>{ menuAberto?fecharMenu(true):abrirMenu($('#portalPerfil')); };
 document.addEventListener('click',e=>{
   if(!menuAberto) return;
-  if(e.target.closest('#menuPerfil')||e.target.closest('#perfilBtn')) return;
+  if(e.target.closest('#menuPerfil')||e.target.closest('#perfilBtn')||
+     e.target.closest('#portalPerfil')) return;
   fecharMenu(false);
 });
 document.addEventListener('keydown',e=>{
   if(!menuAberto) return;
-  if(e.key==='Escape'){ e.stopPropagation(); fecharMenu(true); return; }
+  /* stopImmediatePropagation, e não stopPropagation: os dois ouvintes de Esc
+     estão no MESMO document, e propagação parada não impede o vizinho de
+     rodar — era assim que um Esc no menu fechava a tela de cartas junto. */
+  if(e.key==='Escape'){ e.stopImmediatePropagation(); fecharMenu(true); return; }
   if(e.key!=='ArrowDown'&&e.key!=='ArrowUp') return;
   const itens=[...$('#menuPerfil').querySelectorAll('.mp-item')];
   const i=itens.indexOf(document.activeElement);
@@ -2776,7 +2853,12 @@ $('#menuPerfil').addEventListener('click',e=>{
   if(acao==='sair'){ sairDaConta(); return; }
   const destino={conta:'ajustes:conta', assinatura:'ajustes:assinatura',
                  alertas:'ajustes:alertas', dados:'ajustes:dados'}[acao];
-  if(destino) irPara(destino);
+  if(!destino) return;
+  /* Vindo da tela de cartas, o menu é mais uma porta: fecha as cartas e entra
+     em Ajustes no mesmo modo foco, com o botão "Áreas" para voltar. */
+  const naEscolha=!$('#portal').hidden;
+  irPara(destino);
+  if(naEscolha){ fecharPortal(); entrarFoco(); }
 });
 
 /* ==========================================================================
@@ -2962,7 +3044,10 @@ $('#swFundo').onclick=()=>{
    Nada disso vale no toque: sem cursor não há inclinação a seguir, e gastar
    bateria com isso num celular seria só desperdício.
    ========================================================================== */
-const ALVOS_TILT = '.carta, .card, .hero, .corte, .re-card';
+/* Cartões E teclas. O laço é o mesmo — quatro números por quadro, escritos
+   como variáveis CSS — então incluir os botões não custa um segundo laço nem
+   um segundo listener: custa o mesmo quadro que já estava rodando. */
+const ALVOS_TILT = '.carta, .card, .hero, .corte, .re-card, .tecla, .btn, .sub, .fab, .tb';
 
 function ligarFisica(){
   let fino=false, quieto=false;
@@ -3186,12 +3271,10 @@ function fecharPortal(){
   setTimeout(()=>{ p.hidden=true; },360);
 }
 
-/* "Ir direto para Hoje" é a saída para quem não quer a navegação por portas:
-   entra sem foco, com a barra de abas no lugar de sempre. */
-$('#portalPular').onclick=()=>{ fecharPortal(); sairFoco(); irPara('hoje'); };
 document.addEventListener('keydown',e=>{
   const p=$('#portal');
   if(e.key!=='Escape') return;
+  if(menuAberto) return;      // com o menu aberto, ele é o dono da tecla
   if(p && !p.hidden){ fecharPortal(); irPara(AREA||'hoje'); return; }
   // Dentro de uma área aberta por carta, Esc é o mesmo que o botão de voltar.
   if(document.body.classList.contains('modo-foco') && !$('#sheet').classList.contains('abre')){

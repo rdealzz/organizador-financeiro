@@ -178,35 +178,6 @@ html[data-tema="escuro"] #splash{background:#000}
     </div>
   </div>
 
-  <div class="menu-perfil" id="menuPerfil" role="menu" aria-labelledby="perfilBtn" hidden>
-    <div class="mp-cabeca">
-      <span class="avatar" id="mpAvatar" aria-hidden="true">?</span>
-      <div class="mp-quem">
-        <b id="mpNome">—</b>
-        <span id="mpEmail">—</span>
-      </div>
-    </div>
-    <div class="mp-plano" id="mpPlano"></div>
-    <div class="mp-lista">
-      <button role="menuitem" class="mp-item" data-menu="conta">
-        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.4" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>
-        <span>Editar perfil</span></button>
-      <button role="menuitem" class="mp-item" data-menu="assinatura">
-        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8z"/></svg>
-        <span>Assinatura</span><em class="selo">Em breve</em></button>
-      <button role="menuitem" class="mp-item" data-menu="alertas">
-        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 1 0-12 0c0 5-2 6-2 6h16s-2-1-2-6"/><path d="M13.7 20a2 2 0 0 1-3.4 0"/></svg>
-        <span>Alertas</span></button>
-      <button role="menuitem" class="mp-item" data-menu="dados">
-        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6.2" rx="7.4" ry="2.8"/><path d="M4.6 6.2v11.6c0 1.6 3.3 2.8 7.4 2.8s7.4-1.2 7.4-2.8V6.2"/><path d="M4.6 12c0 1.6 3.3 2.8 7.4 2.8s7.4-1.2 7.4-2.8"/></svg>
-        <span>Meus dados</span></button>
-    </div>
-    <div class="mp-rodape">
-      <button role="menuitem" class="mp-item perigo" data-menu="sair">
-        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 20H5.4A1.4 1.4 0 0 1 4 18.6V5.4A1.4 1.4 0 0 1 5.4 4h4.1"/><path d="m15.5 15.5 3.9-3.5-3.9-3.5"/><path d="M19.4 12H9.6"/></svg>
-        <span>Sair da conta</span></button>
-    </div>
-  </div>
 </header>
 
 <div id="instalar">
@@ -279,24 +250,48 @@ html[data-tema="escuro"] #splash{background:#000}
     <button class="sub" role="tab" aria-selected="false" data-s="objetivos">Metas</button>
   </div>
 
+  <!-- Renda e meta em dois passos numerados, e nada mais na primeira olhada.
+       Antes eram seis campos, dois parágrafos de explicação e três cartões de
+       resultado empilhados sem hierarquia: quem abria não sabia onde começar.
+       Agora o que é obrigatório fica em cima (renda, quanto guardar), o
+       resultado responde logo abaixo e o que é detalhe — datas da fatura e as
+       explicações longas — espera dentro de uma gaveta fechada. -->
   <section class="bloco" id="t-renda">
-    <h2>O que entra por mês</h2>
+    <div class="etapa"><span class="etapa-n">1</span>
+      <div><h2>Quanto entra por mês</h2>
+        <p class="etapa-d">Só o que cai na sua conta, já líquido.</p></div></div>
     <div class="grade g2">
-      <div><label for="salario">Salário líquido</label><input type="number" inputmode="decimal" id="salario" min="0" step="0.01" placeholder="0,00"></div>
-      <div><label for="extra">Renda variável (vendas, freela)</label><input type="number" inputmode="decimal" id="extra" min="0" step="0.01" placeholder="0,00"></div>
-      <div><label for="diaFech">Dia que a fatura fecha</label><input type="number" inputmode="numeric" id="diaFech" min="1" max="28" step="1" value="5"></div>
-      <div><label for="diaVenc">Dia que a fatura vence</label><input type="number" inputmode="numeric" id="diaVenc" min="1" max="28" step="1" value="5"></div>
+      <div><label for="salario">Salário</label><input type="number" inputmode="decimal" id="salario" min="0" step="0.01" placeholder="0,00"></div>
+      <div><label for="extra">Renda variável <em class="opc">opcional</em></label><input type="number" inputmode="decimal" id="extra" min="0" step="0.01" placeholder="0,00"></div>
     </div>
-    <p class="ajuda" style="margin-top:10px">Na renda variável use a média dos últimos 3 meses, ou o pior mês se ela oscila muito. No <b>fechamento</b> o app arquiva a fatura e vira o ciclo; o <b>vencimento</b> é a data do pagamento.</p>
 
-    <h3>Quanto quero guardar todo mês</h3>
-    <p class="ajuda">Sai da conta <b>antes</b> de você gastar, não é o que sobrar no fim.</p>
-    <div class="grade g2">
+    <div class="etapa"><span class="etapa-n">2</span>
+      <div><h2>Quanto quer guardar</h2>
+        <p class="etapa-d">Sai da conta <b>antes</b> de você gastar.</p></div></div>
+    <!-- Um toque resolve o caso comum. Os campos ficam para quem quer o número
+         exato, e não para todo mundo ter de digitar. -->
+    <div class="metas-rapidas" id="chipsMeta" role="group" aria-label="Quanto guardar por mês">
+      <button class="tecla tecla-chip" type="button" data-meta="10"><span class="tecla-face">10%</span></button>
+      <button class="tecla tecla-chip" type="button" data-meta="20"><span class="tecla-face">20%</span></button>
+      <button class="tecla tecla-chip" type="button" data-meta="30"><span class="tecla-face">30%</span></button>
+      <button class="tecla tecla-chip" type="button" data-meta="ajustar"><span class="tecla-face">Outro valor</span></button>
+    </div>
+    <div class="grade g2" id="camposMeta" hidden>
       <div><label for="metaPct">Percentual da renda</label><input type="number" inputmode="numeric" id="metaPct" min="0" max="90" step="1" placeholder="20"></div>
       <div><label for="metaVal">Ou um valor fixo em R$</label><input type="number" inputmode="decimal" id="metaVal" min="0" step="0.01" placeholder="0,00"></div>
     </div>
+
     <div class="cards" id="cardsMeta"></div>
     <div id="notaMeta"></div>
+
+    <details class="gaveta">
+      <summary><span>Datas da fatura e detalhes</span></summary>
+      <div class="grade g2" style="margin-top:var(--e3)">
+        <div><label for="diaFech">Dia que a fatura fecha</label><input type="number" inputmode="numeric" id="diaFech" min="1" max="28" step="1" value="5"></div>
+        <div><label for="diaVenc">Dia que a fatura vence</label><input type="number" inputmode="numeric" id="diaVenc" min="1" max="28" step="1" value="5"></div>
+      </div>
+      <p class="ajuda">No <b>fechamento</b> o app arquiva a fatura e vira o ciclo; o <b>vencimento</b> é a data do pagamento. Na renda variável, use a média dos últimos 3 meses — ou o pior mês, se ela oscila muito.</p>
+    </details>
   </section>
 
   <section class="bloco" id="t-tetos" hidden>
@@ -497,7 +492,7 @@ html[data-tema="escuro"] #splash{background:#000}
     <div class="alerta-linha" style="border-top:1px solid var(--sep);margin-top:var(--e4);padding-top:var(--e4)">
       <div class="ai"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="9.2" cy="9.6" r="1.1"/><circle cx="14.6" cy="13.4" r="1.1"/><circle cx="10.4" cy="15" r="1.1"/></svg></div>
       <div class="at"><div class="an">Esfera atrás do app</div>
-        <div class="ad">Mantém o fundo animado durante o uso. Deixa o app sempre escuro e gasta um pouco mais de bateria. Vale por aparelho.</div></div>
+        <div class="ad">Mantém o fundo animado durante o uso. A esfera acompanha o tema — clara no claro, escura no escuro — e gasta um pouco mais de bateria. Vale por aparelho.</div></div>
       <button class="sw" role="switch" id="swFundo" aria-checked="true" aria-label="Esfera atrás do app"></button>
     </div>
 
@@ -549,12 +544,25 @@ html[data-tema="escuro"] #splash{background:#000}
      navegação assume: assim as cartas dão a entrada sem cobrar um toque a
      mais em toda troca de aba durante o dia. -->
 <div class="portal" id="portal" hidden>
+  <!-- A barra de cima existe para a tela de cartas não ser um beco: daqui se
+       chega ao perfil e se troca o tema sem precisar entrar numa área. -->
+  <div class="portal-barra">
+    <button class="tecla tecla-ic" id="portalPerfil" type="button"
+            aria-label="Abrir o seu perfil" aria-haspopup="menu" aria-expanded="false"
+            aria-controls="menuPerfil">
+      <span class="tecla-face">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.4" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>
+      </span>
+    </button>
+    <button class="tecla tecla-ic" id="portalTema" type="button" aria-label="Alternar tema">
+      <span class="tecla-face"></span>
+    </button>
+  </div>
   <div class="portal-topo">
     <p class="portal-olho" id="portalOlho">Boa noite</p>
     <h2 class="portal-tit">Por onde começamos?</h2>
   </div>
   <div class="portal-grade" id="portalGrade"></div>
-  <button class="link portal-pular" id="portalPular" type="button">Ir direto para Hoje</button>
 </div>
 
 <nav class="tabbar" id="tabbar" role="tablist" aria-label="Áreas do app">
@@ -582,6 +590,41 @@ html[data-tema="escuro"] #splash{background:#000}
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
   <span>Adicionar gasto</span>
 </button>
+
+
+<!-- ══════════════════════ MENU DE PERFIL ══════════════════════
+     Vive fora do app de propósito: assim ele também abre por cima da tela de
+     cartas, onde o conteúdo do app está escondido. Quem o posiciona é o
+     JavaScript, a partir do botão que o chamou. -->
+  <div class="menu-perfil" id="menuPerfil" role="menu" aria-labelledby="perfilBtn" hidden>
+    <div class="mp-cabeca">
+      <span class="avatar" id="mpAvatar" aria-hidden="true">?</span>
+      <div class="mp-quem">
+        <b id="mpNome">—</b>
+        <span id="mpEmail">—</span>
+      </div>
+    </div>
+    <div class="mp-plano" id="mpPlano"></div>
+    <div class="mp-lista">
+      <button role="menuitem" class="mp-item" data-menu="conta">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.4" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>
+        <span>Editar perfil</span></button>
+      <button role="menuitem" class="mp-item" data-menu="assinatura">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8z"/></svg>
+        <span>Assinatura</span><em class="selo">Em breve</em></button>
+      <button role="menuitem" class="mp-item" data-menu="alertas">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 1 0-12 0c0 5-2 6-2 6h16s-2-1-2-6"/><path d="M13.7 20a2 2 0 0 1-3.4 0"/></svg>
+        <span>Alertas</span></button>
+      <button role="menuitem" class="mp-item" data-menu="dados">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6.2" rx="7.4" ry="2.8"/><path d="M4.6 6.2v11.6c0 1.6 3.3 2.8 7.4 2.8s7.4-1.2 7.4-2.8V6.2"/><path d="M4.6 12c0 1.6 3.3 2.8 7.4 2.8s7.4-1.2 7.4-2.8"/></svg>
+        <span>Meus dados</span></button>
+    </div>
+    <div class="mp-rodape">
+      <button role="menuitem" class="mp-item perigo" data-menu="sair">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 20H5.4A1.4 1.4 0 0 1 4 18.6V5.4A1.4 1.4 0 0 1 5.4 4h4.1"/><path d="m15.5 15.5 3.9-3.5-3.9-3.5"/><path d="M19.4 12H9.6"/></svg>
+        <span>Sair da conta</span></button>
+    </div>
+  </div>
 
 <!-- ══════════════════════ FOLHA DE LANÇAMENTO ══════════════════════ -->
 <div class="sheet-bg" id="sheetBg"></div>

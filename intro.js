@@ -58,14 +58,30 @@ const CONFIG = {
 
 /* Brasa → rosa → ouro, a identidade da marca. O quase-branco entra em pouca
    quantidade e é ele que dá o brilho de estrela nos pontos da frente. */
-const PALETA = [
+const PALETA_ESCURA = [
   [255, 45, 107],
   [255, 92, 152],
   [255, 138, 190],
   [255, 211, 107],
   [255, 240, 245]
 ];
+/* A mesma identidade, virada para um fundo claro. Ponto claro sobre fundo
+   claro não existe: no tema claro a esfera precisa ser ESCURA para aparecer,
+   e é a cor mais funda que faz o papel de "estrela da frente". Sem isto a
+   esfera sumia inteira e a troca de tema parecia não funcionar. */
+const PALETA_CLARA = [
+  [206, 24, 88],
+  [166, 30, 120],
+  [120, 52, 150],
+  [176, 120, 20],
+  [62, 20, 58]
+];
 const PESO = [0.24, 0.24, 0.22, 0.12, 0.18];   // quanto cada cor aparece
+
+function temaClaro(){
+  try{ return document.documentElement.getAttribute('data-tema') === 'claro'; }
+  catch(_){ return false; }
+}
 
 function sorteiaCor() {
   let r = Math.random();
@@ -101,7 +117,11 @@ export function iniciarAbertura(canvas, modo) {
   const dpr = Math.min(window.devicePixelRatio || 1, fraco ? 1.5 : 2);
 
   const FAIXAS = 7;                              // faixas de brilho por cor
-  const lotes = Array.from({ length: PALETA.length * FAIXAS }, () => []);
+  /* O tema é lido aqui e pode mudar em pleno voo: quem troca o tema do app
+     chama repintar(), que troca a paleta e repinta o degradê de fundo. */
+  let claro = temaClaro();
+  let PALETA = claro ? PALETA_CLARA : PALETA_ESCURA;
+  const lotes = Array.from({ length: PALETA_ESCURA.length * FAIXAS }, () => []);
 
   let L = 0, A = 0, R = 0;
   /* O fundo (degradê + brilho do miolo) é pintado UMA vez num canvas à parte e
@@ -138,17 +158,29 @@ export function iniciarAbertura(canvas, modo) {
     fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const g = fctx.createRadialGradient(L / 2, A * 0.5, 0, L / 2, A * 0.5, Math.max(L, A) * 0.72);
-    g.addColorStop(0, '#320621');
-    g.addColorStop(0.5, '#20051a');
-    g.addColorStop(1, '#0d0209');
+    if (claro) {
+      g.addColorStop(0, '#fdf7fb');
+      g.addColorStop(0.5, '#f4eef8');
+      g.addColorStop(1, '#e9e2f2');
+    } else {
+      g.addColorStop(0, '#320621');
+      g.addColorStop(0.5, '#20051a');
+      g.addColorStop(1, '#0d0209');
+    }
     fctx.fillStyle = g;
     fctx.fillRect(0, 0, L, A);
 
     // Brilho quente atrás do miolo da esfera, como na referência.
     const b = fctx.createRadialGradient(L / 2, A * 0.5, 0, L / 2, A * 0.5, R * 1.15);
-    b.addColorStop(0, 'rgba(255,70,130,0.17)');
-    b.addColorStop(0.55, 'rgba(200,40,110,0.07)');
-    b.addColorStop(1, 'rgba(120,20,80,0)');
+    if (claro) {
+      b.addColorStop(0, 'rgba(255,120,170,0.16)');
+      b.addColorStop(0.55, 'rgba(190,110,220,0.09)');
+      b.addColorStop(1, 'rgba(190,110,220,0)');
+    } else {
+      b.addColorStop(0, 'rgba(255,70,130,0.17)');
+      b.addColorStop(0.55, 'rgba(200,40,110,0.07)');
+      b.addColorStop(1, 'rgba(120,20,80,0)');
+    }
     fctx.fillStyle = b;
     fctx.fillRect(0, 0, L, A);
   }
@@ -280,8 +312,8 @@ export function iniciarAbertura(canvas, modo) {
     // Brilho discreto acompanhando o cursor.
     if (pt.dentro && !recuado && !fraco) {
       const g = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, 150);
-      g.addColorStop(0, 'rgba(255,150,190,0.10)');
-      g.addColorStop(1, 'rgba(255,150,190,0)');
+      g.addColorStop(0, claro ? 'rgba(150,60,140,0.07)' : 'rgba(255,150,190,0.10)');
+      g.addColorStop(1, claro ? 'rgba(150,60,140,0)' : 'rgba(255,150,190,0)');
       ctx.fillStyle = g;
       ctx.fillRect(pt.x - 150, pt.y - 150, 300, 300);
     }
@@ -360,6 +392,15 @@ export function iniciarAbertura(canvas, modo) {
     },
     // Passa ao modo decoração, atrás do app.
     recuar() { recuado = true; },
+    /* Troca de tema sem recriar nada: a nuvem de pontos continua a mesma, só
+       a paleta e o degradê de fundo mudam. Custa um repintar do fundo — uma
+       vez, não por quadro. */
+    repintar() {
+      claro = temaClaro();
+      PALETA = claro ? PALETA_CLARA : PALETA_ESCURA;
+      medir();
+      if (quieto) desenhar();
+    },
     encerrar
   };
 }
