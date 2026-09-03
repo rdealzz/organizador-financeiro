@@ -16,8 +16,8 @@ const FB = {
   // → Geral → "Seus apps" → app da Web). Nenhum dos dois é secreto: a Web
   // API Key é feita para ir no cliente, quem protege os dados são as regras
   // do Firestore, não este valor.
-  apiKey: 'SUBSTITUA_PELA_SUA_WEB_API_KEY',
-  projectId: 'substitua-pelo-id-do-seu-projeto'
+  apiKey: 'AIzaSyCXt7-vLuFDyg23huGYIx69Lf51tCfqvqo',
+  projectId: 'organizador-financeiro-98e15'
 };
 const AUTH_BASE = 'https://identitytoolkit.googleapis.com/v1';
 const TOKEN_URL = 'https://securetoken.googleapis.com/v1/token?key=' + FB.apiKey;
