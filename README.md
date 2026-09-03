@@ -121,53 +121,61 @@ Contas criadas antes de o campo existir ficam sem nome. Nesse caso o app pede
 uma vez, com um cartão discreto no topo de Hoje, que some assim que for
 respondido (ou dispensado).
 
-Autenticação com **Supabase Auth** (e-mail e senha) e isolamento no **Postgres**,
-não no navegador. A tabela `estado` tem a chave primária igual ao `id` do
-usuário e quatro políticas de RLS amarradas a `auth.uid()` — uma por operação.
-A tabela usa `force row level security`, então nem o dono escapa das políticas.
+Autenticação com **Firebase Authentication** (e-mail e senha) e isolamento no
+**Firestore**, não no navegador. Cada usuário tem no máximo um documento na
+coleção `estado`, com o próprio `uid` como id do documento, e as regras em
+`firestore.rules` só liberam leitura/escrita quando `request.auth.uid` bate
+com o id do documento — uma verificação por operação, igual às políticas de
+RLS que existiam antes, só que do lado do Firestore.
 
-Isso foi **testado, não suposto**. Com um segundo usuário autenticado mandando
-SQL direto no banco contra a linha de outro:
+É o mesmo tipo de garantia que o backend anterior (Supabase/Postgres) tinha
+via RLS, e que ali foi testada de verdade, não só suposta — com um segundo
+usuário chamando a API na mão contra a linha de outra conta. Ao trocar de
+banco a regra precisa do mesmo teste, agora contra o Firestore: antes de
+confiar, tente ler/gravar `estado/<uid-de-outra-conta>` autenticado como uma
+conta diferente (pelo [Rules Playground](https://firebase.google.com/docs/firestore/security/test-rules-emulator)
+do console ou pelo emulador) e confirme que vem `PERMISSION_DENIED`.
 
-| Ataque | Resultado |
-|---|---|
-| Listar a tabela inteira | 0 linhas |
-| `SELECT` na linha alheia | nada retornado |
-| `UPDATE` na linha alheia | 0 linhas afetadas |
-| `DELETE` na linha alheia | 0 linhas afetadas |
-| `INSERT` forjando o `user_id` | bloqueado pela política |
-| Gravar o próprio estado | funciona |
-
-A chave publicável (`anon`) vai no HTML de propósito: ela é feita para ficar
-exposta. Quem protege os dados é o RLS, não o sigilo dessa chave.
+A Web API Key vai no HTML de propósito: ela é feita para ficar exposta. Quem
+protege os dados são as regras do Firestore, não o sigilo dessa chave.
 
 **No aparelho:** a cópia local é guardada numa chave por usuário
 (`sobra-do-mes:u:<id>`), então trocar de conta no mesmo celular não mistura
 nada. Ao sair, o app apaga a cópia local em todas as camadas — localStorage,
-IndexedDB, cookie e as cópias de segurança diárias — e encerra a sessão em
-todos os aparelhos.
+IndexedDB, cookie e as cópias de segurança diárias.
 
 ### Cliente sem dependências
 
-Falamos com a API do Supabase por `fetch` puro (`auth.js`): sem SDK, sem CDN,
-sem nada para dar errado offline. Token renovado sozinho um minuto antes de
+Falamos com as APIs REST do Firebase (Identity Toolkit para autenticação,
+Firestore para os dados) por `fetch` puro (`auth.js`): sem SDK, sem CDN, sem
+nada para dar errado offline. Token renovado sozinho um minuto antes de
 vencer; sem rede, a sessão continua valendo localmente e o app segue
 funcionando.
 
 ### Configuração do projeto
 
-Ao publicar seu próprio clone, troque `SB.url` e `SB.key` em `auth.js` e rode a
-migração de `supabase/` no seu projeto.
+Ao publicar seu próprio clone:
 
-> **Confirmação de e-mail: desligada.** O cadastro entra direto — sem link, sem
-> caixa de entrada. Isso é feito pela migração `0002`, que marca a conta como
-> confirmada no instante em que ela é criada; o `cadastrar()` então pede o token
-> logo em seguida. O código ainda cobre o caso da confirmação ligada (mostra a
-> tela de "confirme seu e-mail" com reenvio), então funciona dos dois jeitos.
+1. Crie um projeto no [console do Firebase](https://console.firebase.google.com),
+   ative o provedor **E-mail/senha** em *Authentication → Sign-in method* e
+   crie um banco **Firestore** (modo nativo).
+2. Em *Firestore Database → Regras*, cole o conteúdo de `firestore.rules`.
+3. Em *Configurações do projeto → Geral → Seus apps*, crie um app da Web e
+   copie a **Web API Key** e o **Project ID**.
+4. Troque `FB.apiKey` e `FB.projectId` em `auth.js` pelos valores do seu
+   projeto.
+5. Em *Authentication → Templates → Redefinição de senha → Personalizar URL
+   de ação*, aponte para a própria origem do app (ex.: `https://seu-dominio/`)
+   — é assim que o link de "esqueci minha senha" volta para dentro do app em
+   vez de cair numa página do Firebase.
+
+> **Confirmação de e-mail: desligada.** O cadastro entra direto — sem link,
+> sem caixa de entrada. O Firebase permite login por e-mail/senha mesmo sem o
+> e-mail verificado, então `cadastrar()` já devolve uma sessão pronta.
 >
-> O que se perde: o e-mail não é comprovado. Quem digitar o endereço errado não
-> conseguirá recuperar a senha depois, porque a recuperação continua exigindo
-> acesso real à caixa de entrada.
+> O que se perde: o e-mail não é comprovado. Quem digitar o endereço errado
+> não conseguirá recuperar a senha depois, porque a recuperação continua
+> exigindo acesso real à caixa de entrada.
 
 ## Sincronização
 
@@ -313,7 +321,7 @@ styles.css            estilo (claro/escuro, segue o sistema na primeira vez)
 auth.js               autenticação e acesso ao banco, por fetch puro
 app.js                cálculo, persistência, sincronização, gráficos, alertas
 sw.js                 service worker: offline, notificações e atualização
-supabase/             a migração que cria a tabela e as políticas de RLS
+firestore.rules       as regras do Firestore (isolamento por usuário)
 manifest.webmanifest  PWA
 vercel.json           headers do deploy
 icons/                ícones do app

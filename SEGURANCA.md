@@ -8,77 +8,73 @@ que acontece se alguém tirar o app do caminho e falar direto com o servidor.
 
 O código do frontend é público. Não tem como não ser: o navegador precisa
 baixá-lo para executá-lo, e qualquer pessoa abre o inspetor e lê tudo —
-ofuscar só troca ler por ler com mais paciência. A chave `anon` do Supabase
+ofuscar só troca ler por ler com mais paciência. A Web API Key do Firebase
 está no HTML **de propósito**: ela é publicável, e é assim que a API funciona.
 
 Por isso nenhuma barreira deste app depende de esconder código. Todas moram em
-lugares que o visitante não controla: o banco de dados e os cabeçalhos que o
-servidor manda. O navegador do atacante é do atacante — o Postgres não.
+lugares que o visitante não controla: as regras do Firestore e os cabeçalhos
+que o servidor manda. O navegador do atacante é do atacante — o Firestore não.
 
 ---
 
-## 1. Banco: cada conta enxerga só a própria linha
+## 1. Banco: cada conta enxerga só o próprio documento
 
-`supabase/migrations/0001_estado_com_rls.sql`
+`firestore.rules`
 
-A tabela `public.estado` tem uma linha por conta, com a **chave primária igual
-ao id do usuário**, e Row Level Security ligado *e forçado* (`force row level
-security`: nem o dono da tabela escapa das políticas). As quatro políticas —
-select, insert, update, delete — exigem `auth.uid() = user_id`.
+A coleção `estado` tem no máximo um documento por conta, e o **id do
+documento é o próprio `uid`** — não existe uma coluna "dono" que precise ser
+checada à parte, o caminho já é a fronteira. A regra libera leitura, escrita
+e apagamento só quando `request.auth.uid == uid` do documento pedido.
 
-Testado com um token válido de uma conta, chamando a API na mão:
+> **Isto ainda não foi testado contra um projeto Firebase real** — só escrito
+> e revisado. Antes de confiar, faça o mesmo teste que o RLS do Supabase
+> passou quando o app usava Postgres: autenticado como a conta A, tente ler/gravar/apagar
+> `estado/<uid-da-conta-B>` (pelo [Rules Playground](https://firebase.google.com/docs/firestore/security/test-rules-emulator)
+> do console, ou pelo emulador local) e confirme `PERMISSION_DENIED` em
+> todos os casos, e que a conta A ainda grava o próprio documento sem
+> problema.
 
-| tentativa                          | resultado                            |
-|------------------------------------|--------------------------------------|
-| ler a linha de outra conta         | 0 linhas                             |
-| apagar a linha de outra conta      | 0 linhas afetadas                    |
-| inserir linha com o id de outro    | bloqueado (`23505`)                  |
+## 2. Banco: o que cabe no documento
 
-## 2. Banco: barreiras contra quem já tem conta
+`firestore.rules`
 
-`supabase/migrations/0003_barreiras.sql`
+- **Tamanho**: `request.resource.data.dados.size() <= 524288` — mesmo teto de
+  512 KB que existia no Postgres, agora medido em bytes de string.
+- **Tipo**: `request.resource.data.dados is string` — o campo é sempre uma
+  string JSON, nunca outro tipo.
+- **Campos**: `keys().hasOnly(['dados', 'revisao'])` — nenhum campo extra
+  entra no documento.
 
-RLS responde "de quem é a linha". Falta responder "o que cabe nela". Uma conta
-legítima ainda podia mandar um payload de 10 MB, forjar carimbos ou esvaziar a
-tabela. Agora não:
-
-| tentativa                              | barreira                                   | resultado           |
-|----------------------------------------|--------------------------------------------|---------------------|
-| `dados` de 600 KB                      | `check pg_column_size(dados) <= 524288`     | bloqueado (`23514`) |
-| `dados` que não é objeto JSON          | `check jsonb_typeof(dados) = 'object'`      | bloqueado           |
-| forjar `revisao` / `criado_em`          | sem privilégio de coluna + gatilho          | bloqueado (`42501`) |
-| `truncate` na tabela inteira            | privilégio revogado                         | bloqueado (`42501`) |
-| reatribuir a linha para outra conta     | gatilho devolve `old.user_id` + RLS         | bloqueado           |
-
-Duas camadas de propósito em cada linha: gatilho **e** privilégio por coluna.
-Uma sozinha é um bilhete de confiança — se alguém remover o gatilho num
-`create or replace` distraído, a permissão continua negando.
-
-`authenticated` tinha também `TRUNCATE`, `TRIGGER` e `REFERENCES` na tabela,
-sobras de um `grant all`. Foram revogados. `TRUNCATE` em particular **ignora
-RLS**: era uma chamada para apagar os dados de todas as contas.
-
-Funções novas em `public` não nascem executáveis por qualquer papel
-(`alter default privileges ... revoke execute`), e ninguém além do dono cria
-objetos no schema.
+O que o Postgres precisava de gatilho e revogação de privilégio para garantir
+— ninguém reatribuir a linha para outra conta, ninguém truncar a tabela
+inteira — aqui não é uma regra, é estrutural: o documento de uma conta *é*
+`estado/<uid dela>`, não existe uma operação de "trocar o dono" nem um
+comando que apague a coleção inteira de uma vez pela API REST, só documento a
+documento, e a regra acima já barra qualquer um fora do próprio uid.
 
 ## 3. Transporte: o navegador só faz o que está na lista
 
 `vercel.json`
 
 - **Content-Security-Policy** — `script-src 'self'`: nenhum script de fora
-  roda, nem inline. `connect-src` só aceita a própria origem e o endereço do
-  Supabase: um script injetado não teria para onde mandar os dados.
-  `frame-ancestors 'none'` e `X-Frame-Options: DENY` matam clickjacking;
-  `base-uri 'none'` impede reescrever a base das URLs relativas;
-  `object-src`/`frame-src`/`media-src 'none'` fecham o que o app não usa.
+  roda, nem inline. `connect-src` só aceita a própria origem e os três
+  domínios do Firebase que o app chama (`identitytoolkit.googleapis.com`,
+  `securetoken.googleapis.com`, `firestore.googleapis.com`): um script
+  injetado não teria para onde mandar os dados. `frame-ancestors 'none'` e
+  `X-Frame-Options: DENY` matam clickjacking; `base-uri 'none'` impede
+  reescrever a base das URLs relativas; `object-src`/`frame-src`/
+  `media-src 'none'` fecham o que o app não usa.
 - **HSTS** com `preload` — o navegador se recusa a falar HTTP com o domínio.
 - **Permissions-Policy** — câmera, microfone, localização, USB, pagamento e
   companhia negados de saída. O app não usa nenhum deles.
 - **COOP / CORP `same-origin`**, `nosniff`, `Referrer-Policy: no-referrer`.
 
-A CSP foi verificada com o app rodando: abertura, login, esfera, troca de
-tema, service worker e download de backup — nenhuma violação.
+> A CSP anterior (com o domínio do Supabase) foi verificada com o app
+> rodando de ponta a ponta. A troca dos três domínios do Firebase ainda
+> precisa da mesma passada manual — abertura, login, cadastro, recuperação de
+> senha, sincronização, troca de tema, service worker e download de backup —
+> porque um domínio errado na lista quebra a chamada em silêncio (a CSP
+> bloqueia, o `fetch` cai no `catch` como "sem rede").
 
 ## 4. Conta: o que o app faz do lado de cá
 
@@ -89,12 +85,15 @@ tema, service worker e download de backup — nenhuma violação.
   substitui o limite do servidor — soma a ele, e segura a força bruta feita
   pelo próprio app antes de a rede ser usada.
 - **Senha**: mínimo de 8, máximo de 72, recusa as senhas mais vazadas do mundo
-  e um caractere repetido. Isto é um remendo enquanto a proteção contra senha
-  vazada estiver desligada — veja "o que falta".
-- **Token recusado (401/403) apaga a sessão local** na hora. Token morto
-  guardado no aparelho só serve para o app tentar em loop.
-- **Teto de 512 KB** conferido antes do envio, espelhando o do banco, para o
-  erro chegar como frase e não como mensagem crua do Postgres.
+  e um caractere repetido. Isto é um remendo — veja "o que falta" abaixo,
+  porque aqui o remendo é mais necessário do que era no Supabase.
+- **Token recusado apaga a sessão local** na hora: tanto por status
+  (401/403) quanto pelo código que o Firebase devolve no corpo
+  (`INVALID_ID_TOKEN`, `TOKEN_EXPIRED`, `USER_NOT_FOUND`, `USER_DISABLED`).
+  Token morto guardado no aparelho só serve para o app tentar em loop.
+- **Teto de 512 KB** conferido antes do envio, espelhando o das regras do
+  Firestore, para o erro chegar como frase e não como mensagem crua do
+  servidor.
 
 `app.js`
 
@@ -109,11 +108,17 @@ tema, service worker e download de backup — nenhuma violação.
 
 ## O que falta, e não depende de código
 
-**Proteção contra senha vazada** (HaveIBeenPwned) está **desligada** no painel
-do Supabase. Ligar é um clique e vale mais que qualquer lista embutida no app:
-Painel → Authentication → Policies → *Leaked password protection*.
-https://supabase.com/docs/guides/auth/password-security
+**Proteção contra senha vazada** (tipo HaveIBeenPwned) **não existe** no
+Firebase Authentication por e-mail/senha — o Supabase tinha um botão para
+isso no painel (`Authentication → Policies → Leaked password protection`); o
+Firebase, na camada gratuita, não oferece equivalente. A lista curta em
+`validarSenha()` (`auth.js`) é o que existe entre uma conta e a senha mais
+óbvia do mundo, e agora carrega mais peso do que carregava antes. Quem quiser
+mais do que isso precisa de um serviço à parte (ex.: checar contra a API do
+[Have I Been Pwned](https://haveibeenpwned.com/API/v3#PwnedPasswords) antes
+de enviar o cadastro) — não implementado aqui.
 
-O cadastro dispensa confirmação de e-mail (decisão registrada na migração
-0002): a conta nasce confirmada e a pessoa entra direto. O preço é que o
-e-mail não é comprovado. Trocar isso é uma decisão de produto, não um bug.
+O cadastro dispensa confirmação de e-mail: o Firebase deixa entrar por
+e-mail/senha mesmo sem o e-mail verificado, e `cadastrar()` já devolve uma
+sessão pronta. O preço é o mesmo de antes: o e-mail não é comprovado. Trocar
+isso é uma decisão de produto, não um bug.

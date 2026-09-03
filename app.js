@@ -2232,7 +2232,8 @@ function preencherCampos(){
 /* ==========================================================================
    Tela de entrar / criar conta
    ========================================================================== */
-let modoAuth='entrar';   // entrar | cadastrar | recuperar
+let modoAuth='entrar';   // entrar | cadastrar | recuperar | novaSenha
+let codigoRecuperacao=null;   // oobCode do link de "esqueci minha senha" (Firebase)
 const $a=id=>document.getElementById(id);
 
 function mostrarErroCampo(campo,msg){
@@ -2254,31 +2255,35 @@ function carregandoAuth(ligado,rotulo){
   b.innerHTML=ligado?'<span class="girando"></span>':(rotulo||b.dataset.rotulo||'Entrar');
 }
 function pintarModo(){
-  const tit={entrar:'Entrar',cadastrar:'Criar conta',recuperar:'Recuperar senha'}[modoAuth];
+  const tit={entrar:'Entrar',cadastrar:'Criar conta',recuperar:'Recuperar senha',novaSenha:'Nova senha'}[modoAuth];
   const sub={
     entrar:'Seus dados ficam na sua conta, e só nela.',
     cadastrar:'Leva 20 segundos: seu nome, um e-mail e uma senha.',
-    recuperar:'Digite seu e-mail e enviamos um link para criar uma senha nova.'
+    recuperar:'Digite seu e-mail e enviamos um link para criar uma senha nova.',
+    novaSenha:'Escolha uma senha nova para sua conta.'
   }[modoAuth];
-  const rotulo={entrar:'Entrar',cadastrar:'Criar minha conta',recuperar:'Enviar o link'}[modoAuth];
+  const rotulo={entrar:'Entrar',cadastrar:'Criar minha conta',recuperar:'Enviar o link',novaSenha:'Salvar nova senha'}[modoAuth];
   $a('authTit').textContent=tit;
   $a('authSub').textContent=sub;
   $a('authEnviar').dataset.rotulo=rotulo;
   $a('authEnviar').textContent=rotulo;
   $a('campoNome').hidden=(modoAuth!=='cadastrar');
+  $a('campoEmail').hidden=(modoAuth==='novaSenha');
   $a('campoSenha').hidden=(modoAuth==='recuperar');
   $a('campoConfirma').hidden=(modoAuth!=='cadastrar');
   $a('forcaSenha').hidden=(modoAuth!=='cadastrar');
   $a('authEsqueci').hidden=(modoAuth!=='entrar');
-  $a('authSenha').setAttribute('autocomplete',modoAuth==='cadastrar'?'new-password':'current-password');
+  $a('authSenha').setAttribute('autocomplete',modoAuth==='cadastrar'||modoAuth==='novaSenha'?'new-password':'current-password');
   $a('authTrocaTxt').textContent=(modoAuth==='entrar')?'Ainda não tem conta?':'Já tem conta?';
   $a('authTroca').textContent=(modoAuth==='entrar')?'Criar conta':'Entrar';
+  const troca=$('.auth-troca');
+  if(troca) troca.hidden=(modoAuth==='novaSenha');
   ['Nome','Email','Senha','Confirma'].forEach(c=>mostrarErroCampo(c,''));
   avisoAuth('');
 }
 function trocarModo(novo){
   modoAuth=novo; pintarModo();
-  $a(modoAuth==='cadastrar'?'authNome':'authEmail').focus();
+  $a(modoAuth==='cadastrar'?'authNome':modoAuth==='novaSenha'?'authSenha':'authEmail').focus();
 }
 
 function validarFormulario(){
@@ -2287,10 +2292,12 @@ function validarFormulario(){
     const n=Auth.validarNome($a('authNome').value);
     mostrarErroCampo('Nome',n); if(n) ok=false;
   }
-  const e=Auth.validarEmail($a('authEmail').value);
-  mostrarErroCampo('Email',e); if(e) ok=false;
+  if(modoAuth!=='novaSenha'){
+    const e=Auth.validarEmail($a('authEmail').value);
+    mostrarErroCampo('Email',e); if(e) ok=false;
+  }
   if(modoAuth!=='recuperar'){
-    const s=modoAuth==='cadastrar'
+    const s=(modoAuth==='cadastrar'||modoAuth==='novaSenha')
       ? Auth.validarSenha($a('authSenha').value)
       : ($a('authSenha').value ? '' : 'Digite sua senha.');
     mostrarErroCampo('Senha',s); if(s) ok=false;
@@ -2316,26 +2323,19 @@ async function enviarAuth(ev){
       await Auth.entrar(email,senha);
       await abrirApp(true,false);
     }else if(modoAuth==='cadastrar'){
-      const r=await Auth.cadastrar(email,senha,nome);
-      if(r.confirmar){
-        avisoAuth(`<b>Conta criada.</b> Enviamos um link de confirmação para <b>${esc(email)}</b>.
-          Abra o e-mail, confirme e volte aqui para entrar.
-          <button type="button" class="link" id="reenviar" style="display:block;margin-top:6px">Reenviar o e-mail</button>`,'ok');
-        const rb=$a('reenviar');
-        if(rb) rb.onclick=async()=>{
-          try{ await Auth.reenviarConfirmacao(email); avisoAuth('E-mail reenviado. Confira a caixa de entrada e o spam.','ok'); }
-          catch(e2){ avisoAuth(Auth.mensagemDeErro(e2)); }
-        };
-        modoAuth='entrar'; pintarModo();
-        avisoAuth(`<b>Conta criada.</b> Confirme pelo link que enviamos para <b>${esc(email)}</b> e entre aqui.`,'ok');
-      }else{
-        // Rede de segurança: se o nome não voltou junto da sessão, gravamos
-        // agora — a saudação nunca pode cair no pedaço do e-mail.
-        if(nome && !(Auth.usuario()||{}).nome){
-          try{ await Auth.definirNome(nome); }catch(e2){}
-        }
-        await abrirApp(true,true);
+      await Auth.cadastrar(email,senha,nome);
+      // Rede de segurança: se o nome não voltou junto da sessão, gravamos
+      // agora — a saudação nunca pode cair no pedaço do e-mail.
+      if(nome && !(Auth.usuario()||{}).nome){
+        try{ await Auth.definirNome(nome); }catch(e2){}
       }
+      await abrirApp(true,true);
+    }else if(modoAuth==='novaSenha'){
+      await Auth.trocarSenhaComCodigo(codigoRecuperacao,senha);
+      codigoRecuperacao=null;
+      history.replaceState(null,'',location.pathname);
+      await abrirApp(true,false);
+      toast('Senha definida. Você já está com a conta aberta.');
     }else{
       await Auth.recuperarSenha(email, location.origin+'/?recuperar=1');
       avisoAuth(`Se existir uma conta com <b>${esc(email)}</b>, o link para criar uma senha nova já está a caminho. Confira também o spam.`,'ok');
@@ -2345,7 +2345,7 @@ async function enviarAuth(ev){
     }
   }catch(e){
     avisoAuth(Auth.mensagemDeErro(e));
-    if(String(e.message||'').toLowerCase().includes('invalid login')) $a('authSenha').select();
+    if(/INVALID_LOGIN_CREDENTIALS|INVALID_PASSWORD/i.test(String(e.codigo||e.message||''))) $a('authSenha').select();
   }finally{
     carregandoAuth(false);
   }
@@ -2404,7 +2404,7 @@ function focarEntrada(){
     const capa=$('#capa');
     if(capa && !capa.hidden && !capa.classList.contains('sai')) return;
     if($('#auth').hidden) return;             // já entrou no app
-    const alvo=$a(modoAuth==='cadastrar'?'authNome':'authEmail');
+    const alvo=$a(modoAuth==='cadastrar'?'authNome':modoAuth==='novaSenha'?'authSenha':'authEmail');
     if(alvo) alvo.focus();
   },380);
 }
@@ -2712,25 +2712,18 @@ function esconderSplash(){
   capaPronta=mostrarCapa();          // some ao primeiro toque
   const capa=capaPronta;
   try{
-    // Voltou do e-mail de recuperação: o token vem no fragmento da URL.
-    const frag=new URLSearchParams(location.hash.replace(/^#/,''));
-    if(frag.get('access_token')){
-      const s=Auth.montarSessao({
-        access_token:frag.get('access_token'),
-        refresh_token:frag.get('refresh_token'),
-        expires_in:+frag.get('expires_in')||3600,
-        user:{}
-      });
-      if(s){
-        Auth.guardarSessao(s);
-        history.replaceState(null,'',location.pathname);
-        await abrirApp(true,true);
-        irPara('ajustes:conta');
-        $('#trocaSenha').hidden=false;
-        toast('Agora escolha uma senha nova');
-        esconderSplash();
-        return;
-      }
+    // Voltou do e-mail de recuperação: o Firebase manda um "oobCode" de uso
+    // único na URL (não uma sessão pronta), que a pessoa troca por uma senha
+    // nova na própria tela de entrada.
+    const params=new URLSearchParams(location.search);
+    if(params.get('mode')==='resetPassword' && params.get('oobCode')){
+      codigoRecuperacao=params.get('oobCode');
+      history.replaceState(null,'',location.pathname);
+      tirarCapaAgora();
+      modoAuth='novaSenha';
+      mostrarAuth();
+      esconderSplash();
+      return;
     }
     if(Auth.logado()) await abrirApp(false);
     else mostrarAuth();
