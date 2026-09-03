@@ -1,0 +1,32 @@
+// Regras do Firestore — o isolamento de verdade não está no app.js, está aqui.
+// Cada usuário tem no máximo um documento na coleção `estado`, com o próprio
+// uid como id do documento. Ninguém lê ou escreve o documento de outra conta,
+// mesmo sabendo o uid dela, porque a regra compara com `request.auth.uid`
+// (que vem do token verificado pelo Firebase, não de nada que o cliente
+// manda). Copie este arquivo para Firebase Console → Firestore Database →
+// Regras (ou publique com `firebase deploy --only firestore:rules`, se
+// preferir usar o Firebase CLI).
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /estado/{uid} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+
+      // `dados` é o único campo que o cliente escreve — um JSON serializado
+      // em string, com o mesmo teto de 512 KB que o app já respeita antes de
+      // gastar rede. `revisao` só sobe via transformação atômica (increment),
+      // então nunca aparece em request.resource.data numa escrita comum, mas
+      // deixamos ele na lista permitida para não recusar a própria transação
+      // que o incrementa.
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['dados', 'revisao'])
+        && request.resource.data.dados is string
+        && request.resource.data.dados.size() <= 524288;
+    }
+    // Nenhuma outra coleção existe; nada mais é liberado.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

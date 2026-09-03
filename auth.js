@@ -1,26 +1,31 @@
 /* ==========================================================================
    Sobra do Mês — autenticação e sincronização
-   Falamos direto com a API do Supabase por fetch: sem biblioteca externa,
-   sem CDN, funciona com o app em cache offline.
+   Falamos direto com as APIs REST do Firebase (Identity Toolkit + Firestore)
+   por fetch puro: sem SDK, sem CDN, funciona com o app em cache offline.
 
    Por que isto é seguro de verdade, e não uma tela de login decorativa:
-   o isolamento não está aqui no navegador — está no banco. Cada linha da
-   tabela `estado` tem a chave primária igual ao id do usuário e políticas de
-   Row Level Security amarradas a `auth.uid()`. Mesmo que alguém pegue a chave
-   pública (ela é pública mesmo, vai no HTML) e chame a API na mão, o Postgres
-   devolve zero linhas das outras contas. Isso foi testado: select, update,
-   delete e insert forjando o user_id de outra conta — todos bloqueados.
+   o isolamento não está aqui no navegador — está nas regras do Firestore
+   (arquivo firestore.rules). Cada documento da coleção `estado` tem como id
+   o próprio uid do usuário, e a regra só libera leitura/escrita quando
+   `request.auth.uid == resource id`. Mesmo que alguém pegue a Web API Key
+   (ela é pública mesmo, vai no HTML) e chame a API na mão, o Firestore
+   devolve permissão negada para qualquer documento que não seja o dela.
    ========================================================================== */
-const SB = {
-  url: 'https://wwusfrgcgassdmsmjkux.supabase.co',
-  // Chave publicável (anon). É feita para ficar exposta no cliente; quem
-  // protege os dados é o RLS, não o segredo desta chave.
-  key: 'sb_publishable_Eac43j7G_fSIAx0r19-ZyA_FBVq5Ahf'
+const FB = {
+  // Preencha com os dados do SEU projeto Firebase (Configurações do projeto
+  // → Geral → "Seus apps" → app da Web). Nenhum dos dois é secreto: a Web
+  // API Key é feita para ir no cliente, quem protege os dados são as regras
+  // do Firestore, não este valor.
+  apiKey: 'AIzaSyCXt7-vLuFDyg23huGYIx69Lf51tCfqvqo',
+  projectId: 'organizador-financeiro-98e15'
 };
+const AUTH_BASE = 'https://identitytoolkit.googleapis.com/v1';
+const TOKEN_URL = 'https://securetoken.googleapis.com/v1/token?key=' + FB.apiKey;
+const DB_BASE = 'https://firestore.googleapis.com/v1/projects/' + FB.projectId + '/databases/(default)/documents';
 const CHAVE_SESSAO = 'sobra:sessao';
 
 /* ---------- sessão ---------- */
-let sessao = null;   // {access_token, refresh_token, expires_at, user:{id,email}}
+let sessao = null;   // {access_token, refresh_token, expires_at, user:{id,email,nome}}
 
 function guardarSessao(s){
   sessao = s;
@@ -41,36 +46,40 @@ const usuario   = () => sessao && sessao.user;
 const logado    = () => !!(sessao && sessao.access_token);
 const expiraEm  = () => (sessao && sessao.expires_at) ? sessao.expires_at*1000 : 0;
 
+/* Monta a sessão a partir da resposta do Identity Toolkit (signUp,
+   signInWithPassword ou accounts:update — todas usam os mesmos nomes de
+   campo, em camelCase). O signUp não devolve displayName mesmo quando ele
+   é enviado no pedido; quem chama cadastrar() completa isso na volta. */
 function montarSessao(r){
-  if(!r || !r.access_token) return null;
-  const u = r.user || {};
-  const meta = u.user_metadata || {};
+  if(!r || !r.idToken) return null;
+  const anterior = (sessao && sessao.user) || {};
   return {
-    access_token: r.access_token,
-    refresh_token: r.refresh_token,
-    expires_at: r.expires_at || Math.floor(Date.now()/1000) + (r.expires_in||3600),
-    user: { id: u.id, email: u.email, nome: (meta.nome || '').trim() }
+    access_token: r.idToken,
+    refresh_token: r.refreshToken || (sessao && sessao.refresh_token) || '',
+    expires_at: Math.floor(Date.now()/1000) + (+r.expiresIn || 3600),
+    user: {
+      id: r.localId || anterior.id || '',
+      email: r.email || anterior.email || '',
+      nome: (r.displayName != null ? r.displayName : (anterior.nome || '')).trim()
+    }
   };
 }
 
 /* ---------- chamadas ---------- */
-async function chamar(caminho, opcoes){
+function formEncode(obj){
+  return Object.keys(obj).map(k => encodeURIComponent(k)+'='+encodeURIComponent(obj[k])).join('&');
+}
+/* Base de toda chamada HTTP: erros de rede viram 'sem_rede', erros do
+   servidor viram Error com .status e .codigo (o `error.message` que o
+   Firebase devolve, tipo "EMAIL_EXISTS" ou "PERMISSION_DENIED"). */
+async function chamar(url, opcoes){
   const o = opcoes || {};
-  const cabecalhos = Object.assign({
-    'apikey': SB.key,
-    'Content-Type': 'application/json'
-  }, o.headers || {});
-  if(o.comToken){
-    const t = await tokenValido();
-    if(!t) throw erro('sessao_expirada');
-    cabecalhos['Authorization'] = 'Bearer ' + t;
-  }
   let r;
   try{
-    r = await fetch(SB.url + caminho, {
+    r = await fetch(url, {
       method: o.method || 'GET',
-      headers: cabecalhos,
-      body: o.body ? JSON.stringify(o.body) : undefined
+      headers: o.headers,
+      body: o.body !== undefined ? (o.form ? formEncode(o.body) : JSON.stringify(o.body)) : undefined
     });
   }catch(e){ throw erro('sem_rede'); }
 
@@ -78,13 +87,15 @@ async function chamar(caminho, opcoes){
   let corpo = null;
   try{ corpo = texto ? JSON.parse(texto) : null; }catch(e){ corpo = texto; }
   if(!r.ok){
-    const e = new Error((corpo && (corpo.msg || corpo.error_description || corpo.message || corpo.error)) || ('HTTP '+r.status));
+    const msg = (corpo && corpo.error && corpo.error.message) || ('HTTP '+r.status);
+    const e = new Error(msg);
     e.status = r.status;
-    e.codigo = (corpo && (corpo.error_code || corpo.code)) || '';
+    e.codigo = msg;
     /* Token recusado pelo servidor: a sessão local não vale mais nada. Guardar
        um token morto no aparelho só serve para o app tentar de novo em loop e
        para o token ficar guardado além do tempo — some com ele na hora. */
-    if((r.status === 401 || r.status === 403) && o.comToken && caminho.indexOf('/auth/v1/token') < 0){
+    if(o.encerraSessaoSeInvalido && (r.status === 401 || r.status === 403 ||
+       /INVALID_ID_TOKEN|TOKEN_EXPIRED|USER_NOT_FOUND|USER_DISABLED/.test(msg))){
       guardarSessao(null);
     }
     throw e;
@@ -93,7 +104,36 @@ async function chamar(caminho, opcoes){
 }
 function erro(codigo){ const e = new Error(codigo); e.codigo = codigo; return e; }
 
-/* Renova o token sozinho um minuto antes de vencer. */
+/* Chamadas ao Identity Toolkit (cadastro, login, troca de senha etc.): a
+   autenticação de quem já tem sessão vai como campo `idToken` no corpo, não
+   como cabeçalho Authorization — é assim que essa API funciona. */
+function chamarIdentidade(caminho, opcoes){
+  const o = opcoes || {};
+  const headers = {'Content-Type': o.form ? 'application/x-www-form-urlencoded' : 'application/json'};
+  return chamar(AUTH_BASE + caminho + '?key=' + FB.apiKey, Object.assign({}, o, {headers}));
+}
+async function chamarComToken(caminho, corpoExtra){
+  const t = await tokenValido();
+  if(!t) throw erro('sessao_expirada');
+  return chamarIdentidade(caminho, {
+    method:'POST', body: Object.assign({idToken:t}, corpoExtra||{}),
+    encerraSessaoSeInvalido: true
+  });
+}
+/* Chamadas ao Firestore: aqui sim é cabeçalho Authorization: Bearer. */
+async function chamarFirestore(caminho, opcoes){
+  const o = opcoes || {};
+  const t = await tokenValido();
+  if(!t) throw erro('sessao_expirada');
+  return chamar(DB_BASE + caminho, Object.assign({}, o, {
+    headers: Object.assign({'Content-Type':'application/json', 'Authorization':'Bearer '+t}, o.headers||{}),
+    encerraSessaoSeInvalido: true
+  }));
+}
+
+/* Renova o token sozinho um minuto antes de vencer. O endpoint de refresh é
+   outro (securetoken, não identitytoolkit), pede o corpo como formulário e
+   devolve os campos em snake_case — por isso não passa por montarSessao(). */
 let renovando = null;
 async function tokenValido(){
   if(!sessao) return null;
@@ -102,10 +142,15 @@ async function tokenValido(){
   if(!renovando){
     renovando = (async()=>{
       try{
-        const r = await chamar('/auth/v1/token?grant_type=refresh_token',
-          {method:'POST', body:{refresh_token: sessao.refresh_token}});
-        const nova = montarSessao(r);
-        if(!nova) throw erro('sessao_expirada');
+        const r = await chamar(TOKEN_URL, {method:'POST', form:true,
+          body:{grant_type:'refresh_token', refresh_token: sessao.refresh_token}});
+        if(!r || !r.id_token) throw erro('sessao_expirada');
+        const nova = {
+          access_token: r.id_token,
+          refresh_token: r.refresh_token || sessao.refresh_token,
+          expires_at: Math.floor(Date.now()/1000) + (+r.expires_in || 3600),
+          user: sessao.user
+        };
         guardarSessao(nova);
         return nova.access_token;
       }catch(e){
@@ -120,7 +165,7 @@ async function tokenValido(){
 }
 
 /* ---------- freio de tentativas ----------
-   O Supabase já limita tentativas do lado dele, e é ele quem manda. Este
+   O Firebase já limita tentativas do lado dele, e é ele quem manda. Este
    freio é o degrau anterior: segura a força bruta feita PELO app, no próprio
    aparelho, antes de a rede ser usada. Cresce a cada erro (1s, 2s, 4s… até
    5 min), zera no acerto, e vale por e-mail para não punir quem só errou a
@@ -162,8 +207,8 @@ async function entrar(email, senha){
   }
   let r;
   try{
-    r = await chamar('/auth/v1/token?grant_type=password',
-      {method:'POST', body:{email:String(email).trim().toLowerCase(), password:senha}});
+    r = await chamarIdentidade('/accounts:signInWithPassword', {method:'POST',
+      body:{email:String(email).trim().toLowerCase(), password:senha, returnSecureToken:true}});
   }catch(e){
     if(e.codigo !== 'sem_rede') registrarErroDeLogin(email);
     throw e;
@@ -174,53 +219,48 @@ async function entrar(email, senha){
   guardarSessao(s);
   return s;
 }
-/* Cadastro sem etapa de confirmação: cria a conta e já entra.
-   No banco há um gatilho que marca a conta como confirmada no instante em que
-   ela é criada, então basta pedir o token em seguida. Três caminhos possíveis:
-     1. o servidor já devolve a sessão      -> pronto;
-     2. devolve só o usuário                -> entramos com o mesmo e-mail/senha;
-     3. falha ao enviar o e-mail de boas-vindas (o SMTP gratuito é limitado)
-        -> a conta costuma existir mesmo assim, então tentamos entrar. */
+/* Cadastro sem etapa de confirmação: cria a conta e já entra — o Firebase
+   deixa fazer login por e-mail/senha mesmo sem o e-mail ter sido verificado,
+   então não existe aqui o vaivém de "confirme para poder entrar" que o
+   Supabase exigia. `confirmar` continua na resposta só por compatibilidade
+   com quem chama, mas nunca vem `true`. */
 async function cadastrar(email, senha, nome){
-  const dados = {email:String(email).trim().toLowerCase(), password:senha,
-                 data:{nome:String(nome||'').trim()}};
-  let r = null, falhaDoCadastro = null;
-  try{
-    r = await chamar('/auth/v1/signup', {method:'POST', body:dados});
-  }catch(e){
-    const cru = String(e.codigo || e.message || '').toLowerCase();
-    const eProblemaDeEmail = cru.includes('email') &&
-      (cru.includes('rate') || cru.includes('send') || cru.includes('smtp'));
-    if(!eProblemaDeEmail) throw e;      // e-mail já cadastrado, senha fraca etc.
-    falhaDoCadastro = e;
-  }
-
+  const emailLimpo = String(email).trim().toLowerCase();
+  const nomeLimpo = String(nome||'').trim();
+  const r = await chamarIdentidade('/accounts:signUp', {method:'POST',
+    body:{email:emailLimpo, password:senha, displayName:nomeLimpo, returnSecureToken:true}});
   const s = montarSessao(r);
-  if(s){ guardarSessao(s); return {sessao:s, confirmar:false}; }
-
-  try{
-    return {sessao: await entrar(dados.email, senha), confirmar:false};
-  }catch(e){
-    if(falhaDoCadastro) throw falhaDoCadastro;
-    return {sessao:null, confirmar:true};   // confirmação por e-mail exigida
-  }
+  if(!s) throw erro('sem_sessao');
+  s.user.nome = nomeLimpo;   // accounts:signUp não devolve displayName na resposta
+  guardarSessao(s);
+  return {sessao:s, confirmar:false};
 }
 async function recuperarSenha(email, redirecionar){
-  await chamar('/auth/v1/recover' + (redirecionar ? '?redirect_to='+encodeURIComponent(redirecionar) : ''),
-    {method:'POST', body:{email:String(email).trim().toLowerCase()}});
+  const body = {requestType:'PASSWORD_RESET', email:String(email).trim().toLowerCase()};
+  if(redirecionar) body.continueUrl = redirecionar;
+  await chamarIdentidade('/accounts:sendOobCode', {method:'POST', body});
 }
-async function reenviarConfirmacao(email){
-  await chamar('/auth/v1/resend',
-    {method:'POST', body:{type:'signup', email:String(email).trim().toLowerCase()}});
+/* O link do e-mail de recuperação traz um `oobCode` (não uma sessão pronta,
+   como no Supabase). Trocamos a senha com ele e, para manter a mesma
+   experiência de antes — cair direto dentro do app —, já fazemos login em
+   seguida com a senha nova. */
+async function trocarSenhaComCodigo(oobCode, novaSenha){
+  const r = await chamarIdentidade('/accounts:resetPassword', {method:'POST',
+    body:{oobCode, newPassword:novaSenha}});
+  const email = r && r.email;
+  if(!email) throw erro('codigo_invalido');
+  return entrar(email, novaSenha);
 }
 async function definirNovaSenha(senha){
-  await chamar('/auth/v1/user', {method:'PUT', comToken:true, body:{password:senha}});
+  const r = await chamarComToken('/accounts:update', {password:senha, returnSecureToken:true});
+  const s = montarSessao(r);
+  if(s){ guardarSessao(s); }
 }
 /* O nome fica no perfil da conta, não no estado financeiro: assim ele
    acompanha a pessoa em qualquer aparelho, junto do login. */
 async function definirNome(nome){
   const limpo = String(nome||'').trim();
-  await chamar('/auth/v1/user', {method:'PUT', comToken:true, body:{data:{nome:limpo}}});
+  await chamarComToken('/accounts:update', {displayName:limpo});
   if(sessao && sessao.user){ sessao.user.nome = limpo; guardarSessao(sessao); }
   return limpo;
 }
@@ -232,69 +272,90 @@ function primeiroNome(){
   return p.charAt(0).toLocaleUpperCase('pt-BR') + p.slice(1);
 }
 async function sair(){
-  // Invalida o refresh token no servidor; se estiver offline, limpa localmente.
-  try{ await chamar('/auth/v1/logout?scope=global', {method:'POST', comToken:true}); }catch(e){}
+  // O Identity Toolkit não tem um endpoint de "derrubar sessão em todo
+  // aparelho" chamável pelo cliente (isso exige o Admin SDK, do lado do
+  // servidor). O que dá para fazer daqui é esquecer a sessão neste aparelho;
+  // o token de acesso ainda válido expira sozinho em até uma hora.
   guardarSessao(null);
 }
 
 /* ---------- estado do usuário na nuvem ---------- */
+/* `dados` vai como uma única string JSON dentro do documento — mais simples
+   e menos sujeito a erro do que converter cada campo para o formato tipado
+   do Firestore, e a Console do Firebase nunca precisa consultar dentro dele. */
+function nomeDoDocumento(uid){
+  return 'projects/' + FB.projectId + '/databases/(default)/documents/estado/' + uid;
+}
 async function puxarEstado(){
   const u = usuario(); if(!u) throw erro('sem_sessao');
-  const linhas = await chamar('/rest/v1/estado?select=dados,revisao,atualizado_em&user_id=eq.'+u.id,
-    {comToken:true});
-  return (Array.isArray(linhas) && linhas[0]) ? linhas[0] : null;
+  let doc;
+  try{
+    doc = await chamarFirestore('/estado/'+u.id, {method:'GET'});
+  }catch(e){
+    if(e.status === 404) return null;
+    throw e;
+  }
+  const f = doc.fields || {};
+  const dados = (f.dados && typeof f.dados.stringValue === 'string') ? JSON.parse(f.dados.stringValue) : {};
+  const revisao = (f.revisao && f.revisao.integerValue != null) ? +f.revisao.integerValue : 1;
+  return {dados, revisao};
 }
-/* O banco recusa acima de 512 KB (constraint estado_dados_tamanho). O app
-   avisa ANTES de gastar a rede — e, mais importante, avisa com uma frase que
-   se entende, em vez de deixar o erro cru do Postgres chegar à tela. */
+/* O Firestore recusa documentos acima de 1 MiB; a gente barra bem antes
+   disso (o mesmo teto de sempre) e avisa com uma frase que se entende, em
+   vez de deixar o erro cru do servidor chegar à tela. A revisão sobe sozinha
+   e de forma atômica: `increment` é uma transformação do próprio Firestore,
+   não uma leitura-e-escrita feita daqui. */
 const TETO_ESTADO = 512 * 1024;
 async function enviarEstado(dados){
   const u = usuario(); if(!u) throw erro('sem_sessao');
-  try{
-    const tamanho = new Blob([JSON.stringify(dados)]).size;
-    if(tamanho > TETO_ESTADO) throw erro('estado_grande');
-  }catch(e){ if(e.codigo === 'estado_grande') throw e; }
-  const linhas = await chamar('/rest/v1/estado', {
-    method:'POST', comToken:true,
-    headers:{'Prefer':'resolution=merge-duplicates,return=representation'},
-    body:{user_id:u.id, dados}
-  });
-  return (Array.isArray(linhas) && linhas[0]) ? linhas[0] : null;
+  const texto = JSON.stringify(dados);
+  const tamanho = new Blob([texto]).size;
+  if(tamanho > TETO_ESTADO) throw erro('estado_grande');
+  const r = await chamarFirestore(':commit', {method:'POST', body:{
+    writes: [{
+      update: {name: nomeDoDocumento(u.id), fields: {dados: {stringValue: texto}}},
+      updateMask: {fieldPaths: ['dados']},
+      updateTransforms: [{fieldPath: 'revisao', increment: {integerValue: '1'}}]
+    }]
+  }});
+  const resultado = r && r.writeResults && r.writeResults[0];
+  const transformado = resultado && resultado.transformResults && resultado.transformResults[0];
+  const revisao = transformado && transformado.integerValue != null ? +transformado.integerValue : 1;
+  return {dados, revisao};
 }
 async function apagarEstadoNaNuvem(){
   const u = usuario(); if(!u) throw erro('sem_sessao');
-  await chamar('/rest/v1/estado?user_id=eq.'+u.id, {method:'DELETE', comToken:true});
+  await chamarFirestore('/estado/'+u.id, {method:'DELETE'});
 }
 
 /* ---------- mensagens amigáveis ---------- */
 function mensagemDeErro(e){
-  const cru = String((e && (e.codigo || e.message)) || '').toLowerCase();
-  if(cru.includes('sem_rede'))            return 'Sem internet agora. Verifique a conexão e tente de novo.';
-  if(cru.includes('freio')){
+  const cru = String((e && (e.codigo || e.message)) || '').toUpperCase();
+  if(cru.includes('SEM_REDE'))            return 'Sem internet agora. Verifique a conexão e tente de novo.';
+  if(cru.includes('FREIO')){
     const s = (e && e.segundos) || 0;
     if(s > 60){ const m=Math.ceil(s/60);
       return 'Muitas tentativas seguidas. Espere '+m+(m===1?' minuto':' minutos')+' e tente de novo.'; }
     const seg=Math.max(1,s);
     return 'Muitas tentativas seguidas. Espere '+seg+(seg===1?' segundo':' segundos')+' e tente de novo.';
   }
-  if(cru.includes('estado_grande'))       return 'Seus dados passaram do tamanho que a nuvem aceita. Arquive meses antigos ou baixe um backup.';
-  if(cru.includes('estado_dados_tamanho'))return 'Seus dados passaram do tamanho que a nuvem aceita. Arquive meses antigos ou baixe um backup.';
-  if(cru.includes('permission denied')||cru.includes('42501'))
-                                          return 'O servidor recusou essa gravação. Se continuar, entre de novo.';
-  if(cru.includes('invalid login'))       return 'E-mail ou senha não conferem. Confira e tente de novo.';
-  if(cru.includes('email not confirmed')) return 'Confirme seu e-mail antes de entrar — o link está na sua caixa de entrada.';
-  if(cru.includes('already registered')||cru.includes('already been registered'))
+  if(cru.includes('ESTADO_GRANDE'))       return 'Seus dados passaram do tamanho que a nuvem aceita. Arquive meses antigos ou baixe um backup.';
+  if(cru.includes('PERMISSION_DENIED'))   return 'O servidor recusou essa gravação. Se continuar, entre de novo.';
+  if(cru.includes('INVALID_LOGIN_CREDENTIALS')||cru.includes('INVALID_PASSWORD')||cru.includes('EMAIL_NOT_FOUND'))
+                                          return 'E-mail ou senha não conferem. Confira e tente de novo.';
+  if(cru.includes('EMAIL_EXISTS')||cru.includes('EMAIL_ALREADY'))
                                           return 'Já existe uma conta com este e-mail. Tente entrar, ou use “Esqueci minha senha”.';
-  if(cru.includes('user_already_exists')) return 'Já existe uma conta com este e-mail.';
-  if(cru.includes('weak_password')||cru.includes('password should be'))
-                                          return 'Senha muito curta. Use pelo menos 8 caracteres.';
-  if(cru.includes('unable to validate email')||cru.includes('invalid format')||cru.includes('validation_failed'))
-                                          return 'Esse e-mail não parece válido. Confira se digitou certo.';
-  if(cru.includes('over_email_send_rate')||cru.includes('rate limit')||cru.includes('too many'))
+  if(cru.includes('WEAK_PASSWORD'))       return 'Senha muito curta. Use pelo menos 8 caracteres.';
+  if(cru.includes('INVALID_EMAIL'))       return 'Esse e-mail não parece válido. Confira se digitou certo.';
+  if(cru.includes('TOO_MANY_ATTEMPTS')||cru.includes('RATE_LIMIT_EXCEEDED')||cru.includes('BLOCKED_ALL_REQUESTS'))
                                           return 'Muitas tentativas seguidas. Espere alguns minutos e tente de novo.';
-  if(cru.includes('sessao_expirada')||cru.includes('sem_sessao'))
+  if(cru.includes('USER_DISABLED'))       return 'Esta conta foi desativada.';
+  if(cru.includes('OPERATION_NOT_ALLOWED')) return 'O cadastro está desativado neste momento.';
+  if(cru.includes('EXPIRED_OOB_CODE')||cru.includes('INVALID_OOB_CODE')||cru.includes('CODIGO_INVALIDO'))
+                                          return 'Esse link de recuperação expirou ou já foi usado. Peça um novo.';
+  if(cru.includes('TOKEN_EXPIRED')||cru.includes('INVALID_ID_TOKEN')||cru.includes('USER_NOT_FOUND')
+     ||cru.includes('SESSAO_EXPIRADA')||cru.includes('SEM_SESSAO'))
                                           return 'Sua sessão expirou. Entre de novo, por favor.';
-  if(cru.includes('signups not allowed')) return 'O cadastro está desativado neste momento.';
   return 'Não consegui completar agora. Tente de novo em instantes.';
 }
 
@@ -314,11 +375,10 @@ function validarNome(v){
   if(/^[\d\s\W]+$/.test(n)) return 'Use letras — é assim que vamos te chamar.';
   return '';
 }
-/* As senhas que aparecem primeiro em toda lista de vazamento. A checagem
-   contra a base do HaveIBeenPwned está desligada no painel do Supabase, então
-   esta lista curta é o que existe entre uma conta e a senha mais óbvia do
-   mundo. É pouco, e é honesto dizer que é pouco: o certo é ligar a proteção
-   de senha vazada no painel. */
+/* As senhas que aparecem primeiro em toda lista de vazamento. O Firebase não
+   checa senha vazada por conta própria, então esta lista curta é o que
+   existe entre uma conta e a senha mais óbvia do mundo. É pouco, e é
+   honesto dizer que é pouco. */
 const SENHAS_OBVIAS = new Set([
   '12345678','123456789','1234567890','12345678910','senha123','password',
   'password1','password123','qwerty123','qwertyui','abc12345','11111111',
@@ -351,7 +411,7 @@ function forcaDaSenha(v){
 sessao = lerSessaoSalva();
 
 window.Auth = {
-  entrar, cadastrar, recuperarSenha, reenviarConfirmacao, definirNovaSenha, sair,
+  entrar, cadastrar, recuperarSenha, trocarSenhaComCodigo, definirNovaSenha, sair,
   definirNome, primeiroNome,
   puxarEstado, enviarEstado, apagarEstadoNaNuvem,
   usuario, logado, tokenValido, guardarSessao, montarSessao,

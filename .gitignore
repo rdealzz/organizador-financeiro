@@ -2,3 +2,12 @@ node_modules/
 .vercel/
 .DS_Store
 *.log
+
+# Credenciais — nunca versionar. O JSON da conta de serviço do Firebase vive
+# na variável de ambiente FIREBASE_SA_JSON (ver CLAUDE.md), nunca em arquivo
+# aqui dentro.
+*firebase-adminsdk*.json
+service-account*.json
+sa.json
+.env
+.env.*

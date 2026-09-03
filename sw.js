@@ -78,8 +78,7 @@ self.addEventListener('fetch', e => {
 
   let url;
   try { url = new URL(req.url); } catch (_) { return; }
-  if (url.origin !== location.origin) return;                    // Supabase e fontes passam direto
-  if (url.pathname.startsWith('/auth/') || url.pathname.startsWith('/rest/')) return;
+  if (url.origin !== location.origin) return;                    // Firebase e fontes passam direto
 
   if (req.mode === 'navigate') {
     /* Escotilha de resgate: abrir o site com ?sw=off faz o service worker sair
