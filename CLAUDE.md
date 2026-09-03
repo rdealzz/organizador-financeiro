@@ -7,53 +7,42 @@ App de finanças pessoais (PWA, JS puro, sem build). Migrou de **Supabase** para
 `claude/database-recommendation-irjo15`. O código da migração já está escrito e
 commitado; falta **configurar e validar contra o projeto Firebase real**.
 
-## Credencial do Firebase
+## Acesso ao Firebase a partir daqui
 
-A variável de ambiente **`FIREBASE_SA_JSON`** contém o JSON de uma conta de
-serviço com acesso ao projeto Firebase do dono do repositório. Ela é
-configurada no ambiente de nuvem (claude.ai/code → ícone de nuvem acima da
-caixa de mensagem → engrenagem do ambiente → Environment variables), então
-toda sessão nova já nasce com ela.
+Não é preciso credencial de admin para o trabalho normal: a `apiKey` do
+projeto é pública e está em `auth.js`, e com ela dá para exercitar todo o
+caminho do app pelas APIs REST (`identitytoolkit.googleapis.com` para
+cadastro/login, `firestore.googleapis.com` para os dados). Foi assim que a
+verificação de segurança abaixo foi feita.
 
-Para usar:
+Limitação da sandbox, se algum dia o CLI for necessário: `firebase login`
+**não funciona** aqui, porque a política de rede bloqueia
+`auth.firebase.tools`. Todos os `*.googleapis.com` passam.
 
-```bash
-echo "$FIREBASE_SA_JSON" > /tmp/sa.json      # nunca dentro do repositório
-export GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json
-```
+Se criar contas para verificar algo, **apague depois**
+(`accounts:delete` com o `idToken` da própria conta) — o projeto é de produção.
 
-**Nunca commite esse JSON**, nem o caminho dele para dentro do repositório.
+## Estado da configuração
 
-### Limitação da sandbox
+Projeto Firebase: **`organizador-financeiro-98e15`**.
 
-`firebase login` **não funciona** aqui: a política de rede bloqueia
-`auth.firebase.tools`. Mas todos os `*.googleapis.com` passam, então o caminho
-é a conta de serviço (via `GOOGLE_APPLICATION_CREDENTIALS` no CLI, ou trocando
-o JWT por um access token direto em `oauth2.googleapis.com` e chamando as APIs
-REST: `firebase.googleapis.com`, `identitytoolkit.googleapis.com`,
-`firebaserules.googleapis.com`).
+- ✅ Firestore criado, regras de `firestore.rules` publicadas e **verificadas
+  contra o projeto real** (ver a tabela em `SEGURANCA.md`).
+- ✅ Authentication ativo com o provedor E-mail/senha.
+- ✅ `FB.apiKey` e `FB.projectId` preenchidos em `auth.js`.
+- ✅ Ciclo completo exercitado de ponta a ponta: cadastro → gravar estado →
+  ler de volta → incremento atômico da `revisao`.
 
-O Firebase CLI se instala normalmente com `npm install -g firebase-tools`.
+### O que ainda falta
 
-## O que falta fazer
-
-1. **Pegar `apiKey` e `projectId`** — registrar um app da Web no projeto
-   (`firebase apps:create web` ou a API REST) e ler a config
-   (`firebase apps:sdkconfig web`).
-2. **Preencher `FB.apiKey` e `FB.projectId`** no topo de `auth.js` — hoje estão
-   com os valores placeholder `SUBSTITUA_PELA_SUA_WEB_API_KEY` e
-   `substitua-pelo-id-do-seu-projeto`. O app não funciona até isso ser feito.
-3. **Confirmar o provedor E-mail/senha** ativo em Authentication.
-4. **Conferir as regras publicadas** contra `firestore.rules` (o dono já colou
-   e publicou pelo console, mas vale confirmar que o que está no servidor bate
-   com o arquivo do repositório).
-5. **URL de ação de redefinição de senha** apontando para a origem do app —
-   sem isso o link de "esqueci minha senha" cai numa página do Firebase em vez
-   de voltar para o app (o fluxo do `app.js` espera `?mode=resetPassword&oobCode=...`
-   na própria origem).
-6. **Testar o isolamento entre contas** — criar duas contas e confirmar que uma
-   não lê/grava `estado/<uid da outra>`. O `SEGURANCA.md` registra esse teste
-   como pendente; quando passar, atualizar aquele arquivo.
+1. **Merge para `main`** — a Vercel publica de `main`, e a migração está em
+   `claude/database-recommendation-irjo15`.
+2. **URL de ação de redefinição de senha** (Authentication → Templates →
+   Redefinição de senha → personalizar URL de ação) apontando para a origem
+   publicada do app. Sem isso o link do e-mail cai numa página do Firebase em
+   vez de voltar para o app — o `app.js` espera
+   `?mode=resetPassword&oobCode=...` na própria origem.
+3. **Contas antigas do Supabase não migram** — é uma base de usuários nova.
 
 ## Detalhes da implementação que importam
 

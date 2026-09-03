@@ -128,13 +128,22 @@ coleção `estado`, com o próprio `uid` como id do documento, e as regras em
 com o id do documento — uma verificação por operação, igual às políticas de
 RLS que existiam antes, só que do lado do Firestore.
 
-É o mesmo tipo de garantia que o backend anterior (Supabase/Postgres) tinha
-via RLS, e que ali foi testada de verdade, não só suposta — com um segundo
-usuário chamando a API na mão contra a linha de outra conta. Ao trocar de
-banco a regra precisa do mesmo teste, agora contra o Firestore: antes de
-confiar, tente ler/gravar `estado/<uid-de-outra-conta>` autenticado como uma
-conta diferente (pelo [Rules Playground](https://firebase.google.com/docs/firestore/security/test-rules-emulator)
-do console ou pelo emulador) e confirme que vem `PERMISSION_DENIED`.
+Isso foi **testado, não suposto** — com duas contas de verdade no projeto e o
+token de uma chamando a API na mão contra o documento da outra:
+
+| Ataque | Resultado |
+|---|---|
+| Ler o documento de outra conta | `PERMISSION_DENIED` |
+| Gravar por cima do documento de outra conta | `PERMISSION_DENIED` |
+| Apagar o documento de outra conta | `PERMISSION_DENIED` |
+| Listar a coleção inteira | `PERMISSION_DENIED` |
+| Ler sem estar autenticado | `PERMISSION_DENIED` |
+| Enviar dados acima do teto de 512 KB | `PERMISSION_DENIED` |
+| Gravar um campo extra no próprio documento | `PERMISSION_DENIED` |
+| Gravar o próprio estado | funciona |
+
+A última linha é parte do teste: uma regra que negasse tudo passaria em todas
+as outras e deixaria o app sem funcionar.
 
 A Web API Key vai no HTML de propósito: ela é feita para ficar exposta. Quem
 protege os dados são as regras do Firestore, não o sigilo dessa chave.

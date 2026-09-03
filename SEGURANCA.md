@@ -26,24 +26,37 @@ documento é o próprio `uid`** — não existe uma coluna "dono" que precise se
 checada à parte, o caminho já é a fronteira. A regra libera leitura, escrita
 e apagamento só quando `request.auth.uid == uid` do documento pedido.
 
-> **Isto ainda não foi testado contra um projeto Firebase real** — só escrito
-> e revisado. Antes de confiar, faça o mesmo teste que o RLS do Supabase
-> passou quando o app usava Postgres: autenticado como a conta A, tente ler/gravar/apagar
-> `estado/<uid-da-conta-B>` (pelo [Rules Playground](https://firebase.google.com/docs/firestore/security/test-rules-emulator)
-> do console, ou pelo emulador local) e confirme `PERMISSION_DENIED` em
-> todos os casos, e que a conta A ainda grava o próprio documento sem
-> problema.
+Testado contra o projeto real, com duas contas de verdade e o token de uma
+chamando a API na mão contra o documento da outra:
+
+| tentativa                                  | resultado           |
+|--------------------------------------------|---------------------|
+| ler o documento de outra conta             | `PERMISSION_DENIED` |
+| gravar por cima do documento de outra conta | `PERMISSION_DENIED` |
+| apagar o documento de outra conta          | `PERMISSION_DENIED` |
+| listar a coleção `estado` inteira          | `PERMISSION_DENIED` |
+| ler sem estar autenticado                  | `PERMISSION_DENIED` |
+| gravar o **próprio** documento             | funciona            |
+
+A última linha importa tanto quanto as outras: uma regra que nega tudo também
+passaria nos cinco primeiros testes, e o app não funcionaria.
 
 ## 2. Banco: o que cabe no documento
 
 `firestore.rules`
 
-- **Tamanho**: `request.resource.data.dados.size() <= 524288` — mesmo teto de
-  512 KB que existia no Postgres, agora medido em bytes de string.
-- **Tipo**: `request.resource.data.dados is string` — o campo é sempre uma
-  string JSON, nunca outro tipo.
-- **Campos**: `keys().hasOnly(['dados', 'revisao'])` — nenhum campo extra
-  entra no documento.
+Também testado contra o projeto real, com uma conta legítima gravando o
+próprio documento:
+
+| tentativa                                   | barreira                              | resultado           |
+|---------------------------------------------|---------------------------------------|---------------------|
+| `dados` de 600 KB                           | `dados.size() <= 524288`              | `PERMISSION_DENIED` |
+| `dados` como número em vez de string        | `dados is string`                     | `PERMISSION_DENIED` |
+| gravar um campo `admin` no próprio documento | `keys().hasOnly(['dados','revisao'])` | `PERMISSION_DENIED` |
+
+O teto de 512 KB é o mesmo que existia no Postgres, agora medido em bytes de
+string, e o app confere antes de enviar para o erro chegar como frase e não
+como recusa crua do servidor.
 
 O que o Postgres precisava de gatilho e revogação de privilégio para garantir
 — ninguém reatribuir a linha para outra conta, ninguém truncar a tabela
