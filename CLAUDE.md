@@ -30,19 +30,24 @@ Projeto Firebase: **`organizador-financeiro-98e15`**.
   contra o projeto real** (ver a tabela em `SEGURANCA.md`).
 - ✅ Authentication ativo com o provedor E-mail/senha.
 - ✅ `FB.apiKey` e `FB.projectId` preenchidos em `auth.js`.
-- ✅ Ciclo completo exercitado de ponta a ponta: cadastro → gravar estado →
-  ler de volta → incremento atômico da `revisao`.
+- ✅ Ciclo completo exercitado de ponta a ponta: cadastro → login → gravar
+  estado → ler de volta → incremento atômico da `revisao` → refresh do token
+  → pedido de redefinição de senha. Reverificado em 04/09/2026, com as três
+  negativas de permissão esperadas (ler doc alheio, escrever em doc alheio,
+  ler sem token — todas HTTP 403).
+- ✅ Migração já está em `main` (commit `70ec8ab`), então a Vercel publica
+  a versão com Firebase.
 
 ### O que ainda falta
 
-1. **Merge para `main`** — a Vercel publica de `main`, e a migração está em
-   `claude/database-recommendation-irjo15`.
-2. **URL de ação de redefinição de senha** (Authentication → Templates →
+1. **URL de ação de redefinição de senha** (Authentication → Templates →
    Redefinição de senha → personalizar URL de ação) apontando para a origem
    publicada do app. Sem isso o link do e-mail cai numa página do Firebase em
    vez de voltar para o app — o `app.js` espera
-   `?mode=resetPassword&oobCode=...` na própria origem.
-3. **Contas antigas do Supabase não migram** — é uma base de usuários nova.
+   `?mode=resetPassword&oobCode=...` na própria origem. Daqui não dá para
+   conferir esse ajuste: ele mora no console do Firebase e o e-mail não é
+   legível pela API — o `sendOobCode` responde 200 de qualquer jeito.
+2. **Contas antigas do Supabase não migram** — é uma base de usuários nova.
 
 ## Detalhes da implementação que importam
 
