@@ -1584,9 +1584,11 @@ body.fundo-vivo{background:transparent; --bg:transparent}
 [data-tema="claro"] body.fundo-vivo .sheet,
 [data-tema="claro"] body.fundo-vivo .snack,
 [data-tema="claro"] body.fundo-vivo .toast,
+[data-tema="claro"] body.fundo-vivo .retro,
 [data-tema="claro"] body.fundo-vivo .atualiza{
   background:#FFFFFF; border:1px solid rgba(10,42,82,.12);
 }
+[data-tema="claro"] body.fundo-vivo .retro{border:none}
 /* O véu da cena escurece o fundo para o login se ler. No claro ele precisa
    CLAREAR, senão a tela de entrada fica cinza-suja. */
 [data-tema="claro"] .cena{
@@ -1622,15 +1624,23 @@ body.fundo-vivo .tabbar{
    Um painel da página pode ser translúcido: o que aparece atrás dele é a
    esfera, que é escura e uniforme. Um menu ou uma folha, não — atrás deles
    está o conteúdo do app, e deixar duas camadas de texto se sobrepondo torna
-   as duas ilegíveis. Foi o que aconteceu com o menu do perfil. */
+   as duas ilegíveis. Foi o que aconteceu com o menu do perfil.
+
+   A .retro faltava nesta lista, e o estrago era o maior de todos: ela é uma
+   TELA INTEIRA (`background:var(--bg)`), e com a esfera ligada `--bg` vale
+   `transparent` — ou seja, a retrospectiva do mês era desenhada sobre o app
+   sem fundo nenhum, e "Setembro terminou" ficava por cima dos painéis. */
 body.fundo-vivo .menu-perfil,
 body.fundo-vivo .sheet,
 body.fundo-vivo .snack,
 body.fundo-vivo .toast,
+body.fundo-vivo .retro,
 body.fundo-vivo .atualiza{
   background:#08131F;
   border:1px solid rgba(255,255,255,.13);
 }
+/* Tela cheia não leva moldura: a borda viraria um fio no canto do monitor. */
+body.fundo-vivo .retro{border:none}
 body.fundo-vivo .menu-perfil{box-shadow:0 26px 70px -18px rgba(0,0,0,.9)}
 
 @media (prefers-reduced-motion:reduce){
@@ -2208,7 +2218,7 @@ body.com-portal .wrap{
 .portal{background:transparent}
 .portal::before{
   content:''; position:fixed; inset:0; z-index:-1;
-  background:radial-gradient(120% 90% at 50% 40%, rgba(13,2,9,.58), rgba(13,2,9,.86));
+  background:radial-gradient(120% 90% at 50% 40%, rgba(2,10,20,.86), rgba(0,0,0,.96));
 }
 :root:not([data-tema="escuro"]) body:not(.fundo-vivo) .portal::before{
   background:radial-gradient(120% 90% at 50% 40%,

@@ -98,6 +98,34 @@ Se for medir de novo: a renderização **não** é o gargalo. Medido com Playwri
 o app fica em 55–60 fps na capa, na esfera de fundo, na rolagem e na troca de
 tema, sem tarefa longa relevante.
 
+## A armadilha do `--bg: transparent`
+
+Com a esfera ligada, `body.fundo-vivo` define **`--bg: transparent`** — é o que
+deixa a esfera aparecer atrás dos painéis. A consequência é que **qualquer
+elemento com `background:var(--bg)` fica invisível nesse modo**, inclusive
+telas inteiras.
+
+Foi exatamente isso que aconteceu com a `.retro` (a retrospectiva do mês): ela
+é uma tela cheia com `background:var(--bg)`, e com a esfera ligada era
+desenhada sobre o app sem fundo nenhum — "Setembro terminou" ficava por cima
+dos painéis, e o portal translúcido por cima dos dois. Três camadas de texto
+somadas.
+
+Existe uma lista em `styles.css` chamada **"Superfícies FLUTUANTES são opacas,
+sempre"** (`.menu-perfil`, `.sheet`, `.snack`, `.toast`, `.atualiza`, `.retro`).
+**Toda camada nova que cobre conteúdo precisa entrar nela**, nos dois temas —
+senão repete o mesmo defeito. Só a `.confete` fica de fora de propósito: ela é
+partícula caindo, e tem que ser transparente mesmo.
+
+Junto disso: a `.retro` nasce em `z-index: 70` e o portal vive em `120`, então
+abrir as duas ao mesmo tempo escondia a retrospectiva ATRÁS das cartas — sem
+como ler nem fechar. Agora `abrirApp()` põe a retrospectiva na fila
+(`retroPendente`) quando o portal está na tela, e `fecharPortal()` a mostra
+assim que a pessoa escolhe uma área. `retroPendente` é declarada **no topo do
+`app.js`**, junto de `cena` e `capaSaindo`, pelo mesmo motivo que elas: ao
+reabrir com sessão salva, `abrirApp()` roda antes do fim do arquivo, e um `let`
+lá embaixo estaria na zona morta temporal.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

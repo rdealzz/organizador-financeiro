@@ -28,6 +28,8 @@ function usarChaveDe(uid){ KEY = uid ? ('sobra-do-mes:u:'+uid) : KEY_ANTIGA; }
    a capa continuava por cima dele. Quem entrava pelo formulário nunca via o
    problema, porque aí o arquivo já tinha terminado de carregar. */
 let cena=null, capaSaindo=false;
+/* Retrospectiva que está esperando o portal sair da frente — ver abrirApp(). */
+let retroPendente=null;
 /* Promessa que só resolve quando a capa sai. Quem revela o app espera por ela,
    senão o app aparece POR TRÁS da capa — era o segundo sintoma do mesmo bug. */
 let capaPronta=Promise.resolve();
@@ -2476,9 +2478,16 @@ async function abrirApp(recemLogado, contaNova){
   marcarSinc(navigator.onLine?'enviando':'offline');
   puxarDaNuvem(true);
 
+  /* A retrospectiva é uma TELA, não um aviso: não pode dividir o vídeo com a
+     escolha de área. Ela nasce em z-index 70 e o portal vive em 120, então
+     abrir as duas juntas escondia a retrospectiva ATRÁS das cartas — ilegível
+     e sem como fechar. Com o portal na tela ela fica na fila e entra assim
+     que a pessoa escolhe uma área. */
   if(avisoCiclo&&S.hist.length&&S.retroVista!==S.hist[0].data){
-    S.retroVista=S.hist[0].data; salvar();
-    setTimeout(()=>mostrarRetro(S.hist[0]),650);
+    const mes=S.hist[0];
+    S.retroVista=mes.data; salvar();
+    if(document.body.classList.contains('com-portal')) retroPendente=mes;
+    else setTimeout(()=>mostrarRetro(mes),650);
   }
   setTimeout(()=>{ checarAlertas(false); checarAgenda(false); },1600);
   if(recemLogado){
@@ -3497,6 +3506,11 @@ function fecharPortal(){
   p.classList.remove('abre');
   document.body.classList.remove('com-portal');
   setTimeout(()=>{ p.hidden=true; },360);
+  // Agora que a tela está livre, mostra a retrospectiva que ficou na fila.
+  if(retroPendente){
+    const mes=retroPendente; retroPendente=null;
+    setTimeout(()=>mostrarRetro(mes),420);
+  }
 }
 
 document.addEventListener('keydown',e=>{
