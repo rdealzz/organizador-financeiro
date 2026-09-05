@@ -56,25 +56,26 @@ const CONFIG = {
   inclinacao: 0.32      // quanto a esfera se vira na direção do cursor
 };
 
-/* Brasa → rosa → ouro, a identidade da marca. O quase-branco entra em pouca
-   quantidade e é ele que dá o brilho de estrela nos pontos da frente. */
+/* Azul claro em quatro degraus, a identidade da marca sobre o preto. O
+   quase-branco entra em pouca quantidade e é ele que dá o brilho de estrela
+   nos pontos da frente. */
 const PALETA_ESCURA = [
-  [255, 45, 107],
-  [255, 92, 152],
-  [255, 138, 190],
-  [255, 211, 107],
-  [255, 240, 245]
+  [ 46, 134, 214],
+  [ 92, 189, 255],
+  [127, 203, 255],
+  [155, 225, 255],
+  [240, 250, 255]
 ];
 /* A mesma identidade, virada para um fundo claro. Ponto claro sobre fundo
    claro não existe: no tema claro a esfera precisa ser ESCURA para aparecer,
    e é a cor mais funda que faz o papel de "estrela da frente". Sem isto a
    esfera sumia inteira e a troca de tema parecia não funcionar. */
 const PALETA_CLARA = [
-  [206, 24, 88],
-  [166, 30, 120],
-  [120, 52, 150],
-  [176, 120, 20],
-  [62, 20, 58]
+  [ 18, 104, 181],
+  [ 12,  79, 168],
+  [ 10,  60, 130],
+  [ 11, 110, 140],
+  [  8,  26,  50]
 ];
 const PESO = [0.24, 0.24, 0.22, 0.12, 0.18];   // quanto cada cor aparece
 
@@ -159,13 +160,15 @@ export function iniciarAbertura(canvas, modo) {
 
     const g = fctx.createRadialGradient(L / 2, A * 0.5, 0, L / 2, A * 0.5, Math.max(L, A) * 0.72);
     if (claro) {
-      g.addColorStop(0, '#fdf7fb');
-      g.addColorStop(0.5, '#f4eef8');
-      g.addColorStop(1, '#e9e2f2');
+      g.addColorStop(0, '#FBFDFF');
+      g.addColorStop(0.5, '#EFF6FE');
+      g.addColorStop(1, '#DCE9F8');
     } else {
-      g.addColorStop(0, '#320621');
-      g.addColorStop(0.5, '#20051a');
-      g.addColorStop(1, '#0d0209');
+      /* Preto de verdade na borda: é o mesmo --bg do tema escuro, então a
+         esfera funde com a página em vez de virar um retângulo mais claro. */
+      g.addColorStop(0, '#072135');
+      g.addColorStop(0.5, '#03121F');
+      g.addColorStop(1, '#000000');
     }
     fctx.fillStyle = g;
     fctx.fillRect(0, 0, L, A);
@@ -173,13 +176,13 @@ export function iniciarAbertura(canvas, modo) {
     // Brilho quente atrás do miolo da esfera, como na referência.
     const b = fctx.createRadialGradient(L / 2, A * 0.5, 0, L / 2, A * 0.5, R * 1.15);
     if (claro) {
-      b.addColorStop(0, 'rgba(255,120,170,0.16)');
-      b.addColorStop(0.55, 'rgba(190,110,220,0.09)');
-      b.addColorStop(1, 'rgba(190,110,220,0)');
+      b.addColorStop(0, 'rgba(60,140,220,0.15)');
+      b.addColorStop(0.55, 'rgba(30,100,190,0.08)');
+      b.addColorStop(1, 'rgba(30,100,190,0)');
     } else {
-      b.addColorStop(0, 'rgba(255,70,130,0.17)');
-      b.addColorStop(0.55, 'rgba(200,40,110,0.07)');
-      b.addColorStop(1, 'rgba(120,20,80,0)');
+      b.addColorStop(0, 'rgba(92,189,255,0.17)');
+      b.addColorStop(0.55, 'rgba(46,134,214,0.08)');
+      b.addColorStop(1, 'rgba(10,45,90,0)');
     }
     fctx.fillStyle = b;
     fctx.fillRect(0, 0, L, A);
@@ -312,8 +315,8 @@ export function iniciarAbertura(canvas, modo) {
     // Brilho discreto acompanhando o cursor.
     if (pt.dentro && !recuado && !fraco) {
       const g = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, 150);
-      g.addColorStop(0, claro ? 'rgba(150,60,140,0.07)' : 'rgba(255,150,190,0.10)');
-      g.addColorStop(1, claro ? 'rgba(150,60,140,0)' : 'rgba(255,150,190,0)');
+      g.addColorStop(0, claro ? 'rgba(20,80,160,0.07)' : 'rgba(140,210,255,0.10)');
+      g.addColorStop(1, claro ? 'rgba(20,80,160,0)' : 'rgba(140,210,255,0)');
       ctx.fillStyle = g;
       ctx.fillRect(pt.x - 150, pt.y - 150, 300, 300);
     }

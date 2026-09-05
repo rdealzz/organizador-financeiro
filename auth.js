@@ -69,21 +69,52 @@ function montarSessao(r){
 function formEncode(obj){
   return Object.keys(obj).map(k => encodeURIComponent(k)+'='+encodeURIComponent(obj[k])).join('&');
 }
+/* Teto de tempo para QUALQUER chamada.
+
+   `fetch` não tem timeout próprio: numa rede que aceita a conexão e nunca
+   responde — metrô, portal cativo de hotel, 3G que caiu no meio do pedido —
+   a promessa fica pendurada para sempre. Sem este freio, medido aqui, o
+   botão de entrar girava 90 segundos sem erro nenhum e sem saída a não ser
+   recarregar a página; e pior, `enviando` na sincronização nunca voltava a
+   false, então TODA gravação seguinte era engolida e o app parecia lento e
+   sem salvar. Estourado o prazo, o erro vira 'sem_rede' e a pessoa lê a
+   mesma frase de sempre, com o botão liberado para tentar de novo.
+
+   20s é o padrão; quem sobe o estado inteiro pede mais, porque ali pode ir
+   meio megabyte por uma rede ruim. */
+const TEMPO_LIMITE = 20000;
+
 /* Base de toda chamada HTTP: erros de rede viram 'sem_rede', erros do
    servidor viram Error com .status e .codigo (o `error.message` que o
    Firebase devolve, tipo "EMAIL_EXISTS" ou "PERMISSION_DENIED"). */
 async function chamar(url, opcoes){
   const o = opcoes || {};
+  /* AbortController existe em tudo que roda este app, mas se um dia faltar o
+     app continua funcionando — só volta a não ter prazo, como antes. */
+  const freio = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const relogio = freio ? setTimeout(() => freio.abort(), o.limite || TEMPO_LIMITE) : null;
+  try{
+    return await pedir(url, o, freio);
+  }finally{
+    if(relogio) clearTimeout(relogio);
+  }
+}
+async function pedir(url, o, freio){
   let r;
   try{
     r = await fetch(url, {
       method: o.method || 'GET',
       headers: o.headers,
-      body: o.body !== undefined ? (o.form ? formEncode(o.body) : JSON.stringify(o.body)) : undefined
+      body: o.body !== undefined ? (o.form ? formEncode(o.body) : JSON.stringify(o.body)) : undefined,
+      signal: freio ? freio.signal : undefined
     });
   }catch(e){ throw erro('sem_rede'); }
 
-  const texto = await r.text();
+  /* Ler o corpo também pode ser abortado no meio: uma resposta que começa a
+     chegar e para na metade cai aqui, e não no catch acima. */
+  let texto;
+  try{ texto = await r.text(); }
+  catch(e){ throw erro('sem_rede'); }
   let corpo = null;
   try{ corpo = texto ? JSON.parse(texto) : null; }catch(e){ corpo = texto; }
   if(!r.ok){
@@ -311,7 +342,7 @@ async function enviarEstado(dados){
   const texto = JSON.stringify(dados);
   const tamanho = new Blob([texto]).size;
   if(tamanho > TETO_ESTADO) throw erro('estado_grande');
-  const r = await chamarFirestore(':commit', {method:'POST', body:{
+  const r = await chamarFirestore(':commit', {method:'POST', limite: 45000, body:{
     writes: [{
       update: {name: nomeDoDocumento(u.id), fields: {dados: {stringValue: texto}}},
       updateMask: {fieldPaths: ['dados']},

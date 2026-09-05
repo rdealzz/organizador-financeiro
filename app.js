@@ -680,7 +680,7 @@ function aplicarTema(){
   S.tema=temaAtual();
   const esc=(S.tema==='escuro');
   try{ localStorage.setItem(CHAVE_TEMA,S.tema); }catch(e){}
-  const cor=esc?'#0B0B0D':'#F7F5FA';
+  const cor=esc?'#000000':'#F4F8FD';
   document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute('content',cor));
   document.documentElement.setAttribute('data-tema',esc?'escuro':'claro');
   const rotulo=esc?'Mudar para o tema claro':'Mudar para o tema escuro';
@@ -2019,7 +2019,9 @@ function renderAgenda(){
    ========================================================================== */
 function confete(){
   if(RED) return;
-  const cores=['#34C759','#007AFF','#FF9500','#AF52DE','#FF2D55'];
+  /* Confete na família azul da marca, com o verde de "deu certo" e um
+     dourado de contraponto: em cinco cores frias o confete some no fundo. */
+  const cores=['#5CBDFF','#2E86D6','#9BE1FF','#34C759','#FFC65C'];
   const d=document.createElement('div'); d.className='confete';
   for(let i=0;i<46;i++){
     const p=document.createElement('i');

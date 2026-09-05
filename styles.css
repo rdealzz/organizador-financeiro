@@ -24,13 +24,13 @@
   --elastico:cubic-bezier(.34,1.56,.64,1);    /* passa do ponto e volta */
   --t-rapido:180ms; --t-medio:280ms; --t-lento:400ms;
 
-  /* ---- sombra: longa, difusa e levemente roxa ----
-     Sombra cinza sobre fundo quente suja a tela. Puxando a sombra para o roxo
+  /* ---- sombra: longa, difusa e levemente azul ----
+     Sombra cinza sobre fundo claro suja a tela. Puxando a sombra para o azul
      da marca e espalhando bastante, a profundidade aparece sem que se veja a
      sombra: o cartão parece flutuar, não parece ter uma mancha embaixo. */
-  --s1:0 1px 2px rgba(76,44,116,.05);
-  --s2:0 1px 2px rgba(76,44,116,.05), 0 10px 28px -12px rgba(104,60,160,.18);
-  --s3:0 24px 64px -22px rgba(104,60,160,.30), 0 3px 10px rgba(76,44,116,.07);
+  --s1:0 1px 2px rgba(10,42,82,.05);
+  --s2:0 1px 2px rgba(10,42,82,.05), 0 10px 28px -12px rgba(13,79,168,.16);
+  --s3:0 24px 64px -22px rgba(13,79,168,.26), 0 3px 10px rgba(10,42,82,.07);
   --sombra:var(--s2);
 
   /* ---- tipografia ---- */
@@ -39,27 +39,31 @@
   --peso-n:400; --peso-m:500; --peso-sm:600; --peso-b:700;
 
   /* ---- superfícies e texto ----
-     O fundo é um neutro QUENTE, com um fio de violeta: cinza puro ao lado de
-     branco puro deixa a tela com cara de papel de escritório. Aquecendo o
-     fundo, o branco dos cartões vira o ponto mais claro da tela e é ele que
-     recebe o olho — a hierarquia sai da luz, não de mais uma borda.
+     O modo claro é BRANCO com azul escuro. O fundo não é branco puro: é um
+     branco com um fio de azul, para que o branco puro dos cartões vire o
+     ponto mais claro da tela e seja ele a receber o olho — a hierarquia sai
+     da luz, não de mais uma borda.
 
-     O texto também não é preto: é o mesmo violeta bem escuro. Preto puro
+     O texto também não é preto: é um azul-marinho bem escuro. Preto puro
      sobre branco puro vibra e cansa em leitura longa, e uma tela de finanças
-     é leitura longa. Contraste do corpo: 15,8:1. */
-  --bg:#F7F5FA; --card:#FFFFFF; --card-2:#F4F1F8;
-  --sep:rgba(58,38,86,.10);
-  --txt:#171320; --txt-2:rgba(23,19,32,.62); --txt-3:rgba(23,19,32,.42);
-  --fill:rgba(58,38,86,.05); --fill-2:rgba(58,38,86,.09);
+     é leitura longa. Contraste do corpo: 16,1:1. */
+  --bg:#F4F8FD; --card:#FFFFFF; --card-2:#EAF1FA;
+  --sep:rgba(10,42,82,.12);
+  --txt:#0A1929; --txt-2:rgba(10,25,41,.64); --txt-3:rgba(10,25,41,.44);
+  --fill:rgba(10,42,82,.055); --fill-2:rgba(10,42,82,.10);
   --vidro:rgba(255,255,255,.72);        /* superfícies flutuantes translúcidas */
   --vidro-borda:rgba(255,255,255,.85);
 
   /* ---- cor com propósito: ação, sucesso, erro, alerta. Só isso ----
      Cada cor tem duas formas: a de preencher (fundo de botão, barra, valor
      grande) e a de escrever (texto pequeno, que precisa de mais contraste). */
-  --azul:#0B69EF;        /* ação: fundo de botão, com texto branco  4.9:1 */
-  --azul-txt:#0A57C6;    /* ação: como texto                        6.6:1 */
-  --azul-fraco:rgba(11,105,239,.10);
+  --azul:#0C4FA8;        /* ação: fundo de botão, com --sobre-azul  7.8:1 */
+  --azul-txt:#0A4491;    /* ação: como texto                        9.1:1 */
+  --azul-fraco:rgba(12,79,168,.10);
+  /* A cor do texto QUE VAI EM CIMA de --azul. No claro o azul é escuro e
+     pede branco; no escuro ele é claro e pede quase-preto. Sem esta variável
+     o botão do tema escuro ficaria branco sobre azul claro — 2:1, ilegível. */
+  --sobre-azul:#FFFFFF;
   --verde:#0F9D58;       /* valores e barras                        3.5:1 */
   --verde-txt:#06713E;   /* como texto                              6.1:1 */
   --verde-fraco:rgba(15,157,88,.10);
@@ -75,14 +79,19 @@
   --cdiv:#3F4550; --cout:#6B7280; --pai:var(--azul); --alerta:var(--vermelho);
 }
 [data-tema="escuro"]{
-  --bg:#0B0B0D; --card:#151518; --card-2:#1C1C21;
-  --sep:rgba(255,255,255,.09);
-  --txt:#F6F6F7; --txt-2:rgba(246,246,247,.64); --txt-3:rgba(246,246,247,.42);
-  --fill:rgba(255,255,255,.055); --fill-2:rgba(255,255,255,.105);
+  /* O escuro é PRETO com azul claro. O fundo é preto de verdade — em tela
+     OLED ele não acende pixel nenhum — e os cartões sobem dele com um fio de
+     azul, para não virarem cinza morto. */
+  --bg:#000000; --card:#0C1117; --card-2:#141C25;
+  --sep:rgba(140,190,240,.14);
+  --txt:#F2F7FC; --txt-2:rgba(242,247,252,.66); --txt-3:rgba(242,247,252,.44);
+  --fill:rgba(140,190,240,.07); --fill-2:rgba(140,190,240,.13);
 
-  /* No escuro o azul de preencher escurece para o texto branco se ler em cima
-     (4.6:1), e o de escrever clareia para se ler sobre o card (8.1:1). */
-  --azul:#2F7BF6; --azul-txt:#7BAEFF; --azul-fraco:rgba(74,144,255,.16);
+  /* Aqui o azul de preencher CLAREIA (é ele o azul claro da identidade) e
+     quem vai por cima é o quase-preto: 9,1:1. O azul de escrever clareia
+     junto e se lê sobre o card a 10,9:1. */
+  --azul:#5CBDFF; --azul-txt:#7FCBFF; --azul-fraco:rgba(92,189,255,.16);
+  --sobre-azul:#04121F;
   --verde:#3DD68C; --verde-txt:#3DD68C; --verde-fraco:rgba(61,214,140,.15);
   --vermelho:#FF6B5E; --vermelho-txt:#FF6B5E; --vermelho-fraco:rgba(255,107,94,.15);
   --laranja:#F0A140; --laranja-txt:#F0A140; --amarelo:#E3B341;
@@ -92,8 +101,8 @@
 
   /* no escuro a profundidade vem da borda, não da sombra */
   --s1:none;
-  --s2:0 1px 0 rgba(255,255,255,.04) inset, 0 2px 12px rgba(0,0,0,.4);
-  --s3:0 16px 50px -16px rgba(0,0,0,.7);
+  --s2:0 1px 0 rgba(140,190,240,.06) inset, 0 2px 12px rgba(0,0,0,.55);
+  --s3:0 16px 50px -16px rgba(0,0,0,.8);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
@@ -176,7 +185,7 @@ input[type=file]{background:transparent;padding-left:0}
 .g-obj{grid-template-columns:repeat(2,1fr);align-items:end}
 @media(min-width:760px){.g-obj{grid-template-columns:2fr 1fr 1fr 1fr auto}}
 @media(max-width:640px){.g2,.g3,.g-lanc{grid-template-columns:1fr 1fr}.full{grid-column:1/-1}}
-.btn{background:var(--azul);color:#fff;border:none;padding:12px 20px;font-weight:600;font-size:16px;
+.btn{background:var(--azul);color:var(--sobre-azul);border:none;padding:12px 20px;font-weight:600;font-size:16px;
   cursor:pointer;border-radius:var(--r-s);letter-spacing:-.01em;transition:opacity .15s}
 .btn:active{opacity:.7}
 .btn.sec{background:var(--fill);color:var(--azul)}
@@ -451,7 +460,7 @@ h1#tituloArea{font-size:clamp(26px,6vw,32px);margin:2px 0 0}
 .hero-v.peq{font-size:clamp(26px,7vw,34px);letter-spacing:-.028em;margin-bottom:6px}
 .passos{display:flex;flex-direction:column;gap:10px;max-width:340px;margin:0 auto;text-align:left}
 .passo{display:flex;align-items:center;gap:12px;background:var(--fill);border-radius:var(--r-s);padding:12px 14px}
-.passo b{flex:0 0 26px;height:26px;border-radius:var(--r-full);background:var(--azul);color:#fff;
+.passo b{flex:0 0 26px;height:26px;border-radius:var(--r-full);background:var(--azul);color:var(--sobre-azul);
   display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
 .passo span{flex:1;min-width:0;font-weight:600;font-size:15px}
 .passo .btn{min-height:44px;padding:var(--e2) var(--e4);font-size:var(--t-sm)}
@@ -500,7 +509,7 @@ h1#tituloArea{font-size:clamp(26px,6vw,32px);margin:2px 0 0}
 /* botão flutuante */
 .fab{position:fixed;right:16px;bottom:calc(var(--barra-h) - 22px);z-index:45;
   width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;
-  background:var(--azul);color:#fff;box-shadow:0 6px 20px rgba(0,122,255,.42);
+  background:var(--azul);color:var(--sobre-azul);box-shadow:0 6px 20px -4px rgba(12,79,168,.42);
   display:flex;align-items:center;justify-content:center;
   transition:transform .22s var(--mola),box-shadow .22s}
 .fab svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
@@ -680,7 +689,7 @@ button,.btn,select,input{font-size:16px}
 .auth-marca i:nth-child(1){height:34%}
 .auth-marca i:nth-child(2){height:52%}
 .auth-marca i:nth-child(3){height:70%}
-.auth-marca i:nth-child(4){height:100%;background:var(--verde)}
+.auth-marca i:nth-child(4){height:100%;background:var(--azul)}
 .auth-tit{font-size:29px;font-weight:700;letter-spacing:-.028em;text-align:center;margin:0 0 6px}
 .auth-sub{font-size:14.5px;color:var(--txt-2);text-align:center;margin:0 0 22px;
   max-width:32ch;margin-inline:auto;line-height:1.45}
@@ -745,7 +754,7 @@ button,.btn,select,input{font-size:16px}
 
 /* ---------- conta ---------- */
 .conta-topo{display:flex;align-items:center;gap:14px;margin-bottom:16px}
-.avatar{width:52px;height:52px;border-radius:50%;background:var(--azul);color:#fff;
+.avatar{width:52px;height:52px;border-radius:50%;background:var(--azul);color:var(--sobre-azul);
   display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:700;
   flex:0 0 52px;text-transform:uppercase}
 .conta-inf{min-width:0}
@@ -852,7 +861,7 @@ p.ajuda{color:var(--txt-2);font-size:var(--t-sm);line-height:1.55;
   border-radius:var(--r-sm); padding:var(--e3) var(--e5);
   font-size:var(--t-base); font-weight:var(--peso-sm); letter-spacing:-.008em;
   min-height:44px; border:1px solid transparent;
-  background:var(--azul); color:#fff;
+  background:var(--azul); color:var(--sobre-azul);
   transition:transform .12s var(--suave), filter .16s, background .16s, opacity .16s;
   position:relative; overflow:hidden;
 }
@@ -953,9 +962,9 @@ td{font-size:var(--t-sm);padding:var(--e3) var(--e2)}
   position:fixed; right:var(--e4); bottom:calc(var(--barra-h) + var(--e3)); z-index:45;
   width:auto; height:52px; padding:0 var(--e5) 0 var(--e4); border-radius:var(--r-full);
   border:none; cursor:pointer; font-family:inherit;
-  background:var(--azul); color:#fff;
+  background:var(--azul); color:var(--sobre-azul);
   display:inline-flex; align-items:center; gap:var(--e2);
-  box-shadow:0 6px 20px -6px rgba(11,105,239,.55), 0 2px 6px rgba(16,17,20,.12);
+  box-shadow:0 6px 20px -6px rgba(12,79,168,.50), 0 2px 6px rgba(16,17,20,.12);
   transition:transform .18s var(--mola), box-shadow .18s, filter .16s;
   overflow:hidden;
   animation:fabEntra .42s var(--mola) .25s backwards;
@@ -969,7 +978,7 @@ td{font-size:var(--t-sm);padding:var(--e3) var(--e2)}
   from{opacity:0;transform:translateY(16px) scale(.9)}
   to{opacity:1;transform:none}
 }
-[data-tema="escuro"] .fab{box-shadow:0 6px 22px -8px rgba(47,123,246,.7)}
+[data-tema="escuro"] .fab{box-shadow:0 6px 22px -8px rgba(92,189,255,.55)}
 /* a barra inferior não precisa mais abrir espaço para um botão redondo */
 @media(max-width:520px){.tabbar{padding-right:0}}
 @media(min-width:521px){.fab{right:var(--e6);bottom:calc(var(--barra-h) + var(--e4))}}
@@ -1220,7 +1229,7 @@ body.com-snack .fab{transform:translateY(calc(-1 * (var(--e9) + var(--e2))))}
 .perfil-btn[aria-expanded="true"]{background:var(--fill)}
 .avatar-p{
   width:28px;height:28px;flex:0 0 28px;border-radius:var(--r-full);
-  background:var(--azul); color:#fff; font-size:var(--t-sm); font-weight:var(--peso-sm);
+  background:var(--azul); color:var(--sobre-azul); font-size:var(--t-sm); font-weight:var(--peso-sm);
   display:flex;align-items:center;justify-content:center; text-transform:uppercase;
   letter-spacing:0;
 }
@@ -1327,7 +1336,7 @@ body.com-snack .fab{transform:translateY(calc(-1 * (var(--e9) + var(--e2))))}
 .perfil-btn .ico{width:21px;height:21px}
 .perfil-btn:hover{background:var(--fill);color:var(--txt);border-color:transparent}
 .perfil-btn:active{transform:scale(.94)}
-.perfil-btn[aria-expanded="true"]{background:var(--azul);border-color:transparent;color:#fff}
+.perfil-btn[aria-expanded="true"]{background:var(--azul);border-color:transparent;color:var(--sobre-azul)}
 .perfil-btn:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
 /* pontinho verde discreto quando há conta ativa */
 .perfil-btn::after{content:"";position:absolute;width:9px;height:9px;border-radius:var(--r-full);
@@ -1347,8 +1356,8 @@ body.com-snack .fab{transform:translateY(calc(-1 * (var(--e9) + var(--e2))))}
 .cena{
   position:fixed; inset:0; z-index:140; overflow:hidden;
   background:
-    radial-gradient(125% 95% at 50% 52%, #4a0830 0%, #2a0722 46%, #17040f 100%),
-    #17040f;
+    radial-gradient(125% 95% at 50% 52%, #072135 0%, #03121F 46%, #000000 100%),
+    #000000;
 }
 #capaCena{
   position:absolute; inset:0; width:100%; height:100%; display:block;
@@ -1398,15 +1407,15 @@ body.com-snack .fab{transform:translateY(calc(-1 * (var(--e9) + var(--e2))))}
 .capa-marca{
   width:60px;height:60px;border-radius:var(--r-lg);margin:0 auto var(--e5);
   display:flex;align-items:flex-end;justify-content:center;gap:5px;padding:14px 13px;
-  background:rgba(10,4,12,.62);
+  background:rgba(4,10,18,.62);
   border:1px solid rgba(255,255,255,.16);
-  box-shadow:0 10px 40px -10px rgba(255,45,107,.55);
+  box-shadow:0 10px 40px -10px rgba(92,189,255,.45);
 }
 .capa-marca i{display:block;width:6px;border-radius:2px;background:rgba(255,255,255,.5)}
 .capa-marca i:nth-child(1){height:34%}
 .capa-marca i:nth-child(2){height:52%}
 .capa-marca i:nth-child(3){height:70%}
-.capa-marca i:nth-child(4){height:100%;background:#ffd36b}
+.capa-marca i:nth-child(4){height:100%;background:#5CBDFF}
 .capa-tit{
   font-size:clamp(30px,8vw,42px); font-weight:var(--peso-b); letter-spacing:-.035em;
   margin:0 0 var(--e2); line-height:1.05;
@@ -1454,7 +1463,7 @@ body.tem-cena:not(.capa-aberta) .auth-caixa{animation:vidroEntra .5s var(--suave
 body.tem-cena .auth-caixa{
   padding:var(--e7) var(--e6) var(--e6);
   border-radius:22px;
-  background:rgba(28,10,26,.52);
+  background:rgba(6,16,28,.52);
   border:1px solid rgba(255,255,255,.14);
   backdrop-filter:blur(26px) saturate(1.5);
   -webkit-backdrop-filter:blur(26px) saturate(1.5);
@@ -1478,8 +1487,8 @@ body.tem-cena .auth input:hover{background:rgba(255,255,255,.11)}
 body.tem-cena .auth input:focus{
   outline:none;
   background:rgba(255,255,255,.13);
-  border-color:rgba(255,138,190,.75);
-  box-shadow:0 0 0 3px rgba(255,45,107,.20), 0 0 26px -6px rgba(255,45,107,.5);
+  border-color:rgba(127,203,255,.75);
+  box-shadow:0 0 0 3px rgba(92,189,255,.22), 0 0 26px -6px rgba(92,189,255,.5);
 }
 body.tem-cena .auth input[aria-invalid="true"]{
   outline:none;border-color:rgba(255,110,100,.85);
@@ -1492,19 +1501,19 @@ body.tem-cena .forca span{color:rgba(255,255,255,.72)}
 body.tem-cena .forca[data-n="0"] i,
 body.tem-cena .forca[data-n="1"] i{background:#ff6b60}
 body.tem-cena .forca[data-n="2"] i{background:#ffa640}
-body.tem-cena .forca[data-n="3"] i{background:#ffd36b}
+body.tem-cena .forca[data-n="3"] i{background:#ffc65c}
 body.tem-cena .forca[data-n="4"] i{background:#5bdd8b}
 body.tem-cena .campo-erro{color:#ffb4ae}
 body.tem-cena .auth .olho{color:rgba(255,255,255,.55)}
 body.tem-cena .auth .olho:hover{color:#fff}
 body.tem-cena .auth-btn{
-  background:linear-gradient(135deg,#ff2d6b,#ff5c98);
-  color:#fff;border:none;
-  box-shadow:0 14px 34px -12px rgba(255,45,107,.75);
+  background:linear-gradient(135deg,#5CBDFF,#2E86D6);
+  color:#04121F;border:none;
+  box-shadow:0 14px 34px -12px rgba(92,189,255,.55);
   transition:transform .25s var(--suave), box-shadow .25s ease, filter .25s ease;
 }
 body.tem-cena .auth-btn:hover{transform:translateY(-1px) scale(1.012);
-  box-shadow:0 18px 44px -12px rgba(255,45,107,.9)}
+  box-shadow:0 18px 44px -12px rgba(92,189,255,.75)}
 body.tem-cena .auth-btn:active{transform:scale(.985)}
 body.tem-cena .auth .link{color:rgba(255,255,255,.78)}
 body.tem-cena .auth .link:hover{color:#fff}
@@ -1527,7 +1536,7 @@ body.tem-cena .auth-ok{background:rgba(52,199,89,.20);color:#8ff0b0}
 .cena.fundo .cena-veu{opacity:.45}
 
 html:has(body.fundo-vivo){background:#0d0209}
-html[data-tema="claro"]:has(body.fundo-vivo){background:#f4eef8}
+html[data-tema="claro"]:has(body.fundo-vivo){background:#EFF6FE}
 body.fundo-vivo{background:transparent; --bg:transparent}
 
 /* A esfera TEM tema. Antes ela era escura por natureza e o app inteiro era
@@ -1535,11 +1544,12 @@ body.fundo-vivo{background:transparent; --bg:transparent}
    não mudava um pixel. Agora a esfera se repinta (paleta clara, degradê
    claro, no intro.js) e cada tema tem aqui as suas superfícies. */
 [data-tema="escuro"] body.fundo-vivo{
-  --card:rgba(24,8,22,.80); --card-2:rgba(34,14,32,.86);
-  --sep:rgba(255,255,255,.11);
+  --card:rgba(6,14,24,.82); --card-2:rgba(12,22,34,.88);
+  --sep:rgba(140,190,240,.14);
   --txt:#F6F6F7; --txt-2:rgba(246,246,247,.66); --txt-3:rgba(246,246,247,.46);
   --fill:rgba(255,255,255,.07); --fill-2:rgba(255,255,255,.12);
-  --azul:#2F7BF6; --azul-txt:#8FBBFF; --azul-fraco:rgba(74,144,255,.18);
+  --azul:#5CBDFF; --azul-txt:#9AD5FF; --azul-fraco:rgba(92,189,255,.18);
+  --sobre-azul:#04121F;
   --verde:#3DD68C; --verde-txt:#5BE3A0; --verde-fraco:rgba(61,214,140,.16);
   --vermelho:#FF6B5E; --vermelho-txt:#FF8C82; --vermelho-fraco:rgba(255,107,94,.16);
   --laranja:#F0A140; --laranja-txt:#F5B764; --amarelo:#E3B341;
@@ -1552,13 +1562,13 @@ body.fundo-vivo{background:transparent; --bg:transparent}
 /* O mesmo, do lado claro: superfícies brancas translúcidas sobre a esfera
    clara, e texto escuro. A esfera continua aparecendo entre os painéis. */
 [data-tema="claro"] body.fundo-vivo{
-  --card:rgba(255,255,255,.86); --card-2:rgba(246,241,250,.92);
-  --sep:rgba(58,38,86,.13);
-  --txt:#171320; --txt-2:rgba(23,19,32,.66); --txt-3:rgba(23,19,32,.46);
-  --fill:rgba(58,38,86,.06); --fill-2:rgba(58,38,86,.11);
+  --card:rgba(255,255,255,.86); --card-2:rgba(236,243,252,.92);
+  --sep:rgba(10,42,82,.13);
+  --txt:#0A1929; --txt-2:rgba(10,25,41,.66); --txt-3:rgba(10,25,41,.46);
+  --fill:rgba(10,42,82,.06); --fill-2:rgba(10,42,82,.11);
   --s1:none;
-  --s2:0 1px 0 rgba(255,255,255,.7) inset, 0 8px 26px rgba(76,44,116,.14);
-  --s3:0 18px 54px -18px rgba(76,44,116,.32);
+  --s2:0 1px 0 rgba(255,255,255,.7) inset, 0 8px 26px rgba(10,42,82,.14);
+  --s3:0 18px 54px -18px rgba(10,42,82,.32);
 }
 [data-tema="claro"] body.fundo-vivo .painel,
 [data-tema="claro"] body.fundo-vivo .painel-aba,
@@ -1566,21 +1576,21 @@ body.fundo-vivo{background:transparent; --bg:transparent}
 [data-tema="claro"] body.fundo-vivo .hero,
 [data-tema="claro"] body.fundo-vivo .re-card,
 [data-tema="claro"] body.fundo-vivo .insight,
-[data-tema="claro"] body.fundo-vivo #instalar{border:1px solid rgba(58,38,86,.10)}
+[data-tema="claro"] body.fundo-vivo #instalar{border:1px solid rgba(10,42,82,.10)}
 [data-tema="claro"] body.fundo-vivo .tabbar{
-  background:rgba(255,255,255,.92); border-top:1px solid rgba(58,38,86,.10);
+  background:rgba(255,255,255,.92); border-top:1px solid rgba(10,42,82,.10);
 }
 [data-tema="claro"] body.fundo-vivo .menu-perfil,
 [data-tema="claro"] body.fundo-vivo .sheet,
 [data-tema="claro"] body.fundo-vivo .snack,
 [data-tema="claro"] body.fundo-vivo .toast,
 [data-tema="claro"] body.fundo-vivo .atualiza{
-  background:#FFFFFF; border:1px solid rgba(58,38,86,.12);
+  background:#FFFFFF; border:1px solid rgba(10,42,82,.12);
 }
 /* O véu da cena escurece o fundo para o login se ler. No claro ele precisa
    CLAREAR, senão a tela de entrada fica cinza-suja. */
 [data-tema="claro"] .cena{
-  background:radial-gradient(125% 95% at 50% 52%, #fdf7fb 0%, #f4eef8 46%, #e9e2f2 100%), #f4eef8;
+  background:radial-gradient(125% 95% at 50% 52%, #FBFDFF 0%, #EFF6FE 46%, #DCE9F8 100%), #EFF6FE;
 }
 [data-tema="claro"] .cena-veu{
   background:
@@ -1588,7 +1598,7 @@ body.fundo-vivo{background:transparent; --bg:transparent}
     linear-gradient(180deg, rgba(255,255,255,.30) 0%, rgba(255,255,255,.05) 45%, rgba(255,255,255,.45) 100%);
 }
 [data-tema="claro"] .portal::before{
-  background:radial-gradient(120% 90% at 50% 40%, rgba(250,246,252,.72), rgba(244,238,248,.92));
+  background:radial-gradient(120% 90% at 50% 40%, rgba(248,252,255,.72), rgba(239,246,254,.92));
 }
 /* Painéis translúcidos, mas SEM backdrop-filter. Desfocar o que está atrás
    obriga o navegador a refazer o desfoque a cada quadro da esfera, para cada
@@ -1605,7 +1615,7 @@ body.fundo-vivo #instalar{
   border:1px solid rgba(255,255,255,.10);
 }
 body.fundo-vivo .tabbar{
-  background:rgba(18,5,16,.94);
+  background:rgba(4,12,22,.94);
   border-top:1px solid rgba(255,255,255,.10);
 }
 /* Superfícies FLUTUANTES são opacas, sempre.
@@ -1618,7 +1628,7 @@ body.fundo-vivo .sheet,
 body.fundo-vivo .snack,
 body.fundo-vivo .toast,
 body.fundo-vivo .atualiza{
-  background:#1B0819;
+  background:#08131F;
   border:1px solid rgba(255,255,255,.13);
 }
 body.fundo-vivo .menu-perfil{box-shadow:0 26px 70px -18px rgba(0,0,0,.9)}
@@ -1680,7 +1690,7 @@ body.fundo-vivo .card::after,
 body.fundo-vivo .hero::after,
 body.fundo-vivo .re-card::after{
   background:radial-gradient(240px circle at var(--mx,50%) var(--my,50%),
-             rgba(255,138,190,.14), transparent 62%);
+             rgba(127,203,255,.14), transparent 62%);
 }
 
 /* ---- Compressão no clique ----
@@ -1771,7 +1781,7 @@ body.com-portal .fab{opacity:0;pointer-events:none;transition:opacity var(--t-me
   position:relative; display:block; width:100%; overflow:hidden;
   aspect-ratio:16/10; min-height:150px;
   border:1px solid var(--sep); border-radius:var(--r-lg);
-  background:#170410; padding:0; cursor:pointer; font:inherit; color:#fff;
+  background:var(--carta-fundo); padding:0; cursor:pointer; font:inherit; color:var(--carta-tit);
   box-shadow:var(--s2);
   transform-style:preserve-3d;
   transition:transform var(--t-lento) var(--suave), box-shadow var(--t-medio) ease;
@@ -1811,7 +1821,7 @@ body.com-portal .fab{opacity:0;pointer-events:none;transition:opacity var(--t-me
   content:''; position:absolute; inset:0; pointer-events:none; opacity:0;
   transition:opacity var(--t-medio) ease;
   background:radial-gradient(320px circle at var(--mx,50%) var(--my,50%),
-             rgba(255,138,190,.20), transparent 60%);
+             rgba(127,203,255,.20), transparent 60%);
 }
 .carta.tilt-ativo::after{opacity:1}
 
@@ -1828,7 +1838,7 @@ body.com-portal .fab{opacity:0;pointer-events:none;transition:opacity var(--t-me
 }
 .carta-rot{
   font-size:var(--t-cap); font-weight:var(--peso-b); letter-spacing:.09em;
-  text-transform:uppercase; color:#ffd36b;
+  text-transform:uppercase; color:var(--carta-rot);
 }
 .carta-tit{font-size:var(--t-lg);font-weight:var(--peso-b);letter-spacing:-.022em;line-height:1.15}
 .carta-sub{font-size:var(--t-sm);color:rgba(255,255,255,.72);line-height:1.4;
@@ -1903,9 +1913,9 @@ body.com-portal .fab{opacity:0;pointer-events:none;transition:opacity var(--t-me
   /* Relevo dos botões: a altura da base e a cor de cada camada.
      Um só lugar decide o quanto tudo no app "levanta" da tela. */
   --b3d-curso:4px;                       /* altura da base, em repouso */
-  --b3d-base:rgba(24,10,44,.34);         /* a lateral, vista de cima */
+  --b3d-base:rgba(8,28,56,.34);         /* a lateral, vista de cima */
   --b3d-luz:rgba(255,255,255,.34);       /* o brilho especular no topo */
-  --b3d-halo:rgba(104,60,160,.28);       /* a sombra projetada no chão */
+  --b3d-halo:rgba(13,79,168,.30);       /* a sombra projetada no chão */
 }
 [data-tema="escuro"]{
   --b3d-base:rgba(0,0,0,.55); --b3d-luz:rgba(255,255,255,.16); --b3d-halo:rgba(0,0,0,.6);
@@ -1935,7 +1945,7 @@ body.com-portal .fab{opacity:0;pointer-events:none;transition:opacity var(--t-me
 .holo .h1{
   width:56vmax; height:56vmax; top:-20vmax; left:-16vmax;
   background:
-    radial-gradient(circle at 32% 30%, rgba(255,45,107,.55) 0%, rgba(255,45,107,0) 62%),
+    radial-gradient(circle at 32% 30%, rgba(92,189,255,.55) 0%, rgba(92,189,255,0) 62%),
     radial-gradient(circle at 68% 40%, rgba(255,211,107,.42) 0%, rgba(255,211,107,0) 58%),
     radial-gradient(circle at 50% 72%, rgba(106,92,255,.45) 0%, rgba(106,92,255,0) 64%);
 }
@@ -1943,7 +1953,7 @@ body.com-portal .fab{opacity:0;pointer-events:none;transition:opacity var(--t-me
   width:48vmax; height:48vmax; top:32%; right:-18vmax; left:auto;
   background:
     radial-gradient(circle at 40% 34%, rgba(106,92,255,.46) 0%, rgba(106,92,255,0) 62%),
-    radial-gradient(circle at 66% 62%, rgba(255,45,107,.40) 0%, rgba(255,45,107,0) 60%),
+    radial-gradient(circle at 66% 62%, rgba(92,189,255,.40) 0%, rgba(92,189,255,0) 60%),
     radial-gradient(circle at 30% 70%, rgba(87,227,212,.36) 0%, rgba(87,227,212,0) 62%);
   animation-duration:46s; animation-direction:reverse; opacity:.34;
 }
@@ -1951,7 +1961,7 @@ body.com-portal .fab{opacity:0;pointer-events:none;transition:opacity var(--t-me
   width:42vmax; height:42vmax; bottom:-16vmax; left:6%; top:auto;
   background:
     radial-gradient(circle at 38% 36%, rgba(87,227,212,.42) 0%, rgba(87,227,212,0) 60%),
-    radial-gradient(circle at 64% 58%, rgba(201,50,127,.42) 0%, rgba(201,50,127,0) 62%),
+    radial-gradient(circle at 64% 58%, rgba(46,134,214,.42) 0%, rgba(46,134,214,0) 62%),
     radial-gradient(circle at 46% 78%, rgba(255,211,107,.30) 0%, rgba(255,211,107,0) 60%);
   animation-duration:58s; opacity:.32;
 }
@@ -1959,7 +1969,7 @@ body.com-portal .fab{opacity:0;pointer-events:none;transition:opacity var(--t-me
   width:30vmax; height:30vmax; top:10%; left:36%;
   background:
     radial-gradient(circle at 42% 38%, rgba(255,211,107,.40) 0%, rgba(255,211,107,0) 60%),
-    radial-gradient(circle at 62% 64%, rgba(255,45,107,.34) 0%, rgba(255,45,107,0) 62%);
+    radial-gradient(circle at 62% 64%, rgba(92,189,255,.34) 0%, rgba(92,189,255,0) 62%);
   animation-duration:40s; animation-direction:reverse; opacity:.26;
 }
 /* Só rotação e deslocamento — nada de scale, que é o que forçava o repintar. */
@@ -1994,8 +2004,8 @@ body.com-portal .fab{opacity:0;pointer-events:none;transition:opacity var(--t-me
 /* No claro a grade branca some no branco: ali ela é escura. */
 :root:not([data-tema="escuro"]) .holo-piso::before{
   background-image:
-    repeating-linear-gradient(90deg, rgba(58,38,86,.55) 0 1px, transparent 1px 84px),
-    repeating-linear-gradient(0deg,  rgba(58,38,86,.55) 0 1px, transparent 1px 84px);
+    repeating-linear-gradient(90deg, rgba(10,42,82,.55) 0 1px, transparent 1px 84px),
+    repeating-linear-gradient(0deg,  rgba(10,42,82,.55) 0 1px, transparent 1px 84px);
 }
 :root:not([data-tema="escuro"]) .holo-piso{opacity:.10}
 :root:not([data-tema="escuro"]) .holo i{opacity:.30}
@@ -2162,7 +2172,7 @@ body.modo-foco .tabbar{
    polegar. Só existe quando a pessoa entrou por uma carta. */
 .voltar-foco{
   position:fixed; left:16px; bottom:calc(env(safe-area-inset-bottom) + 16px);
-  z-index:46; --b3d-cor:#2a1030; --b3d-txt:#fff;
+  z-index:46; --b3d-cor:#0B2E52; --b3d-txt:#fff;
   animation:focoEntra .32s var(--elastico) backwards;
 }
 .voltar-foco .b3d-face{
@@ -2330,7 +2340,7 @@ body.com-portal:not(.fundo-vivo) .holo i{opacity:.5}
 .tecla-chip[aria-pressed="true"] .tecla-face{
   transform:translateY(calc(var(--b3d-curso) - 1px));
   box-shadow:0 1px 0 var(--b3d-base), inset 0 2px 5px rgba(0,0,0,.16);
-  background:var(--azul); color:#fff;
+  background:var(--azul); color:var(--sobre-azul);
 }
 .tecla-chip[aria-pressed="true"].tilt-ativo .tecla-face{
   transform:translateY(calc(var(--b3d-curso) - 1px));
@@ -2404,7 +2414,7 @@ body.com-portal:not(.fundo-vivo) .holo i{opacity:.5}
 .etapa-n{
   flex:0 0 30px; width:30px; height:30px; border-radius:var(--r-full);
   display:grid; place-items:center; font-size:var(--t-sm); font-weight:var(--peso-b);
-  color:#fff; background:linear-gradient(180deg,#ff2d6b,#c9327f);
+  color:#04121F; background:linear-gradient(180deg,#7FCBFF,#2E86D6);
   box-shadow:0 3px 0 var(--b3d-base), inset 0 1px 0 rgba(255,255,255,.35);
 }
 .etapa h2{margin:0;font-size:var(--t-md);letter-spacing:-.02em}
@@ -2491,58 +2501,58 @@ body.sem-barra .tema-flutua{display:block}
 .tema-flutua{--b3d-cor:rgba(255,255,255,.12);--b3d-txt:#fff}
 .tema-flutua .tecla-face{border:1px solid rgba(255,255,255,.18)}
 [data-tema="claro"] .tema-flutua{--b3d-cor:#FFFFFF;--b3d-txt:var(--txt)}
-[data-tema="claro"] .tema-flutua .tecla-face{border-color:rgba(58,38,86,.14)}
+[data-tema="claro"] .tema-flutua .tecla-face{border-color:rgba(10,42,82,.14)}
 @media(min-width:900px){ .tema-flutua{top:20px;right:20px} }
 
 /* ---- a capa no tema claro ----
    Texto escuro, e não texto branco com sombra: sombra é remendo, contraste é
-   solução. Este par de cores dá 12:1 sobre o rosa-claro da esfera. */
-[data-tema="claro"] .capa{color:#1B0F1E}
-[data-tema="claro"] .capa-tit{color:#1B0F1E;text-shadow:0 1px 24px rgba(255,255,255,.85)}
-[data-tema="claro"] .capa-sub{color:rgba(27,15,30,.72);text-shadow:0 1px 18px rgba(255,255,255,.9)}
-[data-tema="claro"] .capa-dica span{color:rgba(27,15,30,.58)}
-[data-tema="claro"] .capa:hover .capa-dica span{color:#1B0F1E}
+   solução. Este par de cores dá 12:1 sobre o azul-claro da esfera. */
+[data-tema="claro"] .capa{color:#0A1929}
+[data-tema="claro"] .capa-tit{color:#0A1929;text-shadow:0 1px 24px rgba(255,255,255,.85)}
+[data-tema="claro"] .capa-sub{color:rgba(10,25,41,.72);text-shadow:0 1px 18px rgba(255,255,255,.9)}
+[data-tema="claro"] .capa-dica span{color:rgba(10,25,41,.58)}
+[data-tema="claro"] .capa:hover .capa-dica span{color:#0A1929}
 [data-tema="claro"] .capa-dica::before{
-  background:linear-gradient(90deg,transparent,rgba(27,15,30,.28),transparent);
+  background:linear-gradient(90deg,transparent,rgba(10,25,41,.28),transparent);
 }
 [data-tema="claro"] .capa-marca{
   background:rgba(255,255,255,.86);
-  border:1px solid rgba(58,38,86,.14);
-  box-shadow:0 10px 34px -12px rgba(201,50,127,.45);
+  border:1px solid rgba(10,42,82,.14);
+  box-shadow:0 10px 34px -12px rgba(13,79,168,.35);
 }
-[data-tema="claro"] .capa-marca i{background:rgba(27,15,30,.45)}
-[data-tema="claro"] .capa-marca i:nth-child(4){background:#c9327f}
-[data-tema="claro"] .capa:focus-visible{outline-color:rgba(27,15,30,.45)}
+[data-tema="claro"] .capa-marca i{background:rgba(10,25,41,.45)}
+[data-tema="claro"] .capa-marca i:nth-child(4){background:#0A4FA8}
+[data-tema="claro"] .capa:focus-visible{outline-color:rgba(10,25,41,.45)}
 
 /* ---- o painel de vidro do login no tema claro ----
    Mesmo componente, vidro claro: fundo branco translúcido, texto escuro e o
-   acento rosa da marca no foco. */
+   acento azul da marca no foco. */
 [data-tema="claro"] body.tem-cena .auth-caixa{
   background:rgba(255,255,255,.72);
-  border:1px solid rgba(58,38,86,.12);
-  box-shadow:0 30px 80px -30px rgba(76,44,116,.35), inset 0 1px 0 rgba(255,255,255,.9);
+  border:1px solid rgba(10,42,82,.12);
+  box-shadow:0 30px 80px -30px rgba(10,42,82,.35), inset 0 1px 0 rgba(255,255,255,.9);
 }
 [data-tema="claro"] body.tem-cena .auth-tit{color:var(--txt)}
 [data-tema="claro"] body.tem-cena .auth-sub,
 [data-tema="claro"] body.tem-cena .auth-nota{color:var(--txt-2)}
 [data-tema="claro"] body.tem-cena .auth .campo label{color:var(--txt-2)}
 [data-tema="claro"] body.tem-cena .auth-marca{
-  background:rgba(255,255,255,.9);border:1px solid rgba(58,38,86,.14);
+  background:rgba(255,255,255,.9);border:1px solid rgba(10,42,82,.14);
 }
-[data-tema="claro"] body.tem-cena .auth-marca i{background:rgba(27,15,30,.42)}
-[data-tema="claro"] body.tem-cena .auth-marca i:nth-child(4){background:#c9327f}
+[data-tema="claro"] body.tem-cena .auth-marca i{background:rgba(10,25,41,.42)}
+[data-tema="claro"] body.tem-cena .auth-marca i:nth-child(4){background:#0A4FA8}
 [data-tema="claro"] body.tem-cena .auth input{
   background:rgba(255,255,255,.86);
-  border:1px solid rgba(58,38,86,.16);
+  border:1px solid rgba(10,42,82,.16);
   color:var(--txt);
 }
 [data-tema="claro"] body.tem-cena .auth input::placeholder{color:var(--txt-3)}
 [data-tema="claro"] body.tem-cena .auth input:hover{background:#fff}
 [data-tema="claro"] body.tem-cena .auth input:focus{
-  background:#fff; border-color:rgba(201,50,127,.75);
-  box-shadow:0 0 0 3px rgba(201,50,127,.18);
+  background:#fff; border-color:rgba(12,79,168,.70);
+  box-shadow:0 0 0 3px rgba(12,79,168,.18);
 }
-[data-tema="claro"] body.tem-cena .forca-trilho{background:rgba(58,38,86,.14)}
+[data-tema="claro"] body.tem-cena .forca-trilho{background:rgba(10,42,82,.14)}
 [data-tema="claro"] body.tem-cena .forca span{color:var(--txt-2)}
 [data-tema="claro"] body.tem-cena .campo-erro{color:var(--vermelho-txt)}
 [data-tema="claro"] body.tem-cena .auth .olho{color:var(--txt-3)}
@@ -2553,7 +2563,7 @@ body.sem-barra .tema-flutua{display:block}
 [data-tema="claro"] body.tem-cena .auth .link{color:var(--azul-txt)}
 [data-tema="claro"] body.tem-cena .auth .link:hover{color:var(--txt)}
 [data-tema="claro"] body.tem-cena .auth-troca{
-  border-top-color:rgba(58,38,86,.14); color:var(--txt-2);
+  border-top-color:rgba(10,42,82,.14); color:var(--txt-2);
 }
 [data-tema="claro"] body.tem-cena .auth-erro{background:rgba(213,53,43,.12);color:var(--vermelho-txt)}
 [data-tema="claro"] body.tem-cena .auth-ok{background:rgba(15,157,88,.14);color:var(--verde-txt)}
@@ -2593,37 +2603,37 @@ h1, .capa-tit, .portal-tit, .carta-tit, .auth-tit, .etapa h2{
    redesenhado na troca de tema: é o navegador recalculando as variáveis.
    ========================================================================== */
 :root{
-  /* escuro é o padrão da carta, como sempre foi */
-  --arte-1:#ff2d6b; --arte-2:#c9327f; --arte-3:#ffd36b;
-  --arte-fundo-1:#5a1040; --arte-fundo-2:#170410;
+  /* escuro é o padrão da carta: fundo quase preto, traços em azul claro */
+  --arte-1:#5CBDFF; --arte-2:#2E86D6; --arte-3:#9BE1FF;
+  --arte-fundo-1:#0B2E52; --arte-fundo-2:#04101C;
   --arte-fio:rgba(255,255,255,.10);
   --arte-fio-forte:rgba(255,255,255,.07);
   --arte-fio-fraco:rgba(255,255,255,.05);
-  --carta-fundo:#170410;
-  --carta-veu:linear-gradient(180deg, rgba(10,2,8,.15) 0%, rgba(10,2,8,.62) 58%, rgba(10,2,8,.90) 100%);
+  --carta-fundo:#04101C;
+  --carta-veu:linear-gradient(180deg, rgba(2,8,16,.15) 0%, rgba(2,8,16,.62) 58%, rgba(2,8,16,.90) 100%);
   --carta-tit:#fff;
-  --carta-rot:#ffd36b;
+  --carta-rot:#9BE1FF;
   --carta-sub:rgba(255,255,255,.72);
-  --carta-brilho:rgba(255,138,190,.20);
+  --carta-brilho:rgba(120,200,255,.20);
 }
 :root[data-tema="claro"]{
-  /* Claro não é o escuro clareado: o fundo vira leitoso, os traços escurecem
-     para continuar existindo sobre ele, e o dourado cede lugar ao vinho —
-     ouro sobre branco é o par que menos se lê da paleta. */
-  --arte-1:#c8004d; --arte-2:#7d1a6b; --arte-3:#a06510;
-  --arte-fundo-1:#ffe0ee; --arte-fundo-2:#ecdcee;
-  --arte-fio:rgba(58,38,86,.22);
-  --arte-fio-forte:rgba(58,38,86,.14);
-  --arte-fio-fraco:rgba(58,38,86,.10);
-  --carta-fundo:#f6ecf4;
+  /* Claro não é o escuro clareado: o fundo vira leitoso, e os traços
+     escurecem para continuar existindo sobre ele — o azul claro do tema
+     escuro, posto sobre branco, simplesmente não se lê. */
+  --arte-1:#0A4FA8; --arte-2:#1268B5; --arte-3:#0B6E8C;
+  --arte-fundo-1:#D8E9FB; --arte-fundo-2:#E6EFFA;
+  --arte-fio:rgba(10,42,82,.22);
+  --arte-fio-forte:rgba(10,42,82,.14);
+  --arte-fio-fraco:rgba(10,42,82,.10);
+  --carta-fundo:#EEF4FD;
   /* O véu existe para o texto se ler sobre o desenho, e só. No escuro ele
      precisa ser pesado (texto branco sobre arte clara); no claro, leve — se
      copiar a força do escuro, apaga a arte inteira e sobra um cartão branco. */
-  --carta-veu:linear-gradient(180deg, rgba(255,255,255,0) 34%, rgba(255,250,253,.52) 72%, rgba(255,252,254,.86) 100%);
-  --carta-tit:#1B0F1E;
-  --carta-rot:#a3175e;
-  --carta-sub:rgba(27,15,30,.70);
-  --carta-brilho:rgba(201,50,127,.16);
+  --carta-veu:linear-gradient(180deg, rgba(255,255,255,0) 34%, rgba(250,252,255,.52) 72%, rgba(252,253,255,.86) 100%);
+  --carta-tit:#0A1929;
+  --carta-rot:#0A4491;
+  --carta-sub:rgba(10,25,41,.70);
+  --carta-brilho:rgba(20,90,180,.16);
 }
 .carta{background:var(--carta-fundo); color:var(--carta-tit)}
 .carta-veu{background:var(--carta-veu)}
@@ -2636,7 +2646,7 @@ h1, .capa-tit, .portal-tit, .carta-tit, .auth-tit, .etapa h2{
 }
 /* No claro a moldura da carta precisa existir: sem ela, carta clara sobre
    fundo claro vira um borrão sem começo nem fim. */
-:root[data-tema="claro"] .carta{border-color:rgba(58,38,86,.14)}
+:root[data-tema="claro"] .carta{border-color:rgba(10,42,82,.14)}
 
 /* O texto da carta saía pela borda de baixo quando a carta se aproximava:
    translateZ aumenta o tamanho aparente, e o que cresce dentro de uma caixa

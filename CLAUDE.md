@@ -49,6 +49,55 @@ Projeto Firebase: **`organizador-financeiro-98e15`**.
    legível pela API — o `sendOobCode` responde 200 de qualquer jeito.
 2. **Contas antigas do Supabase não migram** — é uma base de usuários nova.
 
+## A identidade é azul (v9)
+
+A marca era roxo/magenta com ouro. Agora é azul, em dois lados:
+
+- **Escuro: preto e azul claro.** `--bg` é `#000000` de verdade (em OLED não
+  acende pixel), os cartões sobem dele com um fio de azul, e o acento é
+  `--azul:#5CBDFF`.
+- **Claro: branco e azul escuro.** Fundo branco com um fio de azul, cartões
+  brancos puros, acento `--azul:#0C4FA8`.
+
+O que isso exigiu de estrutura: no escuro o azul de preencher ficou CLARO, e
+texto branco em cima dele dá 2:1 — ilegível. Por isso existe **`--sobre-azul`**,
+a cor que vai em cima de `--azul`: branco no claro, quase-preto (`#04121F`) no
+escuro. Todo `background:var(--azul)` usa ela, nunca `#fff` fixo. Se aparecer
+um botão azul novo, é essa a regra.
+
+A paleta atravessa quatro lugares — não adianta mexer só num:
+`styles.css` (variáveis, cena, cartas), `intro.js` (a esfera de partículas tem
+paleta própria por tema, mais o degradê de fundo), `index.html` (splash e
+`theme-color`) e `manifest.webmanifest`.
+
+**Exceção consciente:** as cores de DADO (`--roxo`, `--rosa`, `--s5`, `--s7`…)
+continuam multicoloridas. Elas separam categoria em gráfico; se virarem todas
+azuis, o gráfico deixa de ser legível. Só o cromo do app é azul.
+
+Contrastes conferidos: nada abaixo de 4,5:1, e o corpo passa de 16:1 nos dois
+temas.
+
+## Chamada de rede sem prazo — a "lentidão" (corrigido na v9)
+
+`fetch` não tem timeout. A `chamar()` do `auth.js` não punha nenhum, e numa
+rede que aceita a conexão e nunca responde (metrô, portal de hotel, 3G que
+caiu no meio) o resultado medido aqui foi:
+
+- o botão de entrar girava **90 s sem erro nenhum**, sem saída a não ser
+  recarregar a página;
+- pior, o `enviando` de `enviarParaNuvem()` nunca voltava a `false`, e daí em
+  diante **toda gravação era engolida** por `if(enviando){pendente=true;return;}`
+  — o app parecia lento e parecia não salvar.
+
+Agora `chamar()` tem `AbortController` com 20 s (45 s no `:commit`, que sobe o
+estado inteiro). Estourado o prazo o erro vira `sem_rede`, que já tem frase
+pronta. Verificado: com a rede muda o botão volta em 20 s; no caminho normal o
+login fecha em ~120 ms.
+
+Se for medir de novo: a renderização **não** é o gargalo. Medido com Playwright,
+o app fica em 55–60 fps na capa, na esfera de fundo, na rolagem e na troca de
+tema, sem tarefa longa relevante.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem
