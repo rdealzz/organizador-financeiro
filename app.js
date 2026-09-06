@@ -792,6 +792,20 @@ const REGRAS=[
   [/faculdade|mensalidade|escola|colegio|curso|udemy|alura|coursera|ieduc|apostila|livro|material escolar|impress|xerox|papelaria|certifica/,'estudo',2],
   [/fatura|cartao|emprestimo|financiamento|consorcio|parcela|juros|rotativo|nubank|inter\b|itau|bradesco|santander|caixa\b/,'divida',1]
 ];
+/* O que se repete IGUAL todo mês.
+
+   A categoria sozinha não dá conta disso. Dentro de "estudo" cabem tanto a
+   mensalidade da faculdade, que é fixa, quanto uma apostila ou uma xerox, que
+   não são — marcar a categoria inteira como fixa erraria metade dos casos.
+   Por isso a recorrência é lida do NOME do gasto, e vale por cima da regra de
+   categoria: casa e assinatura continuam fixas como sempre foram.
+
+   Importa acertar: um gasto "variável" tem o valor zerado a cada fatura para a
+   pessoa preencher o do mês. Uma mensalidade marcada como variável sumiria do
+   mês seguinte e o app calcularia uma sobra maior do que a real. */
+/* Os \b não são enfeite: sem eles "material escolar" casava com `escola` e
+   virava gasto fixo, e "concurso" casaria com `curso`. */
+const RECORRENTE=/mensalidade|semestralidade|anuidade|matricula|faculdade|universidade|colegio|\bescola\b|creche|\bcurso\b|academia|smartfit|bluefit|gympass|plano de saude|unimed|amil|hapvida|\bseguro\b|previdencia|financiamento|consorcio|emprestimo|aluguel|condominio/;
 function classificar(txt){
   const t=semAcento(txt);
   for(const [re,cat,tier] of REGRAS) if(re.test(t)) return [cat,tier];
@@ -1810,7 +1824,8 @@ function lerRapido(txt){
     valor,
     cat: igual?igual.cat:cat,
     tier: igual?igual.tier:tier,
-    tipo: igual?igual.tipo:(cat==='casa'||cat==='assinatura'?'fixo':'var'),
+    tipo: igual?igual.tipo
+         :((cat==='casa'||cat==='assinatura'||RECORRENTE.test(semAcento(nome)))?'fixo':'var'),
     fonte: igual?(igual.fonte||'Conta'):'Conta',
     herdado: !!igual
   };
