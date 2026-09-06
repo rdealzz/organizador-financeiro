@@ -1838,6 +1838,28 @@ function salvarRapido(){
   $('#rapido').focus();
 }
 
+/* Um atalho por CATEGORIA, não uma lista fixa de nomes.
+
+   O defeito: existem dez categorias em CATS, e os padrões daqui cobriam
+   quatro (mercado, transporte, comida, saúde). Estudo, Casa, Assinaturas,
+   Lazer e Dívidas não tinham como ser alcançadas pela folha de gasto rápido
+   — quem quisesse lançar uma mensalidade de faculdade só chegava lá abrindo
+   "Mais opções". Pior: os padrões só apareciam com menos de três lançamentos
+   no histórico, então esse caminho sumia justamente para quem já usa o app.
+
+   Cada nome abaixo foi conferido contra classificar(): digitado no campo, cai
+   na categoria que promete. Se mexer nesta lista, confira de novo — um chip
+   que cai na categoria errada é pior do que não existir.
+
+   "Outros" fica de fora de propósito: é o destino de quem não se encaixa, não
+   um atalho que alguém queira tomar. */
+const CHIP_PADRAO=[
+  ['Mercado','mercado'], ['Combustível','transporte'], ['iFood','comida'],
+  ['Aluguel','casa'],    ['Farmácia','saude'],         ['Faculdade','estudo'],
+  ['Netflix','assinatura'], ['Roupa','lazer'],         ['Fatura do cartão','divida']
+];
+const CHIPS_MAX=10;
+
 /* ---------- chips: o que você mais lança ---------- */
 function renderChips(){
   const el=$('#chips'); if(!el) return;
@@ -1848,13 +1870,17 @@ function renderChips(){
     conta[k].n+=peso; };
   S.lanc.forEach(l=>registra(l.nome,l.cat,3));
   S.hist.slice(0,4).forEach(h=>(h.itens||[]).forEach(l=>registra(l.nome,l.cat,1)));
+  // Primeiro o que a pessoa mais lança — esses são os atalhos que valem.
   let its=Object.values(conta).sort((a,b)=>b.n-a.n).slice(0,6);
-  if(its.length<3){
-    const base=[['Mercado','mercado'],['Combustível','transporte'],['iFood','comida'],
-                ['Farmácia','saude'],['Uber','transporte'],['Padaria','comida']];
-    base.forEach(([nome,cat])=>{ if(its.length<6&&!its.some(x=>x.nome.toLowerCase()===nome.toLowerCase()))
-      its.push({nome,cat,n:0}); });
-  }
+  /* Depois completa com as categorias que ainda NÃO apareceram, para que toda
+     categoria continue a um toque de distância mesmo com o histórico cheio. */
+  const temCat=new Set(its.map(x=>x.cat));
+  const temNome=new Set(its.map(x=>x.nome.toLowerCase()));
+  CHIP_PADRAO.forEach(([nome,cat])=>{
+    if(its.length>=CHIPS_MAX) return;
+    if(temCat.has(cat)||temNome.has(nome.toLowerCase())) return;
+    its.push({nome,cat,n:0}); temCat.add(cat);
+  });
   el.innerHTML=its.map(x=>`<button type="button" class="chip-s" data-chip="${esc(x.nome)}">
     <i style="background:${CATS[x.cat]?CATS[x.cat].c:'var(--cout)'}"></i>${esc(x.nome)}</button>`).join('');
   el.querySelectorAll('[data-chip]').forEach(b=>b.onclick=()=>{
