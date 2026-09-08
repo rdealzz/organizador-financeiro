@@ -91,15 +91,6 @@ let retroPendente=null;
 /* Promessa que só resolve quando a capa sai. Quem revela o app espera por ela,
    senão o app aparece POR TRÁS da capa — era o segundo sintoma do mesmo bug. */
 let capaPronta=Promise.resolve();
-/* O app ABRE CLARO. O tema do sistema não decide por ninguém: quem prefere o
-   escuro toca no botão uma vez e a escolha fica guardada no aparelho
-   (`sobra:tema`) e na conta. O mesmo raciocínio está no tema.js, que aplica
-   isto antes da splash aparecer — os dois precisam concordar.
-
-   Declarado AQUI, no topo, porque o `let S = {...}` logo abaixo usa este valor:
-   um `const` junto do resto do código de tema estaria na zona morta temporal
-   nesse momento, e o erro derrubaria a partida do app inteiro. */
-const TEMA_PADRAO='claro';
 // nome, cat, peso, valor, cartão, parcelas restantes, tipo, quanto o pai cobre
 const SEED=[];
 /* Ajustes → Alertas. O `icone` aqui é um traço do conjunto do app; o emoji
@@ -114,7 +105,14 @@ const ALERTAS_PADRAO={
   variavel:  {on:true,  icone:'lapis',      nome:'Lançamento variável zerado',   desc:'Depois da virada do ciclo, lembra de preencher mercado, gasolina e afins.'},
   parcela:   {on:false, icone:'festa',      nome:'Última parcela',               desc:'Quando um parcelado chega na última — dinheiro que volta pro seu bolso.'}
 };
-let S={versao:2,tema:TEMA_PADRAO,avatar:'',salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:12,ultimoFech:null,hist:[],
+/* `tema:'auto'` quer dizer "esta conta não escolheu tema", e é o que faz
+   temaAtual() ir olhar a escolha guardada NO APARELHO. Pôr 'claro' aqui parece
+   inofensivo e não é: temaAtual() devolveria 'claro' de cara, sem nunca
+   consultar `sobra:tema`, e aplicarTema() ainda gravaria 'claro' por cima da
+   escolha da pessoa — quem tivesse escolhido escuro veria o app voltar pro
+   claro a cada recarga. O padrão claro mora em TEMA_PADRAO, lá embaixo, como
+   ÚLTIMO recurso: só vale quando não há escolha nenhuma. */
+let S={versao:2,tema:'auto',avatar:'',salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:12,ultimoFech:null,hist:[],
        tetos:{},lanc:SEED,div:[],obj:[],pessoas:[],meses:6,jaTem:0,
        alertas:{teto:true,gasto:true,meta:true,fechamento:true,vencimento:true,contas:true,variavel:true,parcela:false},
        aTetoPct:85,aDiasFech:3,aDiasVenc:2,notifLog:{},_ultimoSalvo:0};
@@ -1024,9 +1022,12 @@ function temaGuardado(){
   try{ const t=localStorage.getItem(CHAVE_TEMA); return (t==='claro'||t==='escuro')?t:null; }
   catch(e){ return null; }
 }
-/* TEMA_PADRAO está declarado lá no topo do arquivo, junto de `cena`: o objeto
-   `S` o usa como valor inicial, e um `const` aqui embaixo estaria na zona morta
-   temporal nesse instante. */
+/* O app ABRE CLARO — mas isto é o ÚLTIMO recurso, não o primeiro. A ordem em
+   temaAtual() é: o que a conta escolheu, depois o que o aparelho guardou
+   (`sobra:tema`), e só então este padrão. O tema do sistema não decide por
+   ninguém. O tema.js repete a mesma regra no <head>, antes da splash: os dois
+   precisam concordar, então mexer aqui é mexer lá também. */
+const TEMA_PADRAO='claro';
 function alternarTema(){
   S.tema=(temaAtual()==='escuro')?'claro':'escuro';
   aplicarTema();

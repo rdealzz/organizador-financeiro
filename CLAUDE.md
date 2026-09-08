@@ -251,10 +251,15 @@ aparelho** (`localStorage['sobra:tema']`); quem nunca escolheu vê o tema claro.
 
 Duas armadilhas moram aqui:
 
-1. **`TEMA_PADRAO` está declarado no TOPO do arquivo**, junto de `cena` e
-   `retroPendente`, porque o `let S = {…}` logo abaixo o usa como valor inicial.
-   Um `const` junto do resto do código de tema estaria na zona morta temporal
-   nesse instante — o mesmo erro que já derrubou a partida do app uma vez.
+1. **`S.tema` continua nascendo `'auto'`, e não `'claro'`.** Parece a mudança
+   óbvia e é justamente a errada: `temaAtual()` devolve `S.tema` na hora quando
+   ele já vale `'claro'` ou `'escuro'`, então nunca chegaria a consultar
+   `sobra:tema` — e `aplicarTema()` ainda gravaria `'claro'` POR CIMA da escolha
+   guardada. Quem tivesse escolhido escuro veria o app voltar ao claro a cada
+   recarga, e a escolha sumia do aparelho. `'auto'` é o valor que significa
+   "ainda não escolheram"; o padrão claro é o **último** degrau de
+   `temaGuardado() || TEMA_PADRAO`, nunca o primeiro. Este defeito foi
+   introduzido e pego na verificação — se voltar, é aqui.
 2. **`tema.js` existe por causa do CSP.** O tema precisa ser aplicado antes da
    splash aparecer, e o `app.js` só carrega no fim do `<body>` — decidir lá
    fazia a abertura piscar. A solução natural seria um `<script>` inline no
