@@ -105,10 +105,23 @@ tabela e no cartão *Guardado pra próxima*, e entra sozinho quando a fatura vir
 ## Contas a vencer com "Paguei"
 
 Lançamentos com dia de vencimento marcado viram uma lista com a data ao lado.
-Quitou? **Paguei** risca o valor, tira a conta da contagem e cala o alerta —
-até o vencimento do mês que vem, quando ela volta sozinha. A marca é por
-ocorrência (`l.pagoAte` guarda a data quitada), então não existe interruptor
-esquecido ligado.
+Quitou? **Paguei** pergunta como — *no cartão* ou *do bolso* — risca o valor,
+tira a conta da contagem e cala o alerta até o vencimento do mês que vem, quando
+ela volta sozinha. A marca é por ocorrência (`l.pagoAte` guarda a data quitada),
+então não existe interruptor esquecido ligado.
+
+A diferença entre as duas formas é o dia em que o dinheiro sai. *Do bolso* saiu
+agora. *No cartão* a conta está paga, mas o valor entra na fatura: a linha passa
+a mostrar **no cartão · sai 12/10** — o vencimento da fatura em que ela caiu,
+congelado ali. E o valor não é somado de novo: o lançamento já estava dentro
+da fatura.
+
+## Tema claro por padrão
+
+O app abre claro. Quem prefere escuro toca no botão uma vez e a escolha fica
+guardada no aparelho e na conta — o tema do sistema não decide por ninguém.
+Um `tema.js` de dez linhas aplica isso no `<head>`, antes da splash aparecer,
+para a abertura não piscar num tema e o app abrir no outro.
 
 ## Gasto dividido tem nome
 

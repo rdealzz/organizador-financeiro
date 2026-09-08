@@ -416,7 +416,7 @@ td input,td select{padding:7px 9px;font-size:14px;border-radius:var(--r-xs)}
 .salvo i{width:8px;height:8px;border-radius:var(--r-full);background:var(--verde);display:inline-block}
 .salvo.ruim i{background:var(--vermelho)}
 /* contas a vencer */
-.venc{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--sep)}
+.venc{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--sep);flex-wrap:wrap}
 .venc:last-child{border-bottom:none}
 .venc .dia{flex:0 0 46px;text-align:center;background:var(--fill);border-radius:var(--r-xs);padding:5px 0}
 .venc .dia b{display:block;font-size:18px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
@@ -439,6 +439,17 @@ td input,td select{padding:7px 9px;font-size:14px;border-radius:var(--r-xs)}
 /* Marcada, a cor vem da BORDA e do texto verde de texto (--verde-txt, 6:1).
    Verde de preenchimento com texto em cima dá 3,5:1 — não passa em 12px. */
 .btn-pago.on{background:var(--verde-fraco);border-color:var(--verde);color:var(--verde-txt)}
+/* As duas formas de pagar, lado a lado, no lugar do próprio botão. Pagar no
+   cartão não é a mesma coisa que pagar do bolso: a conta fica quitada dos dois
+   jeitos, mas no cartão o dinheiro só sai quando a fatura vencer. */
+/* Ocupa a linha inteira: "no cartão" e "do bolso" ao lado do valor não cabem
+   numa tela de 430 px — a descrição da conta era espremida até sumir. */
+.pago-escolha{flex:1 0 100%;display:flex;gap:6px;justify-content:flex-end;margin-top:2px}
+.pago-escolha button{border:1px solid var(--azul);background:var(--azul-fraco);color:var(--azul-txt);
+  font-family:inherit;font-size:11.5px;font-weight:600;line-height:1;padding:9px 10px;
+  border-radius:var(--r-full);cursor:pointer;white-space:nowrap}
+.pago-escolha button:active{opacity:.7}
+.pago-escolha button:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
 .venc.pago{opacity:.55}
 .venc.pago .vv{text-decoration:line-through}
 .venc.pago .dia{background:color-mix(in srgb,var(--verde) 16%,transparent)}

@@ -91,6 +91,15 @@ let retroPendente=null;
 /* Promessa que só resolve quando a capa sai. Quem revela o app espera por ela,
    senão o app aparece POR TRÁS da capa — era o segundo sintoma do mesmo bug. */
 let capaPronta=Promise.resolve();
+/* O app ABRE CLARO. O tema do sistema não decide por ninguém: quem prefere o
+   escuro toca no botão uma vez e a escolha fica guardada no aparelho
+   (`sobra:tema`) e na conta. O mesmo raciocínio está no tema.js, que aplica
+   isto antes da splash aparecer — os dois precisam concordar.
+
+   Declarado AQUI, no topo, porque o `let S = {...}` logo abaixo usa este valor:
+   um `const` junto do resto do código de tema estaria na zona morta temporal
+   nesse momento, e o erro derrubaria a partida do app inteiro. */
+const TEMA_PADRAO='claro';
 // nome, cat, peso, valor, cartão, parcelas restantes, tipo, quanto o pai cobre
 const SEED=[];
 /* Ajustes → Alertas. O `icone` aqui é um traço do conjunto do app; o emoji
@@ -105,7 +114,7 @@ const ALERTAS_PADRAO={
   variavel:  {on:true,  icone:'lapis',      nome:'Lançamento variável zerado',   desc:'Depois da virada do ciclo, lembra de preencher mercado, gasolina e afins.'},
   parcela:   {on:false, icone:'festa',      nome:'Última parcela',               desc:'Quando um parcelado chega na última — dinheiro que volta pro seu bolso.'}
 };
-let S={versao:2,tema:'auto',avatar:'',salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:5,ultimoFech:null,hist:[],
+let S={versao:2,tema:TEMA_PADRAO,avatar:'',salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:12,ultimoFech:null,hist:[],
        tetos:{},lanc:SEED,div:[],obj:[],pessoas:[],meses:6,jaTem:0,
        alertas:{teto:true,gasto:true,meta:true,fechamento:true,vencimento:true,contas:true,variavel:true,parcela:false},
        aTetoPct:85,aDiasFech:3,aDiasVenc:2,notifLog:{},_ultimoSalvo:0};
@@ -359,7 +368,7 @@ async function carregar(){
   $('#salario').value=S.salario||''; $('#extra').value=S.extra||'';
   $('#metaPct').value=S.metaPct||''; $('#metaVal').value=S.metaVal||'';
   $('#meses').value=S.meses||6; $('#jaTem').value=S.jaTem||'';
-  $('#diaFech').value=S.diaFech||5; $('#diaVenc').value=S.diaVenc||S.diaFech||5;
+  $('#diaFech').value=S.diaFech||5; $('#diaVenc').value=S.diaVenc||S.diaFech||12;
   // O rosto escolhido vem no estado da conta: pinta assim que ele chega.
   pintarAvatares();
   render(); salvar(); avisoModo();
@@ -484,9 +493,15 @@ function renderFatura(c){
     ${c.proxN?`<br>Há ${c.proxN} gasto${c.proxN===1?'':'s'} guardado${c.proxN===1?'':'s'} pra fatura seguinte, somando ${brl(c.proxBruto)}. ${c.proxN===1?'Ele não entra':'Eles não entram'} nos totais acima.`:''}</div>`;
 
   const nf=$('#notaFatura');
+  /* Fechamento e vencimento iguais quase sempre são a mesma data digitada duas
+     vezes, por só se conhecer a do pagamento. O app funciona assim mesmo — mas
+     com os dois dias certos a previsão fica exata, então vale dizer. */
+  const mesmoDia=diaDoMes(S.diaFech||5)===diaDoMes(S.diaVenc||S.diaFech||5);
   if(nf) nf.innerHTML=`<div class="nota">Um gasto no cartão feito <b>hoje</b> entra na fatura que fecha em
-    <b>${fecha}</b> e é cobrado no vencimento de <b>${vence}</b>. Se as duas datas forem o mesmo dia do mês,
-    o app entende o que o cartão faz: fecha no dia e cobra no mês seguinte.</div>`;
+    <b>${fecha}</b> e é cobrado no vencimento de <b>${vence}</b>.`
+    +(mesmoDia?` <br><b>Os dois dias estão iguais.</b> Se o seu cartão fecha num dia e vence noutro — fecha 5, vence 12, por exemplo —
+      ponha os dois aqui: aí o app sabe que a compra de hoje entra na fatura que fecha dia 5 e só é cobrada dia 12.`
+      :'')+`</div>`;
 
   const bp=$('#blocoPagar');
   if(bp){
@@ -1009,10 +1024,9 @@ function temaGuardado(){
   try{ const t=localStorage.getItem(CHAVE_TEMA); return (t==='claro'||t==='escuro')?t:null; }
   catch(e){ return null; }
 }
-function temaDoSistema(){
-  try{ return (window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)?'escuro':'claro'; }
-  catch(e){ return 'claro'; }
-}
+/* TEMA_PADRAO está declarado lá no topo do arquivo, junto de `cena`: o objeto
+   `S` o usa como valor inicial, e um `const` aqui embaixo estaria na zona morta
+   temporal nesse instante. */
 function alternarTema(){
   S.tema=(temaAtual()==='escuro')?'claro':'escuro';
   aplicarTema();
@@ -1025,7 +1039,7 @@ function alternarTema(){
 }
 function temaAtual(){
   if(S.tema==='claro'||S.tema==='escuro') return S.tema;
-  return temaGuardado()||temaDoSistema();
+  return temaGuardado()||TEMA_PADRAO;
 }
 /* Todos os botões de tema do app — cabeçalho, tela de cartas e o flutuante da
    abertura — são a mesma função. Um botão de tema que existe só em algumas
@@ -1137,7 +1151,7 @@ document.addEventListener('click',e=>{
   if(o) removerCom('obj',o.dataset.delo,'Objetivo');
 });
 $('#zerar').onclick=()=>{ if(confirm('Apagar tudo e recomeçar do zero?')){
-  S=Object.assign({},S,{salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:5,
+  S=Object.assign({},S,{salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:12,
      ultimoFech:iso(ultimoFechPassado()),hist:[],tetos:{},lanc:[],div:[],obj:[],pessoas:[],meses:6,jaTem:0,notifLog:{},agendaLog:{},retroVista:null});
   ['salario','extra','jaTem','metaVal'].forEach(i=>$('#'+i).value=''); $('#metaPct').value=20; $('#meses').value=6;
   avisoCiclo=''; render(); salvar();
@@ -1645,8 +1659,25 @@ function proximoVenc(dia){
 }
 /* "Já paguei" é por OCORRÊNCIA, não um interruptor: `l.pagoAte` guarda a data
    do vencimento que foi quitado. No mês seguinte essa data muda sozinha e a
-   conta volta a cobrar atenção — ninguém precisa lembrar de desmarcar nada. */
+   conta volta a cobrar atenção — ninguém precisa lembrar de desmarcar nada.
+
+   E pagar tem DUAS formas, que não significam a mesma coisa no cartão:
+
+   • **do bolso** (pix, débito, dinheiro): o dinheiro saiu agora, acabou.
+   • **no cartão**: a conta está paga — não vence mais, não avisa mais — mas o
+     dinheiro só sai quando a fatura vencer. Pagando hoje, dia 8, com a fatura
+     fechando dia 5, essa despesa entra na fatura que fecha em 05/10 e é
+     cobrada em 12/10. É esse dia que `pagoVence` guarda, congelado no momento
+     da marcação: o ciclo vira, mas a conta continua sabendo quando o dinheiro
+     de verdade sai.
+
+   O valor não se move quando se marca "no cartão": o lançamento JÁ está na
+   fatura aberta e já conta em `calc()`. A marca só diz que a obrigação foi
+   resolvida — somar de novo seria contar o mesmo gasto duas vezes. */
 const contaPaga=(l,d)=>!!l.pagoAte&&l.pagoAte===iso(d);
+/* Qual conta está com as duas opções abertas na tela. Mora fora da render
+   porque a escolha é passageira: some no próximo desenho. */
+let escolhendoPago=null;
 function contasAVencer(comAsPagas){
   return doCiclo().filter(l=>+l.venc>0&&meuValor(l)>0)
     .map(l=>{const d=proximoVenc(l.venc);
@@ -1654,30 +1685,60 @@ function contasAVencer(comAsPagas){
     .filter(x=>comAsPagas||!x.pago)
     .sort((a,b)=>(a.pago-b.pago)||(a.dias-b.dias));
 }
-/* Marcar e desmarcar são o mesmo botão: quem clicou por engano desfaz no
-   mesmo lugar, sem menu e sem confirmação. */
-function alternarPago(id){
+function marcarPago(id,como){
   const l=S.lanc.find(x=>String(x.id)===String(id)); if(!l) return;
-  const d=iso(proximoVenc(l.venc));
-  if(l.pagoAte===d){ delete l.pagoAte; toast(l.nome+' voltou pra lista'); }
-  else { l.pagoAte=d; toast(l.nome+' marcado como pago'); vibrar(12); }
-  render(); salvar();
+  escolhendoPago=null;
+  l.pagoAte=iso(proximoVenc(l.venc));
+  l.pagoCom=(como==='cartao')?'cartao':'bolso';
+  if(l.pagoCom==='cartao'){ l.pagoVence=iso(faturaAberta().vence); toast(l.nome+' pago no cartão · sai em '+ddmm(dataDeISO(l.pagoVence))); }
+  else { delete l.pagoVence; toast(l.nome+' pago'); }
+  vibrar(12); render(); salvar();
+}
+/* Desmarcar é o mesmo botão de marcado: quem clicou por engano desfaz no
+   mesmo lugar, sem menu e sem confirmação. */
+function desmarcarPago(id){
+  const l=S.lanc.find(x=>String(x.id)===String(id)); if(!l) return;
+  delete l.pagoAte; delete l.pagoCom; delete l.pagoVence;
+  escolhendoPago=null;
+  toast(l.nome+' voltou pra lista'); render(); salvar();
 }
 function renderVenc(){
   const el=$('#blocoVenc'); const cs=contasAVencer(true);
-  if(!cs.length){ el.innerHTML=''; return; }
+  if(!cs.length){ el.innerHTML=''; escolhendoPago=null; return; }
   const falta=cs.filter(x=>!x.pago), pagas=cs.length-falta.length;
   const total=falta.reduce((s,x)=>s+meuValor(x.l),0);
+  const noCartao=cs.filter(x=>x.pago&&x.l.pagoCom==='cartao'&&x.l.pagoVence);
+  /* Uma frase por conta paga no cartão, com o dia em que o dinheiro sai. */
+  const legenda=x=>{
+    if(!x.pago) return x.dias===0?'vence hoje':x.dias===1?'vence amanhã':'em '+x.dias+' dias';
+    // curto de propósito: o selo "✓ pago" ao lado já diz que está paga, e numa
+    // tela de 430 px a frase inteira empurrava o valor pra terceira linha
+    if(x.l.pagoCom==='cartao'&&x.l.pagoVence) return 'no cartão · sai '+ddmm(dataDeISO(x.l.pagoVence));
+    return 'pago · vencia '+ddmm(x.data);
+  };
+  const botao=x=>{
+    if(x.pago) return `<button class="btn-pago on" data-despago="${x.l.id}"
+      aria-label="Desmarcar ${esc(x.l.nome)} como pago">✓ pago</button>`;
+    if(String(escolhendoPago)===String(x.l.id)) return `<span class="pago-escolha">
+      <button data-pagocom="cartao" data-id="${x.l.id}">no cartão</button>
+      <button data-pagocom="bolso" data-id="${x.l.id}">do bolso</button></span>`;
+    return `<button class="btn-pago" data-abrepago="${x.l.id}"
+      aria-label="Marcar ${esc(x.l.nome)} como pago">Paguei</button>`;
+  };
   el.innerHTML=`<h3>Contas a vencer · ${brl(total)}</h3>
-   <p class="ajuda">Lançamentos com dia de vencimento marcado. Toque em <b>Paguei</b> quando quitar: a conta sai da contagem e para de avisar até o vencimento do mês que vem.${pagas?` <b>${pagas}</b> já ${pagas===1?'está paga':'estão pagas'} neste mês.`:''}</p>`+
+   <p class="ajuda">Lançamentos com dia de vencimento marcado. Toque em <b>Paguei</b> quando quitar: a conta sai da contagem e para de avisar até o vencimento do mês que vem.
+   Pagou <b>no cartão</b>? Continua paga — só que o dinheiro sai quando a fatura vencer, e o app mostra o dia.${pagas?` <b>${pagas}</b> já ${pagas===1?'está paga':'estão pagas'} neste mês.`:''}</p>`+
    cs.map(x=>`<div class="venc${x.pago?' pago':(x.dias<=3?' perto':'')}">
      <div class="dia"><b>${x.data.getDate()}</b><span>${MES_CURTO[x.data.getMonth()]}</span></div>
-     <div class="vn">${esc(x.l.nome)}<small>${x.pago?'pago · vence '+ddmm(x.data):(x.dias===0?'vence hoje':x.dias===1?'vence amanhã':'em '+x.dias+' dias')} · ${esc(x.l.fonte||'Conta')}</small></div>
+     <div class="vn">${esc(x.l.nome)}<small>${legenda(x)} · ${esc(x.l.fonte||'Conta')}</small></div>
      <div class="vv">${brl(meuValor(x.l))}</div>
-     <button class="btn-pago${x.pago?' on':''}" data-pago="${x.l.id}" aria-pressed="${x.pago?'true':'false'}"
-       aria-label="${x.pago?'Desmarcar':'Marcar'} ${esc(x.l.nome)} como pago">${x.pago?'✓ pago':'Paguei'}</button>
-   </div>`).join('');
-  el.querySelectorAll('[data-pago]').forEach(b=>b.onclick=()=>alternarPago(b.dataset.pago));
+     ${botao(x)}
+   </div>`).join('')+
+   (noCartao.length?`<p class="ajuda" style="margin:10px 0 0"><b>${noCartao.length===1?'Uma conta paga no cartão':noCartao.length+' contas pagas no cartão'}</b> —
+     ${noCartao.length===1?'ela já está':'elas já estão'} dentro da fatura acima, então o valor não é cobrado duas vezes.</p>`:'');
+  el.querySelectorAll('[data-abrepago]').forEach(b=>b.onclick=()=>{ escolhendoPago=b.dataset.abrepago; renderVenc(); });
+  el.querySelectorAll('[data-despago]').forEach(b=>b.onclick=()=>desmarcarPago(b.dataset.despago));
+  el.querySelectorAll('[data-pagocom]').forEach(b=>b.onclick=()=>marcarPago(b.dataset.id,b.dataset.pagocom));
 }
 
 /* ---------- exportar CSV ---------- */

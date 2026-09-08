@@ -6,8 +6,10 @@
 <title>Sobra+ — controle financeiro</title>
 <meta name="description" content="Quanto você pode gastar hoje. Registre um gasto em segundos, veja para onde vai seu dinheiro e receba alertas antes de estourar.">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#F4F8FD" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<!-- Uma só, sem media: quem manda na cor da barra é o tema ESCOLHIDO, e o
+     tema.js/aplicarTema() a reescrevem. Com duas metas por prefers-color-scheme
+     um celular no escuro pintava a barra de preto com o app claro na tela. -->
+<meta name="theme-color" content="#F4F8FD">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -19,12 +21,16 @@
      (San Francisco no iPhone, Roboto no Android). Abre mais rápido, funciona
      offline sem depender de ninguém e não conta nada a servidor de terceiro. -->
 <link rel="stylesheet" href="/styles.css">
+<!-- Decide o tema antes da splash aparecer. Tem que vir aqui, no <head>, e
+     antes do <style> da splash: é o que evita a abertura piscar. -->
+<script src="/tema.js"></script>
 <style>
 /* Splash inline: pintada no primeiro frame, sem esperar CSS externo nem JS. */
 #splash{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:18px;background:#F4F8FD;
   transition:opacity .32s ease,visibility .32s}
-@media(prefers-color-scheme:dark){#splash{background:#000}}
+/* Só o data-tema decide, nunca o prefers-color-scheme: o app abre claro por
+   padrão, e a splash tem que abrir com ele. */
 html[data-tema="escuro"] #splash{background:#000}
 #splash.sai{opacity:0;visibility:hidden}
 #splash .marca{width:74px;height:74px;border-radius:20px;background:#04121F;
@@ -307,7 +313,7 @@ html[data-tema="escuro"] #splash{background:#000}
       <summary><span>Datas da fatura e detalhes</span></summary>
       <div class="grade g2" style="margin-top:var(--e3)">
         <div><label for="diaFech">Dia que a fatura fecha</label><input type="number" inputmode="numeric" id="diaFech" min="1" max="28" step="1" value="5"></div>
-        <div><label for="diaVenc">Dia que a fatura vence</label><input type="number" inputmode="numeric" id="diaVenc" min="1" max="28" step="1" value="5"></div>
+        <div><label for="diaVenc">Dia que a fatura vence</label><input type="number" inputmode="numeric" id="diaVenc" min="1" max="28" step="1" value="12"></div>
       </div>
       <p class="ajuda">No <b>fechamento</b> o app arquiva a fatura e vira o ciclo; o <b>vencimento</b> é a data do pagamento. No cartão as duas nunca são o mesmo dia da mesma fatura: o que fecha hoje só é cobrado no vencimento seguinte. Na renda variável, use a média dos últimos 3 meses — ou o pior mês, se ela oscila muito.</p>
       <div id="notaFatura"></div>

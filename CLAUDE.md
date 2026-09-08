@@ -217,16 +217,62 @@ sobre `S.lanc` cru, ele vai contar duas vezes o que está guardado.
 vez só guardado na fila já aparece inteiro em `proxBruto`; somá-lo nos dois
 lugares dobrava o número na tela — foi o que aconteceu na primeira versão.
 
-## "Paguei" é por ocorrência, não um interruptor
+## "Paguei" é por ocorrência, e pagar no cartão não é pagar do bolso
 
 `l.pagoAte` guarda **a data do vencimento que foi quitado**, não `true`. A conta
 é considerada paga só enquanto `l.pagoAte === iso(proximoVenc(l.venc))`; quando
 o mês vira, a data deixa de bater e a conta volta sozinha para a lista. Um
 booleano precisaria ser desmarcado à mão todo mês, e ninguém faria isso.
 
+O botão pergunta **como** foi paga, porque no cartão as duas coisas não são a
+mesma:
+
+* `pagoCom:'bolso'` (pix, débito, dinheiro) — o dinheiro saiu agora, acabou.
+* `pagoCom:'cartao'` — a conta está quitada (não vence mais, não avisa mais),
+  mas o dinheiro só sai quando a fatura vencer. `pagoVence` guarda esse dia,
+  **congelado no momento da marcação** (`iso(faturaAberta().vence)`): o ciclo
+  vira, a fatura fecha, e a linha continua sabendo quando o dinheiro sai.
+
+**Marcar "no cartão" não mexe em valor nenhum.** O lançamento já está em
+`S.lanc`, já entra em `calc()` e já está dentro da fatura aberta; somar de novo
+seria contar o mesmo gasto duas vezes. A marca só resolve a obrigação — e o
+bloco diz isso em uma linha, senão a pergunta "então eu paguei duas vezes?"
+aparece sozinha.
+
 A fatura fechada usa a mesma ideia num campo próprio: `S.hist[0].pago` com a
 data em que foi paga. `faturaAPagar()` devolve `null` quando ele existe, e com
 isso o cartão some e o alerta de vencimento cala junto.
+
+## O app abre CLARO (v9.4)
+
+O tema deixou de seguir o sistema. Vale o que a pessoa escolheu **neste
+aparelho** (`localStorage['sobra:tema']`); quem nunca escolheu vê o tema claro.
+`TEMA_PADRAO` é a única fonte disso no `app.js`.
+
+Duas armadilhas moram aqui:
+
+1. **`TEMA_PADRAO` está declarado no TOPO do arquivo**, junto de `cena` e
+   `retroPendente`, porque o `let S = {…}` logo abaixo o usa como valor inicial.
+   Um `const` junto do resto do código de tema estaria na zona morta temporal
+   nesse instante — o mesmo erro que já derrubou a partida do app uma vez.
+2. **`tema.js` existe por causa do CSP.** O tema precisa ser aplicado antes da
+   splash aparecer, e o `app.js` só carrega no fim do `<body>` — decidir lá
+   fazia a abertura piscar. A solução natural seria um `<script>` inline no
+   `<head>`, mas o `vercel.json` usa `script-src 'self'`, que recusa código
+   dentro do HTML. Daí o arquivo separado, carregado no `<head>` antes do
+   `<style>` da splash. Ele também reescreve o `theme-color`, senão a barra do
+   navegador pisca na cor do outro tema.
+
+Quem mexer no padrão precisa mexer nos **dois** lugares: `TEMA_PADRAO` no
+`app.js` e a linha do `tema.js`. E a splash não olha mais
+`prefers-color-scheme` — só `data-tema` —, senão um celular no escuro abria com
+splash preta e app claro.
+
+O padrão de datas do cartão também mudou: **fecha dia 5, vence dia 12**. O
+antigo era 5 e 5, que na leitura correta significa "fecha hoje e paga no mesmo
+dia do mês que vem" — 30 dias de folga que nenhum cartão dá. Quem já tem conta
+mantém o que configurou; a nota em *Renda e meta* avisa quando os dois dias
+estão iguais.
 
 ## Detalhes da implementação que importam
 
