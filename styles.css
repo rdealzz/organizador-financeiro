@@ -77,6 +77,14 @@
   --c100:var(--azul); --c2:var(--teal); --c10:var(--vermelho); --c20:var(--laranja);
   --c5:var(--roxo); --c50:var(--marrom); --c200:#6B7280; --cedu:var(--indigo);
   --cdiv:#3F4550; --cout:#6B7280; --pai:var(--azul); --alerta:var(--vermelho);
+
+  /* ---- cores de PESSOA: quem divide o gasto com você ----
+     São cor de DADO, não cromo: separam o pai da mãe numa lista de três
+     linhas, então continuam multicoloridas de propósito (ver CLAUDE.md).
+     Cada uma foi escolhida para funcionar como TEXTO sobre o cartão: nada
+     abaixo de 4,5:1 nos dois temas. */
+  --pes1:#0A4491; --pes2:#7A3EB0; --pes3:#0C6E7C; --pes4:#9A5600;
+  --pes5:#B02E5A; --pes6:#06713E; --pes7:#4B4FCF; --pes8:#7A5636;
 }
 [data-tema="escuro"]{
   /* O escuro é PRETO com azul claro. O fundo é preto de verdade — em tela
@@ -97,6 +105,8 @@
   --laranja:#F0A140; --laranja-txt:#F0A140; --amarelo:#E3B341;
 
   --roxo:#A98BE8; --rosa:#EE7BA0; --teal:#3FBDD1; --indigo:#7B7FEB; --marrom:#B99270;
+  --pes1:#7FCBFF; --pes2:#C4A8F5; --pes3:#4FCFE3; --pes4:#F0A140;
+  --pes5:#F58CB0; --pes6:#3DD68C; --pes7:#9A9DF5; --pes8:#C9A183;
   --c200:#9AA1AC; --cdiv:#C8CDD4; --cout:#9AA1AC;
 
   /* no escuro a profundidade vem da borda, não da sombra */
@@ -2712,3 +2722,13 @@ h1, .capa-tit, .portal-tit, .carta-tit, .auth-tit, .etapa h2{
 .av-op[aria-pressed="false"]{filter:saturate(.82) opacity(.88)}
 .av-op:focus-visible{outline:2px solid var(--azul);outline-offset:3px}
 @media (prefers-reduced-motion:reduce){ .av-op{transition-duration:.01ms} }
+
+/* ── Pessoas com quem se divide o gasto ─────────────────────────────────────
+   A linha da pessoa é a mesma .item dos últimos lançamentos — mesma altura,
+   mesmo alvo de toque —, só que a rodela traz a inicial do nome em vez de um
+   traço de categoria. */
+.pessoa-ini{font-weight:700;font-size:16px;letter-spacing:.01em}
+.item .dt .link{font-size:12.5px;padding:0;margin-left:8px}
+.nova-pessoa{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.nova-pessoa input{flex:1 1 180px;min-width:0}
+.nova-pessoa .btn{flex:0 0 auto}

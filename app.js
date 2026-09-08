@@ -11,6 +11,64 @@ const CATS={
   outros:{n:'Outros',c:'var(--cout)',peso:5,dica:'o que não se encaixa'}
 };
 const TIER={1:{n:'Essencial',cl:'t1'},2:{n:'Vale a pena',cl:'t2'},3:{n:'Pode cortar',cl:'t3'}};
+
+/* ---------- pessoas com quem se divide o gasto ----------
+
+   O app já sabia dizer "outra pessoa cobriu R$ 800". Só isso não bastava:
+   quem divide o mercado com o pai E a assinatura com a mãe via os dois
+   somados num número só, sem como saber quanto é de quem. Agora cada gasto
+   dividido aponta para uma PESSOA — `l.com` guarda o id dela — e todo lugar
+   que dizia "outra pessoa" passa a dizer o nome.
+
+   `l.pai` continua sendo o campo de QUANTO a outra pessoa cobre, com esse
+   nome mesmo. Ele está nas faturas já arquivadas, no CSV exportado e nos
+   backups de quem usa o app desde antes disto; renomear quebraria os três
+   sem mudar nada para quem olha a tela. */
+const COR_PESSOA=['var(--pes1)','var(--pes2)','var(--pes3)','var(--pes4)',
+                  'var(--pes5)','var(--pes6)','var(--pes7)','var(--pes8)'];
+const pessoas=()=>Array.isArray(S.pessoas)?S.pessoas:(S.pessoas=[]);
+const achaPessoa=id=>id?(pessoas().find(p=>String(p.id)===String(id))||null):null;
+const nomePessoa=id=>{const p=achaPessoa(id); return p?p.nome:'Outra pessoa';};
+const corPessoa=id=>{const p=achaPessoa(id); return (p&&p.cor)||'var(--pai)';};
+function criarPessoa(nome){
+  const n=String(nome||'').trim().replace(/\s+/g,' ').slice(0,28);
+  if(!n) return null;
+  const igual=pessoas().find(p=>p.nome.toLowerCase()===n.toLowerCase());
+  if(igual) return igual;
+  const p={id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+           nome:n,cor:COR_PESSOA[pessoas().length%COR_PESSOA.length]};
+  pessoas().push(p);
+  return p;
+}
+/* Quanto cada pessoa cobriu numa lista de lançamentos, do maior pro menor.
+   Serve tanto pro ciclo aberto quanto pra fatura que está sendo arquivada. */
+function fatiasPessoa(itens){
+  const m={};
+  (itens||[]).forEach(l=>{ const v=Math.min(+l.pai||0,+l.valor||0);
+    if(v>0){ const k=l.com||''; m[k]=(m[k]||0)+v; } });
+  return Object.entries(m).map(([id,valor])=>({id,nome:nomePessoa(id),cor:corPessoa(id),valor}))
+    .sort((a,b)=>b.valor-a.valor);
+}
+/* Estado de antes desta versão: havia valor em `pai` e pessoa nenhuma. Em vez
+   de jogar essa informação fora, ela vira uma pessoa de verdade chamada
+   "Outra pessoa" — basta renomear pra "Pai" e o histórico inteiro vem junto.
+   Roda uma vez por conta: `pessoasOk` viaja no estado, então quem entra no
+   segundo aparelho não repete a migração. */
+function migrarPessoas(){
+  if(!Array.isArray(S.pessoas)) S.pessoas=[];
+  if(S.pessoasOk) return;
+  S.pessoasOk=true;
+  const legado=l=>+l.pai>0&&!l.com;
+  const temLegado=(S.lanc||[]).some(legado)
+    || (S.hist||[]).some(x=>(x.itens||[]).some(legado));
+  if(!temLegado) return;
+  const p=criarPessoa('Outra pessoa'); if(!p) return;
+  (S.lanc||[]).forEach(l=>{ if(legado(l)) l.com=p.id; });
+  (S.hist||[]).forEach(x=>{
+    (x.itens||[]).forEach(l=>{ if(legado(l)) l.com=p.id; });
+    if(!x.pessoas) x.pessoas=fatiasPessoa(x.itens);
+  });
+}
 const KEY_ANTIGA='sobra-do-mes:novo';   // dados de antes do login, neste aparelho
 let KEY=KEY_ANTIGA;
 function usarChaveDe(uid){ KEY = uid ? ('sobra-do-mes:u:'+uid) : KEY_ANTIGA; }
@@ -48,7 +106,7 @@ const ALERTAS_PADRAO={
   parcela:   {on:false, icone:'festa',      nome:'Última parcela',               desc:'Quando um parcelado chega na última — dinheiro que volta pro seu bolso.'}
 };
 let S={versao:2,tema:'auto',avatar:'',salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:5,ultimoFech:null,hist:[],
-       tetos:{},lanc:SEED,div:[],obj:[],meses:6,jaTem:0,
+       tetos:{},lanc:SEED,div:[],obj:[],pessoas:[],meses:6,jaTem:0,
        alertas:{teto:true,gasto:true,meta:true,fechamento:true,vencimento:true,contas:true,variavel:true,parcela:false},
        aTetoPct:85,aDiasFech:3,aDiasVenc:2,notifLog:{},_ultimoSalvo:0};
 let prev=[], avisoCiclo='';
@@ -83,12 +141,15 @@ function fecharCiclo(dataStr){
     bruto+=l.valor; meu+=m; pai+=Math.min(+l.pai||0,l.valor);
     porCat[l.cat]=(porCat[l.cat]||0)+m; });
   const itens=S.lanc.map(l=>({nome:l.nome,cat:l.cat,tier:l.tier,valor:l.valor,pai:+l.pai||0,
-    tipo:l.tipo,fonte:l.fonte,pRest:+l.pRest||0,venc:+l.venc||0}));
-  S.hist.unshift({data:dataStr,bruto,meu,pai,porCat,itens});
+    com:l.com||'',tipo:l.tipo,fonte:l.fonte,pRest:+l.pRest||0,venc:+l.venc||0}));
+  /* O nome e a cor da pessoa vão CONGELADOS na fatura arquivada, não por
+     referência: quem apagar "Mãe" daqui a três meses continua vendo de quem
+     era aquela metade do mercado de setembro. */
+  S.hist.unshift({data:dataStr,bruto,meu,pai,porCat,itens,pessoas:fatiasPessoa(S.lanc)});
   S.hist=S.hist.slice(0,24);
   let sumiram=0, andaram=0;
   S.lanc=S.lanc.filter(l=>{
-    if(l.tipo==='var'){ l.ref=l.valor; l.valor=0; l.pai=0; return true; }
+    if(l.tipo==='var'){ l.ref=l.valor; l.valor=0; l.pai=0; return true; }   // `com` fica: a divisão do mercado costuma ser a mesma no mês seguinte
     if(l.tipo==='rec'||l.tipo==='fixo') return true;
     if(l.tipo==='parc'){ l.pRest=Math.max((+l.pRest||0)-1,0); if(l.pRest<=0){ sumiram++; return false; } andaram++; return true; }
     sumiram++; return false;
@@ -236,7 +297,7 @@ async function copiaDeSeguranca(txt){
 async function carregar(){
   try{ const v=await storeGet(KEY); if(v) S=Object.assign(S,JSON.parse(v)); }catch(e){}
   ultimoConteudo=conteudoDe(S);
-  rodarCiclos(); aplicarTema();
+  migrarPessoas(); rodarCiclos(); aplicarTema();
   $('#salario').value=S.salario||''; $('#extra').value=S.extra||'';
   $('#metaPct').value=S.metaPct||''; $('#metaVal').value=S.metaVal||'';
   $('#meses').value=S.meses||6; $('#jaTem').value=S.jaTem||'';
@@ -262,7 +323,7 @@ function restaurarBackup(file){
       const dados=JSON.parse(fr.result);
       if(!dados||typeof dados!=='object'||!('lanc' in dados)) throw new Error('formato');
       S=Object.assign(S,dados);
-      rodarCiclos(); aplicarTema();
+      migrarPessoas(); rodarCiclos(); aplicarTema();
       $('#salario').value=S.salario||''; $('#extra').value=S.extra||'';
       $('#metaPct').value=S.metaPct||''; $('#metaVal').value=S.metaVal||'';
       $('#meses').value=S.meses||6; $('#jaTem').value=S.jaTem||''; $('#diaFech').value=S.diaFech||5;
@@ -293,7 +354,7 @@ function calc(){
   const futuro=S.lanc.reduce((s,l)=>s+meuValor(l)*(+l.pRest||0),0);
   const fontes={}; S.lanc.forEach(l=>{const f=l.fonte||'Conta'; fontes[f]=(fontes[f]||0)+l.valor;});
   return {renda,gasto,bruto,pai,t,porCat,meta,disponivel,tetos,excesso,somaExcesso,futuro,fontes,
-          sobra:renda-gasto,corte:t[3]};
+          fatias:fatiasPessoa(S.lanc),sobra:renda-gasto,corte:t[3]};
 }
 
 /* ---------- render ---------- */
@@ -317,10 +378,11 @@ function render(){
   $('#topoUltimos').hidden=vazio;
   $('#blocoUltimos').classList.toggle('sem-moldura',vazio);
   renderTopCats(c); renderUltimos(c);
-  renderMeta(c); renderHist(); renderTetos(c); renderLanc(c); renderCortes(c); renderReserva(c); renderObj(c); renderDiv();
+  renderMeta(c); renderHist(); renderTetos(c); renderPessoas(c); renderLanc(c); renderCortes(c); renderReserva(c); renderObj(c); renderDiv();
   renderVenc(c); renderAlertas(c); renderChips();
   if(AREA==='analise'&&SUB.analise==='graficos') renderGraficos(c);
   $('#dlFontes').innerHTML=[...new Set(S.lanc.map(l=>l.fonte).filter(Boolean))].map(f=>`<option value="${esc(f)}">`).join('');
+  pintarPagadorForm();   // as opções são as pessoas cadastradas, e elas mudam
 }
 
 function renderMeta(c){
@@ -337,6 +399,13 @@ function renderMeta(c){
 }
 
 let histSel=0;
+/* A fatura arquivada guarda as fatias congeladas desde esta versão. As de
+   antes só têm o total em `pai`, e para elas o melhor que dá pra dizer é
+   "outra pessoa" — era só isso que o app sabia quando elas fecharam. */
+function fatiasDoHist(x){
+  if(Array.isArray(x.pessoas)&&x.pessoas.length) return x.pessoas;
+  return x.pai>0?[{id:'',nome:'Outra pessoa',cor:'var(--pai)',valor:x.pai}]:[];
+}
 function renderHist(){
   const lc=$('#listaCiclos'), dc=$('#detalheCiclo');
   if(!S.hist.length){
@@ -370,7 +439,7 @@ function renderHist(){
    <div class="cards">
      <div class="card"><div class="l">Fatura total</div><div class="v">${brl(x.bruto)}</div></div>
      <div class="card"><div class="l">Meu</div><div class="v" style="color:var(--verde)">${brl(x.meu)}</div></div>
-     ${x.pai>0?`<div class="card"><div class="l">De outra pessoa</div><div class="v" style="color:var(--pai)">${brl(x.pai)}</div></div>`:''}
+     ${fatiasDoHist(x).map(f=>`<div class="card"><div class="l">De ${esc(f.nome)}</div><div class="v" style="color:${f.cor}">${brl(f.valor)}</div></div>`).join('')}
      ${ant?`<div class="card"><div class="l">Contra o mês anterior</div><div class="v" style="color:${x.meu>ant.meu?'var(--vermelho)':'var(--verde)'}">${x.meu>ant.meu?'+':'−'}${brl(Math.abs(x.meu-ant.meu))}</div></div>`:''}
    </div>
    ${cats.length?'<h3>Por categoria</h3>'+cats.map(([k,v])=>{
@@ -392,7 +461,7 @@ function renderHist(){
 function renderTetos(c){
   $('#cardsTeto').innerHTML=`
    <div class="card"><div class="l">Disponível pra gastar</div><div class="v">${brl(c.disponivel)}</div><div class="n">renda menos o que guarda</div></div>
-   <div class="card"><div class="l">Meu gasto de hoje</div><div class="v" style="color:${c.gasto>c.disponivel?'var(--alerta)':'var(--verde)'}">${brl(c.gasto)}</div><div class="n">${c.pai>0?'sem os '+brl(c.pai)+' de outra pessoa':''}</div></div>
+   <div class="card"><div class="l">Meu gasto de hoje</div><div class="v" style="color:${c.gasto>c.disponivel?'var(--alerta)':'var(--verde)'}">${brl(c.gasto)}</div><div class="n">${fraseFatias(c)}</div></div>
    <div class="card" style="${c.somaExcesso>0?'border-color:var(--alerta)':''}"><div class="l">Estourando o teto</div><div class="v" style="color:${c.somaExcesso>0?'var(--alerta)':'var(--verde)'}">${brl(c.somaExcesso)}</div><div class="n">${c.somaExcesso>0?'é isso que precisa sair':'nenhuma categoria passou'}</div></div>`;
   const its=Object.entries(CATS).sort((a,b)=>(c.porCat[b[0]]||0)-(c.porCat[a[0]]||0));
   $('#tetos').innerHTML=its.map(([k,cat])=>{
@@ -418,12 +487,123 @@ function renderTetos(c){
     ? `<div class="nota aviso">Seus gastos passam em ${brl(c.gasto-c.disponivel)} do disponível depois de guardar. Ou o corte sai das categorias em vermelho, ou a meta cai — não tem terceira opção.</div>` : '';
 }
 
+/* ---------- quem paga: um select, uma pessoa ----------
+
+   Antes eram três opções fixas — Eu, Dividido, Outra pessoa — e a "outra
+   pessoa" era sempre a mesma, anônima. Agora o mesmo select lista, para cada
+   pessoa cadastrada, as duas situações que existem de verdade: dividido com
+   ela, ou por conta dela. Em um controle só, e sem deixar escolher "dividido"
+   sem dizer com quem. */
+function opcoesPagador(l,curto){
+  const val=+l.valor||0, pago=Math.min(+l.pai||0,val);
+  const atual=!pago?'eu':((pago>=val&&val>0?'t:':'d:')+(l.com||''));
+  const lista=pessoas().slice();
+  // Pessoa apagada, ou gasto de antes da migração: continua aparecendo, senão
+  // o select mostraria "Eu" para um gasto que não é só seu.
+  if(pago>0&&!achaPessoa(l.com)) lista.unshift({id:l.com||'',nome:nomePessoa(l.com)});
+  const op=(v,txt)=>`<option value="${esc(v)}"${v===atual?' selected':''}>${esc(txt)}</option>`;
+  /* Na tabela o rótulo é curto de propósito: a coluna cabe em 430px de tela e
+     "Dividido com Mãe" a espremia até virar "Divi". O nome por extenso fica
+     embaixo da descrição, que é a coluna que nunca sai da tela. */
+  return op('eu',curto?'Eu':'Eu, sozinho')
+    +lista.map(p=>op('d:'+p.id,curto?'Com '+p.nome:'Dividido com '+p.nome)
+                 +op('t:'+p.id,curto?p.nome+' paga':p.nome+' paga tudo')).join('')
+    +`<option value="+">${curto?'+ pessoa…':'+ Nova pessoa…'}</option>`;
+}
+function aplicarPagador(l,v){
+  if(v==='eu'){ l.pai=0; l.com=''; return; }
+  const [modo,id]=String(v).split(':'), val=+l.valor||0;
+  l.com=id||'';
+  if(modo==='t') l.pai=val;
+  else if(!(+l.pai>0)||+l.pai>=val) l.pai=+(val/2).toFixed(2);
+}
+function pedirPessoa(){
+  const n=prompt('Quem divide esse gasto com você?\n\nEscreva o nome como você chama a pessoa: Pai, Mãe, Ana…');
+  if(n===null) return null;
+  const p=criarPessoa(n);
+  if(!p){ toast('Escreva um nome para a pessoa',true); return null; }
+  return p;
+}
+function renomearPessoa(id){
+  const p=achaPessoa(id); if(!p) return;
+  const n=prompt('Novo nome para '+p.nome+':',p.nome);
+  if(n===null) return;
+  const lim=String(n).trim().replace(/\s+/g,' ').slice(0,28);
+  if(!lim){ toast('O nome não pode ficar vazio',true); return; }
+  p.nome=lim;
+  render(); salvar(); toast('Agora é '+lim);
+}
+function removerPessoa(id){
+  const p=achaPessoa(id); if(!p) return;
+  const n=S.lanc.filter(l=>l.com===id&&+l.pai>0).length;
+  if(!confirm('Remover '+p.nome+'?\n\n'+(n
+      ? n+(n===1?' gasto deste ciclo volta a ser só seu.':' gastos deste ciclo voltam a ser só seus.')
+      : 'Nenhum gasto deste ciclo está dividido com essa pessoa.')
+    +'\nAs faturas já arquivadas continuam mostrando o nome.')) return;
+  S.lanc.forEach(l=>{ if(l.com===id){ l.com=''; l.pai=0; } });
+  S.pessoas=pessoas().filter(x=>x.id!==id);
+  render(); salvar(); toast(p.nome+' saiu da lista');
+}
+/* A frase que aparece embaixo do "meu gasto de hoje". Com uma pessoa só, vale
+   dizer o nome; com mais de uma, o nome de cada uma está logo ali no bloco
+   "Dividido com" e repetir tudo aqui só faria a linha crescer. */
+function fraseFatias(c){
+  if(!(c.pai>0)) return '';
+  return c.fatias.length===1
+    ? 'sem os '+brl(c.fatias[0].valor)+' que '+c.fatias[0].nome+' cobre'
+    : 'sem os '+brl(c.pai)+' de outras pessoas';
+}
+
+/* ---------- bloco "Dividido com" ---------- */
+function renderPessoas(c){
+  const sec=$('#blocoPessoas'), el=$('#pessoas');
+  if(!sec||!el) return;
+  const reg=pessoas();
+  // Pessoa apagada que ainda tem gasto no ciclo entra na lista assim mesmo.
+  const soltas=c.fatias.filter(f=>!achaPessoa(f.id));
+  sec.hidden=!reg.length&&!soltas.length;
+  if(sec.hidden){ el.innerHTML=''; return; }
+  const linhas=reg.map(p=>({id:p.id,nome:p.nome,cor:p.cor||'var(--pai)'})).concat(soltas)
+    .map(p=>{
+      const itens=S.lanc.filter(l=>(l.com||'')===p.id&&+l.pai>0);
+      const dela=itens.reduce((t,l)=>t+Math.min(+l.pai||0,l.valor),0);
+      const minha=itens.reduce((t,l)=>t+meuValor(l),0);
+      const n=itens.length;
+      return {p,dela,minha,n};
+    }).sort((a,b)=>b.dela-a.dela);
+  const total=linhas.reduce((t,x)=>t+x.dela,0);
+  el.innerHTML=linhas.map(({p,dela,minha,n})=>`<div class="item">
+    <div class="ic" style="background:color-mix(in srgb,${p.cor} 14%,transparent);color:${p.cor}"
+      ><span class="pessoa-ini">${esc(p.nome.trim().charAt(0).toUpperCase()||'?')}</span></div>
+    <div class="tx"><div class="nm">${esc(p.nome)}</div>
+      <div class="dt">${n?n+' gasto'+(n===1?'':'s')+' no ciclo · sua parte '+brl(minha):'nenhum gasto dividido neste ciclo'}
+        ${achaPessoa(p.id)?`<button class="link" data-ren="${esc(p.id)}">renomear</button>`:''}</div></div>
+    <div class="vl" style="color:${dela>0?p.cor:'var(--txt-3)'}">${brl(dela)}${dela>0?'<small>não é seu</small>':''}</div>
+    ${achaPessoa(p.id)?`<button class="rm" data-rmp="${esc(p.id)}" aria-label="Remover ${esc(p.nome)}">×</button>`:''}
+  </div>`).join('')
+   +`<p class="ajuda" style="margin:12px 0 0">${total>0
+      ? 'Ao todo <b>'+brl(total)+'</b> da fatura deste ciclo é de outra pessoa. Esse valor aparece na fatura, mas não entra nos seus tetos.'
+      : 'Marque quem divide cada gasto na coluna <b>Quem paga</b>, em “Todos os gastos do ciclo”.'}</p>
+    <div class="nova-pessoa">
+      <input id="pNome" maxlength="28" placeholder="Ex.: Mãe" aria-label="Nome da pessoa">
+      <button class="btn sec" id="addPessoa">Adicionar pessoa</button></div>`;
+  el.querySelectorAll('[data-ren]').forEach(b=>b.onclick=()=>renomearPessoa(b.dataset.ren));
+  el.querySelectorAll('[data-rmp]').forEach(b=>b.onclick=()=>removerPessoa(b.dataset.rmp));
+  const add=()=>{
+    const p=criarPessoa($('#pNome').value);
+    if(!p){ toast('Escreva um nome para a pessoa',true); $('#pNome').focus(); return; }
+    $('#pNome').value=''; render(); salvar(); vibrar(12); toast(p.nome+' entrou na lista');
+  };
+  $('#addPessoa').onclick=add;
+  $('#pNome').onkeydown=e=>{ if(e.key==='Enter') add(); };
+}
+
 function renderLanc(c){
   const fs=Object.entries(c.fontes).sort((a,b)=>b[1]-a[1]);
   $('#cards2').innerHTML='<div class="cards">'+
     `<div class="card"><div class="l">Fatura total</div><div class="v">${brl(c.bruto)}</div></div>`+
     `<div class="card" style="border-color:var(--verde)"><div class="l">Meu</div><div class="v" style="color:var(--verde)">${brl(c.gasto)}</div></div>`+
-    (c.pai>0?`<div class="card" style="border-color:var(--pai)"><div class="l">De outra pessoa</div><div class="v" style="color:var(--pai)">${brl(c.pai)}</div><div class="n">está na fatura, não é gasto seu</div></div>`:'')+
+    c.fatias.map(f=>`<div class="card" style="border-color:${f.cor}"><div class="l">De ${esc(f.nome)}</div><div class="v" style="color:${f.cor}">${brl(f.valor)}</div><div class="n">está na fatura, não é gasto seu</div></div>`).join('')+
     fs.map(([f,v])=>`<div class="card"><div class="l">${esc(f)}</div><div class="v">${brl(v)}</div></div>`).join('')+
     (c.futuro>0?`<div class="card" style="border-color:var(--alerta)"><div class="l">Parcelas por vir</div><div class="v" style="color:var(--alerta)">${brl(c.futuro)}</div><div class="n">sua parte, nos próximos meses</div></div>`:'')+'</div>';
 
@@ -433,17 +613,15 @@ function renderLanc(c){
     :l.tipo==='var'?'<span class="tag ciclov">variável</span>'
     :l.tipo==='parc'?`<span class="tag ciclop">faltam ${l.pRest||0}x</span>`:'<span class="tag ciclo1">1x</span>';
   tb.innerHTML=[...S.lanc].sort((a,b)=>b.valor-a.valor).map(l=>`<tr>
-    <td>${esc(l.nome)} ${selo(l)}<div style="font-size:11.5px;color:var(--txt-3)">${esc(l.fonte||'Conta')} · <span class="tag ${TIER[l.tier].cl}">${TIER[l.tier].n}</span></div></td>
+    <td>${esc(l.nome)} ${selo(l)}<div style="font-size:11.5px;color:var(--txt-3)">${esc(l.fonte||'Conta')} · <span class="tag ${TIER[l.tier].cl}">${TIER[l.tier].n}</span>${+l.pai>0?` · <b style="color:${corPessoa(l.com)}">${esc(nomePessoa(l.com))}</b>`:''}</div></td>
     <td><span class="pt" style="background:${CATS[l.cat].c}"></span>${CATS[l.cat].n}</td>
-    <td><select data-pag="${l.id}" style="padding:5px 6px;font-size:12.5px">
-      <option value="eu"${!l.pai?' selected':''}>Eu</option>
-      <option value="dividido"${l.pai&&l.pai<l.valor?' selected':''}>Dividido</option>
-      <option value="pai"${l.pai>=l.valor?' selected':''}>Outra pessoa</option></select></td>
+    <td><select data-pag="${l.id}" style="padding:5px 6px;font-size:12.5px;min-width:102px">${opcoesPagador(l,true)}</select></td>
     <td class="v"><input type="number" min="0" step="0.01" data-val="${l.id}" value="${l.valor||''}" placeholder="0,00"
         style="width:100px;padding:5px 7px;text-align:right;font-size:13px">
         ${(!l.valor&&l.ref)?`<div style="font-size:11px;color:var(--txt-3)">mês passado ${brl(l.ref)}</div>`:''}</td>
     <td class="v"><input type="number" min="0" step="0.01" data-pai="${l.id}" value="${l.pai||''}" placeholder="0,00"
-        style="width:96px;padding:5px 7px;text-align:right;font-size:13px"></td>
+        style="width:96px;padding:5px 7px;text-align:right;font-size:13px"
+        aria-label="Quanto ${+l.pai>0?esc(nomePessoa(l.com)):'a outra pessoa'} cobre em ${esc(l.nome)}"></td>
     <td class="v" style="font-weight:700;color:${meuValor(l)===0?'var(--pai)':'inherit'}">${brl(meuValor(l))}</td>
     <td style="text-align:right"><button class="btn-x" data-del="${l.id}" aria-label="Remover">×</button></td></tr>`).join('')
     +`<tr class="total"><td colspan="3">Total</td><td class="v">${brl(c.bruto)}</td>
@@ -456,9 +634,13 @@ function renderLanc(c){
     if(l){ l.pai=Math.min(+e.target.value||0,l.valor); render(); salvar(); }});
   tb.querySelectorAll('[data-pag]').forEach(s=>s.onchange=e=>{
     const l=S.lanc.find(x=>String(x.id)===e.target.dataset.pag); if(!l) return;
-    if(e.target.value==='eu') l.pai=0;
-    else if(e.target.value==='pai') l.pai=l.valor;
-    else if(!l.pai||l.pai>=l.valor) l.pai=+(l.valor/2).toFixed(2);
+    if(e.target.value==='+'){
+      const p=pedirPessoa();
+      /* Sem nome não muda nada — mas o select precisa voltar ao que era, senão
+         a linha fica mostrando "Nova pessoa…" como se fosse quem paga. */
+      if(!p){ render(); return; }
+      aplicarPagador(l,'d:'+p.id);
+    } else aplicarPagador(l,e.target.value);
     render(); salvar();});
 }
 
@@ -634,10 +816,36 @@ document.querySelectorAll('#chipsMeta [data-meta]').forEach(b=>b.onclick=()=>{
   render(); salvar();
 });
 
-$('#lPagador').onchange=e=>{ const v=+$('#lValor').value||0;
-  if(e.target.value==='eu') $('#lPai').value='';
-  else if(e.target.value==='pai') $('#lPai').value=v||'';
-  else if(v) $('#lPai').value=(v/2).toFixed(2); };
+/* O mesmo select de "quem paga" da tabela, agora no formulário de "Mais
+   opções" — as opções são as pessoas cadastradas, então ele é repintado
+   sempre que a lista muda. */
+function pintarPagadorForm(valor){
+  const sel=$('#lPagador'); if(!sel) return;
+  const antes=valor||sel.value||'eu';
+  const v=+$('#lValor').value||0, pago=+$('#lPai').value||0;
+  const [modo,id]=String(antes).split(':');
+  sel.innerHTML=opcoesPagador({valor:v,pai:antes==='eu'?0:(pago||v),com:antes==='eu'?'':(id||'')});
+  sel.value=[...sel.options].some(o=>o.value===antes)?antes:'eu';
+  rotularPai();
+}
+function rotularPai(){
+  const lab=$('#labPai'), sel=$('#lPagador'); if(!lab||!sel) return;
+  const [,id]=String(sel.value).split(':');
+  lab.textContent=(sel.value==='eu'||sel.value==='+')?'Quanto a outra pessoa cobre'
+    :'Quanto '+nomePessoa(id)+' cobre';
+}
+$('#lPagador').onchange=e=>{
+  if(e.target.value==='+'){
+    const p=pedirPessoa();
+    pintarPagadorForm(p?'d:'+p.id:'eu');
+    if(p){ render(); salvar(); }
+  }
+  const v=+$('#lValor').value||0, escolha=$('#lPagador').value;
+  if(escolha==='eu') $('#lPai').value='';
+  else if(escolha.startsWith('t:')) $('#lPai').value=v||'';
+  else if(v) $('#lPai').value=(v/2).toFixed(2);
+  rotularPai();
+};
 $('#lTipo').onchange=e=>{ $('#lParc').disabled=(e.target.value!=='parc'); if(e.target.value!=='parc') $('#lParc').value=''; };
 /* ==========================================================================
    Tema: uma preferência do APARELHO, aplicada antes de qualquer tela
@@ -733,10 +941,18 @@ $('#addLanc').onclick=()=>{
   const nome=$('#lNome').value.trim(), valor=+$('#lValor').value;
   if(!nome||!(valor>0)){ $('#lNome').focus(); return; }
   const tipo=$('#lTipo').value;
-  S.lanc.push({id:Date.now()+Math.random(),criadoEm:Date.now(),nome,valor,cat:$('#lCat').value,tier:+$('#lTier').value,
+  const l={id:Date.now()+Math.random(),criadoEm:Date.now(),nome,valor,cat:$('#lCat').value,tier:+$('#lTier').value,
     fonte:$('#lFonte').value.trim()||'Conta',tipo,pRest:tipo==='parc'?(+$('#lParc').value||1):0,
-    pai:Math.min(+$('#lPai').value||0,valor),ref:0,venc:Math.min(Math.max(+$('#lVenc').value||0,0),31)});
-  ['lNome','lValor','lParc','lPai','lVenc'].forEach(i=>$('#'+i).value=''); $('#lPagador').value='eu'; $('#lNome').focus();
+    com:'',pai:Math.min(+$('#lPai').value||0,valor),ref:0,venc:Math.min(Math.max(+$('#lVenc').value||0,0),31)};
+  const pag=$('#lPagador').value;
+  if(pag==='eu'||pag==='+'){ l.pai=0; l.com=''; }
+  else{
+    const [modo,id]=pag.split(':');
+    l.com=id||'';
+    l.pai=modo==='t'?valor:(l.pai>0?Math.min(l.pai,valor):+(valor/2).toFixed(2));
+  }
+  S.lanc.push(l);
+  ['lNome','lValor','lParc','lPai','lVenc'].forEach(i=>$('#'+i).value=''); pintarPagadorForm('eu'); $('#lNome').focus();
   render(); salvar();
 };
 $('#addObj').onclick=()=>{
@@ -770,7 +986,7 @@ document.addEventListener('click',e=>{
 });
 $('#zerar').onclick=()=>{ if(confirm('Apagar tudo e recomeçar do zero?')){
   S=Object.assign({},S,{salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:5,
-     ultimoFech:iso(ultimoFechPassado()),hist:[],tetos:{},lanc:[],div:[],obj:[],meses:6,jaTem:0,notifLog:{},agendaLog:{},retroVista:null});
+     ultimoFech:iso(ultimoFechPassado()),hist:[],tetos:{},lanc:[],div:[],obj:[],pessoas:[],meses:6,jaTem:0,notifLog:{},agendaLog:{},retroVista:null});
   ['salario','extra','jaTem','metaVal'].forEach(i=>$('#'+i).value=''); $('#metaPct').value=20; $('#meses').value=6;
   avisoCiclo=''; render(); salvar();
   Auth.apagarEstadoNaNuvem().catch(()=>{});
@@ -1295,12 +1511,17 @@ function renderVenc(){
 
 /* ---------- exportar CSV ---------- */
 function exportarCSV(){
-  const cab=['descricao','categoria','peso','tipo','valor_fatura','pago_por_outro','meu_valor','fonte','parcelas_restantes','vence_dia'];
+  const cab=['descricao','categoria','peso','tipo','valor_fatura','dividido_com','pago_por_outro','meu_valor','fonte','parcelas_restantes','vence_dia'];
   const lin=S.lanc.map(l=>[l.nome,CATS[l.cat]?CATS[l.cat].n:l.cat,TIER[l.tier].n,l.tipo,
-    l.valor,+l.pai||0,meuValor(l),l.fonte||'Conta',+l.pRest||0,+l.venc||0]);
-  const hist=S.hist.flatMap(x=>(x.itens||[]).map(l=>['[fatura '+dataBR(x.data)+'] '+l.nome,
-    CATS[l.cat]?CATS[l.cat].n:l.cat,TIER[l.tier]?TIER[l.tier].n:l.tier,l.tipo,l.valor,+l.pai||0,
-    Math.max(l.valor-(+l.pai||0),0),l.fonte||'Conta',+l.pRest||0,+l.venc||0]));
+    l.valor,+l.pai>0?nomePessoa(l.com):'',+l.pai||0,meuValor(l),l.fonte||'Conta',+l.pRest||0,+l.venc||0]);
+  const hist=S.hist.flatMap(x=>{
+    // O nome vem da fatura arquivada, não da lista de hoje: pessoa apagada
+    // continua nomeada na linha do mês em que ela dividiu o gasto.
+    const nomes={}; fatiasDoHist(x).forEach(f=>{ nomes[f.id]=f.nome; });
+    return (x.itens||[]).map(l=>['[fatura '+dataBR(x.data)+'] '+l.nome,
+      CATS[l.cat]?CATS[l.cat].n:l.cat,TIER[l.tier]?TIER[l.tier].n:l.tier,l.tipo,l.valor,
+      +l.pai>0?(nomes[l.com||'']||nomePessoa(l.com)):'',+l.pai||0,
+      Math.max(l.valor-(+l.pai||0),0),l.fonte||'Conta',+l.pRest||0,+l.venc||0]);});
   const cel=v=>typeof v==='number'?String(v).replace('.',','):'"'+String(v).replace(/"/g,'""')+'"';
   const csv='﻿'+[cab.join(';'),...lin.concat(hist).map(l=>l.map(cel).join(';'))].join('\r\n');
   const a=document.createElement('a');
@@ -1735,7 +1956,7 @@ function renderUltimos(c){
       >${icone(ICONE_CAT[l.cat]||'outros')}</div>
     <div class="tx"><div class="nm">${esc(l.nome)}</div>
       <div class="dt">${CATS[l.cat].n} · ${selo(l)}${l.fonte&&l.fonte!=='Conta'?' · '+esc(l.fonte):''}</div></div>
-    <div class="vl">${brl(l.valor)}${(+l.pai>0)?`<small>meu ${brl(meuValor(l))}</small>`:''}</div>
+    <div class="vl">${brl(l.valor)}${(+l.pai>0)?`<small>meu ${brl(meuValor(l))} · ${esc(nomePessoa(l.com))}</small>`:''}</div>
     <button class="rm" data-del="${l.id}" aria-label="Remover ${esc(l.nome)}">×</button>
   </div>`).join('');
   if(S.lanc.length>6) el.innerHTML+=`<p class="ajuda" style="margin:12px 0 0;text-align:center">
@@ -2102,7 +2323,11 @@ function mostrarRetro(x){
     </div>
 
     ${x.pai>0?`<div class="re-card" style="animation-delay:.1s">
-      <div class="l">Outra pessoa cobriu</div><div class="re-n" style="font-size:30px;color:var(--pai)">${brl(x.pai)}</div>
+      <div class="l">${fatiasDoHist(x).length===1?esc(fatiasDoHist(x)[0].nome)+' cobriu':'Dividido com outras pessoas'}</div>
+      <div class="re-n" style="font-size:30px;color:${fatiasDoHist(x).length===1?fatiasDoHist(x)[0].cor:'var(--pai)'}">${brl(x.pai)}</div>
+      ${fatiasDoHist(x).length>1?fatiasDoHist(x).map(f=>`<div class="re-linha">
+        <span class="pt" style="background:${f.cor}"></span><span class="rn">${esc(f.nome)}</span>
+        <span class="rv">${brl(f.valor)}</span><span class="rd"></span></div>`).join(''):''}
       <div class="d">Estava na fatura, mas não saiu do seu bolso.</div></div>`:''}
 
     <div class="re-card" style="animation-delay:.15s">
@@ -2151,8 +2376,14 @@ document.addEventListener('click',e=>{
 $('#rapido').addEventListener('input',renderEco);
 $('#rapido').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); salvarRapido(); } });
 $('#rapidoOk').onclick=salvarRapido;
-$('#verTodos').onclick=()=>{ $('#blocoTodos').hidden=false;
-  $('#blocoTodos').scrollIntoView({behavior:'smooth',block:'start'}); };
+function abrirTodosOsGastos(){
+  $('#blocoTodos').hidden=false;
+  $('#blocoTodos').scrollIntoView({behavior:'smooth',block:'start'});
+}
+$('#verTodos').onclick=abrirTodosOsGastos;
+// O "ver os gastos" do bloco Dividido com leva pra mesma tabela: é lá que se
+// marca quem paga cada linha.
+document.querySelectorAll('[data-ver-todos]').forEach(b=>b.onclick=abrirTodosOsGastos);
 $('#fecharTodos').onclick=()=>{ $('#blocoTodos').hidden=true; };
 $('#addHorario').onclick=()=>{
   S.agenda=S.agenda||[];
@@ -2249,7 +2480,7 @@ async function puxarDaNuvem(silencioso){
     if(adotarRemoto){
       S=Object.assign(S,remoto);
       S._revisao=linha.revisao;
-      rodarCiclos(); aplicarTema(); preencherCampos(); render();
+      migrarPessoas(); rodarCiclos(); aplicarTema(); preencherCampos(); render();
       await storeSet(KEY,JSON.stringify(S));
       marcarSinc('ok');
       if(!silencioso) toast('Dados atualizados desta conta');
@@ -2492,7 +2723,7 @@ async function abrirApp(recemLogado, contaNova){
         const d=JSON.parse(antigo);
         if(d && (d.lanc||[]).length){
           S=Object.assign(S,d); delete S._revisao;
-          rodarCiclos(); preencherCampos(); render(); await salvar();
+          migrarPessoas(); rodarCiclos(); preencherCampos(); render(); await salvar();
           toast('Importamos os dados que já estavam neste aparelho');
         }
       }

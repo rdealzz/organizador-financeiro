@@ -126,6 +126,42 @@ assim que a pessoa escolhe uma área. `retroPendente` é declarada **no topo do
 reabrir com sessão salva, `abrirApp()` roda antes do fim do arquivo, e um `let`
 lá embaixo estaria na zona morta temporal.
 
+## Quem divide o gasto é uma PESSOA (v9.2)
+
+Antes existia um campo só, `l.pai`, com o quanto "outra pessoa" cobria — anônima
+e sempre a mesma. Agora há uma lista de pessoas (`S.pessoas`, cada uma com
+`id`, `nome` e `cor`) e cada lançamento aponta para uma delas em **`l.com`**.
+
+**`l.pai` continua com esse nome de propósito.** Ele guarda o VALOR que a outra
+pessoa cobre, e está gravado nas faturas arquivadas, nos backups em arquivo e no
+CSV que as pessoas já baixaram. Renomear o campo quebraria os três sem mudar uma
+linha do que aparece na tela. `meuValor()` não mudou.
+
+Três coisas para não repetir:
+
+1. **A fatura arquivada congela nome e cor** (`hist[].pessoas`), não guarda só o
+   id. Quem apagar "Mãe" em dezembro continua vendo de quem era a metade do
+   mercado de setembro. Quem lê o histórico usa `fatiasDoHist(x)`, que também
+   sabe responder pelas faturas antigas, que só têm o total em `x.pai`.
+2. **A migração roda uma vez por conta**, marcada por `S.pessoasOk` — que viaja
+   no estado, então o segundo aparelho não repete. Ela transforma a divisão
+   anônima antiga numa pessoa chamada "Outra pessoa" e a costura no histórico.
+   `migrarPessoas()` é chamada nos QUATRO pontos em que estado entra no app:
+   `carregar()`, restauração de backup, adoção do estado remoto e importação do
+   estado que já estava no aparelho.
+3. **As cores de pessoa (`--pes1`…`--pes8`) são cor de DADO**, como as de
+   categoria: existem para separar pai de mãe numa lista, então continuam
+   multicoloridas mesmo com a identidade azul. Diferente das cores de gráfico
+   (`--s1`…`--s8`, que só existem dentro de `.viz` e fora dali são *sombra*),
+   elas estão no `:root` e no bloco do tema escuro — podem ser usadas em
+   qualquer tela, e foram escolhidas para servir como TEXTO sobre o cartão.
+
+O select de "quem paga" é montado por `opcoesPagador(l, curto)` e vale para a
+tabela e para o formulário. O `curto` existe porque "Dividido com Mãe" espremia
+a coluna da tabela até virar "Divi" numa tela de 430 px; na tabela o rótulo é
+"Com Mãe" e o nome por extenso aparece embaixo da descrição, que é a coluna que
+nunca sai da tela.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

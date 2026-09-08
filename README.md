@@ -83,6 +83,29 @@ anterior. O resto dos campos (parcelado, quem paga, vencimento, conta) fica em
 Abaixo do campo ficam **chips** dos seus gastos mais frequentes, tirados do
 histórico: um toque preenche a descrição e só falta o valor.
 
+## Gasto dividido tem nome
+
+Dividir a conta não é uma coisa só: o mercado é meio a meio com o **pai**, a
+assinatura é inteira da **mãe**, o rateio da casa é com mais alguém. Por isso
+cada pessoa com quem você divide é cadastrada uma vez — em *Mais opções →
+Quem paga → + Nova pessoa*, ou no bloco **Dividido com**, na tela Hoje — e cada
+gasto aponta para uma delas.
+
+Em cada lançamento, três situações: **eu, sozinho**, **dividido com Fulano**
+(metade por padrão, o valor exato é editável) e **Fulano paga tudo** — o caso do
+cartão em que outra pessoa gasta e você só recebe a fatura.
+
+O gasto continua inteiro na fatura, mas só a **sua parte** entra nos tetos, na
+sobra do mês e no "quanto posso gastar hoje". O bloco **Dividido com** mostra
+quanto é de cada pessoa neste ciclo e quanto sobra para você, a fatura arquivada
+guarda a divisão **congelada** (com o nome de quem dividiu, mesmo que a pessoa
+saia da lista depois), a retrospectiva do mês abre a divisão pessoa a pessoa e o
+CSV exportado ganhou a coluna `dividido_com`.
+
+Quem já usava o app com o antigo "outra pessoa" não perde nada: na primeira
+abertura essa divisão anônima vira uma pessoa chamada **Outra pessoa** — é só
+renomear para *Pai* e o histórico inteiro vem junto.
+
 ## O número principal
 
 O painel não abre com "sobra prevista" — abre com **quanto você pode gastar

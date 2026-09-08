@@ -239,6 +239,14 @@ html[data-tema="escuro"] #splash{background:#000}
     <div id="ultimos"></div>
   </section>
 
+  <!-- Só aparece quando existe alguém cadastrado: quem nunca divide gasto
+       não precisa de mais um bloco na tela inicial. -->
+  <section class="bloco" id="blocoPessoas" hidden>
+    <div class="bloco-topo"><h2>Dividido com</h2>
+      <button class="link" data-ver-todos="1">ver os gastos</button></div>
+    <div id="pessoas"></div>
+  </section>
+
   <section class="bloco" id="blocoTodos" hidden>
     <div class="bloco-topo"><h2>Todos os gastos do ciclo</h2>
       <button class="link" id="fecharTodos">recolher</button></div>
@@ -675,13 +683,15 @@ html[data-tema="escuro"] #splash{background:#000}
           <option value="unico">Só neste mês (1x)</option></select></div>
         <div><label for="lParc">Parcelas restantes</label><input type="number" inputmode="numeric" id="lParc" min="0" step="1" placeholder="0"></div>
         <div><label for="lVenc">Vence dia</label><input type="number" inputmode="numeric" id="lVenc" min="1" max="31" step="1" placeholder="—"></div>
+        <!-- As opções deste select são as pessoas cadastradas: quem monta é
+             pintarPagadorForm(), no app.js. -->
         <div><label for="lPagador">Quem paga</label><select id="lPagador">
-          <option value="eu">Eu, sozinho</option><option value="dividido">Dividido com outra pessoa</option><option value="pai">Outra pessoa paga tudo</option></select></div>
-        <div><label for="lPai">Quanto ele cobre</label><input type="number" inputmode="decimal" id="lPai" min="0" step="0.01" placeholder="0,00"></div>
+          <option value="eu">Eu, sozinho</option></select></div>
+        <div><label for="lPai" id="labPai">Quanto a outra pessoa cobre</label><input type="number" inputmode="decimal" id="lPai" min="0" step="0.01" placeholder="0,00"></div>
         <div><label for="lFonte">Onde caiu</label><input id="lFonte" list="dlFontes" placeholder="Conta"></div>
       </div>
       <div class="acoes"><button class="btn" id="addLanc">Adicionar com estes detalhes</button></div>
-      <p class="ajuda" style="margin:6px 0 0"><b>Quem paga:</b> se outra pessoa cobre parte, escolha “dividido” — o gasto continua inteiro na fatura, mas só a sua parte conta no teto. <b>Repetição:</b> <i>variável</i> zera o valor a cada fatura pra você preencher o do mês; <i>fixo</i> repete igual; <i>parcelado</i> desconta uma parcela; <i>1x</i> some no fechamento.</p>
+      <p class="ajuda" style="margin:6px 0 0"><b>Quem paga:</b> cadastre cada pessoa com quem você divide — pai, mãe, quem for — em <b>+ Nova pessoa</b>, ali no próprio select. O gasto continua inteiro na fatura, mas só a sua parte conta no teto, e o bloco <b>Dividido com</b> mostra quanto é de cada um. <b>Repetição:</b> <i>variável</i> zera o valor a cada fatura pra você preencher o do mês; <i>fixo</i> repete igual; <i>parcelado</i> desconta uma parcela; <i>1x</i> some no fechamento.</p>
     </details>
   </div>
 </div>
