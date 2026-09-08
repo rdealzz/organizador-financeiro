@@ -264,6 +264,19 @@ uma linha existente.
 O indicador no cabeçalho mostra o estado real: sincronizado (com a hora),
 sincronizando, offline ou falha.
 
+## Quando a sincronização falha
+
+Falha de rede é passageira quase sempre, então o app trata assim: repete
+sozinho em 4s, 12s, 40s, 2min e depois de 5 em 5 minutos, e tenta de novo
+assim que volta ao primeiro plano. Enquanto está tentando, o aviso é
+**"Tentando de novo…"** com o ponto laranja — vermelho fica reservado para o
+que só passa com uma ação sua: o estado passou do tamanho que a nuvem aceita,
+ou a sessão expirou de verdade. O motivo real aparece por escrito em
+*Ajustes → Minha conta*.
+
+Nada disso arrisca seus dados: eles já estão salvos no aparelho antes de
+qualquer tentativa de subir.
+
 ## Nova versão disponível
 
 Quando um deploy novo chega na `main`, o app detecta (ao abrir, ao voltar para

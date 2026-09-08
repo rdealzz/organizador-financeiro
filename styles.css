@@ -801,6 +801,9 @@ button,.btn,select,input{font-size:16px}
 .sinc[data-e="enviando"] i{background:var(--azul);animation:pisca 1s ease-in-out infinite}
 .sinc[data-e="offline"] i{background:var(--laranja)}
 .sinc[data-e="erro"] i{background:var(--vermelho)}
+/* Falhou, mas o app já marcou nova tentativa: laranja pulsando, não vermelho.
+   Vermelho é para o que só passa com uma ação da pessoa. */
+.sinc[data-e="retentando"] i{background:var(--laranja);animation:pisca 1s ease-in-out infinite}
 .sinc[data-e="local"] i{background:var(--txt-3)}
 @keyframes pisca{0%,100%{opacity:1}50%{opacity:.3}}
 @media(max-width:430px){.sinc span{display:none}.sinc{padding:0;width:44px}}

@@ -2659,6 +2659,21 @@ setInterval(()=>{ if(Auth.logado()) checarAlertas(false); },30*60*1000); // os a
 
 /* ---------- sincronização com a nuvem ---------- */
 let sincEstado='local', sincQuando=0, envioT=null, enviando=false, pendente=false;
+/* Por que a falha aparecia e ficava: uma gravação que dava errado marcava
+   'erro' e parava por ali. Não havia nova tentativa — o app só voltava a
+   tentar quando a pessoa editasse alguma coisa (o que reagenda o envio) ou
+   tocasse no chip. Numa oscilação de dois segundos de rede, o resultado era
+   um "Falha ao sincronizar" que ficava na tela até alguém mexer, mesmo com a
+   internet já de volta.
+
+   Agora quase toda falha é passageira até prova em contrário: o app tenta de
+   novo sozinho, com espera crescente, e DIZ que vai tentar. `sincMotivo`
+   guarda a frase do erro real, porque "falha" sem motivo não ajuda ninguém a
+   resolver — e havia dois motivos que nenhuma tentativa resolve (estado
+   grande demais e sessão expirada), que precisam de resposta diferente. */
+const ESPERA_SINC=[4000,12000,40000,120000,300000];
+let sincMotivo='', sincTentativa=0, sincProxima=0, sincFatal=false;
+const ERRO_SEM_VOLTA=/ESTADO_GRANDE|SESSAO_EXPIRADA|SEM_SESSAO|INVALID_ID_TOKEN|TOKEN_EXPIRED|USER_NOT_FOUND|USER_DISABLED/;
 
 function pintarSinc(){
   const el=$('#sinc'); if(!el) return;
@@ -2667,32 +2682,63 @@ function pintarSinc(){
     ok:       hora?('Sincronizado '+hora):'Sincronizado',
     enviando: 'Sincronizando…',
     offline:  'Offline — salvo aqui',
-    erro:     'Falha ao sincronizar',
+    // Com nova tentativa marcada, "falha" é alarme falso: o app está no meio
+    // de resolver sozinho, e dizer isso evita o susto e o toque desnecessário.
+    erro:     sincProxima?'Tentando de novo…':'Falha ao sincronizar',
     local:    'Só neste aparelho'
   }[sincEstado]||'—';
-  el.dataset.e=sincEstado;
+  /* Ponto vermelho é "preciso de você". Enquanto o app está tentando de novo
+     sozinho isso não é verdade — e numa tela de até 430px o span some e o
+     ponto é a mensagem inteira. Laranja pulsando: pendente, mas cuidando. */
+  el.dataset.e=(sincEstado==='erro'&&sincProxima)?'retentando':sincEstado;
   el.querySelector('span').textContent=txt;
   el.setAttribute('aria-label','Sincronização: '+txt+'. Toque para sincronizar agora.');
   const c=$('#contaSinc');
   const traco={ok:'certo',offline:'lua',erro:'atencao',enviando:'relogio',local:'nota'}[sincEstado]||'relogio';
-  if(c) c.innerHTML=`<div class="aviso-card ${sincEstado==='ok'?'ok':sincEstado==='erro'?'ruim':''}">
+  /* O cartão da conta é o lugar de explicar: o que falhou, se o app vai
+     tentar de novo e o que a pessoa precisa fazer — quando precisa. */
+  const daquiA=sincProxima?Math.max(Math.round((sincProxima-Date.now())/1000),1):0;
+  const textoErro = sincFatal
+    ? `<b>Não consegui sincronizar.</b> ${esc(sincMotivo||'')} Seus dados continuam salvos neste aparelho — nada foi perdido.`
+    : `<b>A última sincronização falhou.</b> ${esc(sincMotivo||'')} Seus dados estão salvos neste aparelho${daquiA?` e o app tenta de novo em ${daquiA} segundo${daquiA===1?'':'s'}`:''}. Toque em “Sincronizar agora” se quiser tentar já.`;
+  if(c) c.innerHTML=`<div class="aviso-card ${sincEstado==='ok'?'ok':(sincEstado==='erro'&&sincFatal)?'ruim':''}">
     <span class="av-ic">${icone(traco,18)}</span>
     <div>${sincEstado==='ok'?`<b>Tudo salvo na sua conta.</b> Última sincronização às ${hora}. Abrindo em outro aparelho com este mesmo login, os dados estarão lá.`
       :sincEstado==='offline'?'<b>Sem internet agora.</b> Continue usando normalmente — está tudo salvo neste aparelho e sobe sozinho quando a conexão voltar.'
-      :sincEstado==='erro'?'<b>Não consegui sincronizar.</b> Seus dados estão salvos neste aparelho. Toque em “Sincronizar agora” para tentar de novo.'
+      :sincEstado==='erro'?textoErro
       :'Sincronizando…'}</div></div>`;
 }
-function marcarSinc(e){ sincEstado=e; if(e==='ok') sincQuando=Date.now(); pintarSinc(); }
+function marcarSinc(e){
+  sincEstado=e;
+  if(e==='ok'){ sincQuando=Date.now(); sincMotivo=''; sincTentativa=0; sincProxima=0; sincFatal=false; }
+  pintarSinc();
+}
 
 function agendarEnvio(){
   if(!Auth.logado()) return;
+  /* Uma edição nova cancela a espera da tentativa anterior de propósito: ela
+     JÁ é a próxima tentativa, e adiar meia hora o que a pessoa acabou de
+     escrever seria o pior dos dois mundos. */
+  sincProxima=0;
   clearTimeout(envioT);
   envioT=setTimeout(enviarParaNuvem,1200);
+}
+/* Espera crescente: 4s, 12s, 40s, 2min e daí 5 em 5 minutos. Curta no começo
+   porque a maioria das falhas é um soluço de rede que passa em segundos;
+   longa depois para não martelar um servidor que está fora do ar. */
+function agendarRetentativa(){
+  if(!Auth.logado()) return;
+  const espera=ESPERA_SINC[Math.min(sincTentativa,ESPERA_SINC.length-1)];
+  sincTentativa++;
+  sincProxima=Date.now()+espera;
+  clearTimeout(envioT);
+  envioT=setTimeout(()=>{ sincProxima=0; enviarParaNuvem(); },espera);
+  pintarSinc();
 }
 async function enviarParaNuvem(){
   if(!Auth.logado()) return;
   if(enviando){ pendente=true; return; }
-  if(!navigator.onLine){ marcarSinc('offline'); pendente=true; return; }
+  if(!navigator.onLine){ marcarSinc('offline'); pendente=true; agendarRetentativa(); return; }
   if(estaVazio(S) && S._revisao){ marcarSinc('ok'); return; }
   enviando=true; marcarSinc('enviando');
   try{
@@ -2700,7 +2746,12 @@ async function enviarParaNuvem(){
     if(r) S._revisao=r.revisao;
     marcarSinc('ok');
   }catch(e){
-    marcarSinc(String(e.codigo||'').includes('sem_rede')||!navigator.onLine?'offline':'erro');
+    const cru=String(e.codigo||e.message||'').toUpperCase();
+    sincFatal=ERRO_SEM_VOLTA.test(cru);
+    sincMotivo=Auth.mensagemDeErro(e);
+    if(cru.includes('SEM_REDE')||!navigator.onLine){ marcarSinc('offline'); agendarRetentativa(); }
+    else if(sincFatal){ sincTentativa=0; sincProxima=0; marcarSinc('erro'); }   // repetir não resolve: precisa de ação
+    else { marcarSinc('erro'); agendarRetentativa(); }
   }finally{
     enviando=false;
     if(pendente){ pendente=false; agendarEnvio(); }
@@ -2732,11 +2783,28 @@ async function puxarDaNuvem(silencioso){
       S._revisao=linha.revisao; marcarSinc('ok');
     }
   }catch(e){
-    marcarSinc(String(e.codigo||'').includes('sem_rede')?'offline':'erro');
+    const cru=String(e.codigo||e.message||'').toUpperCase();
+    sincFatal=ERRO_SEM_VOLTA.test(cru);
+    sincMotivo=Auth.mensagemDeErro(e);
+    marcarSinc(cru.includes('SEM_REDE')?'offline':'erro');
+    if(!sincFatal) agendarRetentativa();
   }
 }
-window.addEventListener('online',()=>{ if(Auth.logado()){ marcarSinc('enviando'); puxarDaNuvem(true); } });
+/* A conexão voltou: recomeça a contagem de espera do zero, senão o app ficaria
+   parado no intervalo de cinco minutos herdado de quando estava sem rede. */
+window.addEventListener('online',()=>{ if(Auth.logado()){ sincTentativa=0; marcarSinc('enviando'); puxarDaNuvem(true); } });
 window.addEventListener('offline',()=>{ if(Auth.logado()) marcarSinc('offline'); });
+/* Voltar para o app é o momento mais provável de a rede estar boa de novo — e
+   é quando a pessoa vai OLHAR para o aviso. Tentar aqui é o que faz a falha
+   sumir sozinha antes de ela reparar. */
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible') return;
+  if(!Auth.logado()) return;
+  if(sincEstado==='erro'&&sincFatal) return;          // esperar não muda nada
+  if(sincEstado==='erro'||sincEstado==='offline'||pendente){
+    sincTentativa=0; clearTimeout(envioT); enviarParaNuvem();
+  }
+});
 
 /* preenche os campos do formulário a partir do estado (usado no load e no pull) */
 function preencherCampos(){
@@ -3207,7 +3275,15 @@ document.addEventListener('pointerdown',e=>{
 });
 
 $('#sinc').onclick=()=>{ if(Auth.logado()) puxarDaNuvem(); };
-$('#btnSincAgora').onclick=async()=>{ await puxarDaNuvem(); await enviarParaNuvem(); toast('Sincronizado'); };
+$('#btnSincAgora').onclick=async()=>{
+  /* Tentativa a pedido zera a espera: a pessoa não deve esperar o relógio de
+     uma tentativa automática que estava marcada para daqui a cinco minutos. */
+  sincTentativa=0; sincProxima=0; clearTimeout(envioT);
+  await puxarDaNuvem(); await enviarParaNuvem();
+  // Dizer "Sincronizado" depois de falhar é mentir na cara de quem tocou.
+  if(sincEstado==='ok') toast('Sincronizado');
+  else toast(sincMotivo||'Não consegui sincronizar agora',true);
+};
 $('#btnSair').onclick=sairDaConta;
 $('#btnTrocarSenha').onclick=()=>{
   const el=$('#trocaSenha'); el.hidden=!el.hidden;

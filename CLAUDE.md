@@ -274,6 +274,57 @@ dia do mês que vem" — 30 dias de folga que nenhum cartão dá. Quem já tem c
 mantém o que configurou; a nota em *Renda e meta* avisa quando os dois dias
 estão iguais.
 
+## "Falha ao sincronizar" — três causas, três correções (v9.5)
+
+O aviso aparecia "às vezes" e ficava. Investigando, eram três defeitos
+diferentes empilhados, e os dois primeiros chegavam a **deslogar a pessoa**:
+
+1. **Um 403 do Firestore apagava a sessão.** `pedir()` tinha
+   `r.status === 401 || r.status === 403` na regra de `encerraSessaoSeInvalido`.
+   Só que o Firestore responde **403 com "Missing or insufficient permissions"**
+   quando as REGRAS recusam a gravação — não quando o token acabou. Um tropeço
+   ali derrubava uma sessão perfeitamente válida, e a gravação seguinte falhava
+   com "sessão expirada". Agora só 401 e as mensagens que falam do token
+   (`INVALID_ID_TOKEN`, `TOKEN_EXPIRED`, `USER_NOT_FOUND`, `USER_DISABLED`)
+   encerram a sessão.
+2. **Qualquer falha no refresh apagava a sessão.** O `catch` do `tokenValido()`
+   tratava tudo que não fosse `sem_rede` como credencial morta — um 500 do
+   Google ou um 429 deslogava. Agora existe `sessaoMorta(e)`: só 400/401 e as
+   mensagens definitivas (`INVALID_REFRESH_TOKEN`, `INVALID_GRANT`…) apagam a
+   sessão; o passageiro vira `sem_rede`, que o app já sabe tratar. **403 fica de
+   fora de propósito** também aqui: no securetoken ele significa "esta API está
+   bloqueada para esta chave", problema de configuração do projeto — deslogar
+   todo mundo por isso seria pior que o problema.
+3. **Não havia nova tentativa.** Uma gravação que falhava marcava `'erro'` e
+   parava. O app só tentava de novo quando a pessoa editasse algo (o que
+   reagenda o envio) ou tocasse no chip. Numa oscilação de dois segundos, o
+   aviso ficava na tela até alguém mexer — com a internet já de volta.
+
+`agendarRetentativa()` repete sozinho em **4s, 12s, 40s, 2min e daí de 5 em 5
+minutos**, e `visibilitychange` tenta de novo (com a espera zerada) quando o app
+volta ao primeiro plano — que é o momento mais provável de a rede estar boa E o
+momento em que a pessoa olha para o aviso. `agendarEnvio()` zera `sincProxima`
+porque uma edição nova JÁ é a próxima tentativa.
+
+Duas distinções que a interface passou a fazer:
+
+* **`sincMotivo`** guarda a frase real do erro (`Auth.mensagemDeErro`). "Falha"
+  sem motivo não diz a ninguém o que fazer — e havia um motivo que a pessoa
+  PRECISA saber: o estado passou de 512 KB.
+* **`ERRO_SEM_VOLTA`** separa o que tentar de novo resolve do que não resolve
+  (estado grande, sessão expirada). Só o segundo grupo mostra "Falha ao
+  sincronizar" com o ponto vermelho; o resto mostra "Tentando de novo…" com o
+  ponto laranja pulsando. Numa tela de até 430px o texto do chip some e **o
+  ponto é a mensagem inteira** — vermelho ali tem que significar "preciso de
+  você", nunca "aguarde".
+
+E `#btnSincAgora` não diz mais "Sincronizado" quando falhou: ele lê
+`sincEstado` depois de tentar.
+
+O projeto Firebase foi reverificado em 08/09/2026 pelas APIs REST (cadastro,
+`:commit` com increment, leitura de volta, refresh, 403 esperado em doc alheio,
+conta de teste apagada) — está saudável. A falha era toda do lado do cliente.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

@@ -124,8 +124,16 @@ async function pedir(url, o, freio){
     e.codigo = msg;
     /* Token recusado pelo servidor: a sessão local não vale mais nada. Guardar
        um token morto no aparelho só serve para o app tentar de novo em loop e
-       para o token ficar guardado além do tempo — some com ele na hora. */
-    if(o.encerraSessaoSeInvalido && (r.status === 401 || r.status === 403 ||
+       para o token ficar guardado além do tempo — some com ele na hora.
+
+       Só que 403 NÃO entra aqui. O Firestore devolve 403 com "Missing or
+       insufficient permissions" — que é o que ele responde quando as regras
+       recusam a gravação, não quando o token está morto. Enquanto 403 derrubava
+       a sessão, um tropeço momentâneo das regras deslogava a pessoa do nada e o
+       app dizia "Falha ao sincronizar" com um token que estava perfeito.
+       401 e as mensagens que falam do token, sim: essas são o servidor
+       afirmando que a credencial acabou. */
+    if(o.encerraSessaoSeInvalido && (r.status === 401 ||
        /INVALID_ID_TOKEN|TOKEN_EXPIRED|USER_NOT_FOUND|USER_DISABLED/.test(msg))){
       guardarSessao(null);
     }
@@ -165,6 +173,23 @@ async function chamarFirestore(caminho, opcoes){
 /* Renova o token sozinho um minuto antes de vencer. O endpoint de refresh é
    outro (securetoken, não identitytoolkit), pede o corpo como formulário e
    devolve os campos em snake_case — por isso não passa por montarSessao(). */
+/* O servidor está dizendo que a credencial acabou, ou só teve um mau momento?
+
+   No endpoint de refresh (securetoken) a resposta para um refresh token
+   inválido ou vencido é 400 com INVALID_REFRESH_TOKEN / TOKEN_EXPIRED — essas
+   são definitivas. 429 e a família 500 não são: são o Google pedindo para
+   tentar de novo mais tarde. */
+const SESSAO_MORTA = /INVALID_REFRESH_TOKEN|INVALID_GRANT|TOKEN_EXPIRED|MISSING_REFRESH_TOKEN|INVALID_ID_TOKEN|USER_NOT_FOUND|USER_DISABLED/;
+function sessaoMorta(e){
+  const m = String((e && (e.codigo || e.message)) || '').toUpperCase();
+  if(SESSAO_MORTA.test(m)) return true;
+  /* 400 e 401 é o securetoken dizendo que o refresh token não serve mais.
+     403 fica de fora de propósito: ali ele significa "esta API está bloqueada
+     para esta chave" — problema de configuração do projeto, não credencial
+     vencida, e derrubar a sessão de todo mundo por causa disso seria pior. */
+  const st = e && e.status;
+  return st === 400 || st === 401;
+}
 let renovando = null;
 async function tokenValido(){
   if(!sessao) return null;
@@ -187,8 +212,15 @@ async function tokenValido(){
       }catch(e){
         // Sem rede a sessão continua válida localmente: o app segue offline.
         if(e.codigo === 'sem_rede') return sessao ? sessao.access_token : null;
-        guardarSessao(null);
-        return null;
+        /* Só apaga a sessão quando o servidor DIZ que ela morreu. Um 500 do
+           Google, um 429 de excesso de pedidos ou uma resposta que veio pela
+           metade não provam nada — e apagar a sessão neles desloga a pessoa do
+           nada: a gravação seguinte falhava com "sessão expirada", o app
+           mostrava "Falha ao sincronizar" e a única saída era entrar de novo.
+           No passageiro devolvemos 'sem_rede', que o app já sabe tratar:
+           mostra "offline" e tenta outra vez sozinho. */
+        if(sessaoMorta(e)){ guardarSessao(null); return null; }
+        throw erro('sem_rede');
       }finally{ renovando = null; }
     })();
   }
