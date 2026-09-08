@@ -216,7 +216,11 @@ td input,td select{padding:7px 9px;font-size:14px;border-radius:var(--r-xs)}
 .tag{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:var(--r-full);color:#fff;white-space:nowrap;letter-spacing:0}
 .tag.t1{background:#8E8E93}.tag.t2{background:var(--laranja)}.tag.t3{background:var(--vermelho)}
 .tag.ciclor{background:var(--teal)}.tag.ciclov{background:var(--amarelo);color:#000}
-.tag.ciclop{background:var(--marrom)}.tag.ciclo1{background:#8E8E93}.tag.pai{background:var(--azul)}
+.tag.ciclop{background:var(--marrom)}.tag.ciclo1{background:#8E8E93}
+/* Fundo azul pede a cor de cima do azul — no tema escuro o azul é CLARO, e
+   texto branco em cima dele fica em 2:1. Ver "A identidade é azul" no CLAUDE.md. */
+.tag.pai{background:var(--azul);color:var(--sobre-azul)}
+.tag.cicloprox{background:var(--indigo);color:var(--sobre-azul)}
 .pt{display:inline-block;width:9px;height:9px;border-radius:var(--r-full);margin-right:8px;vertical-align:0}
 .vazio{color:var(--txt-3);font-size:14px;padding:20px 0;border-bottom:none;text-align:center}
 /* tetos */
@@ -422,6 +426,34 @@ td input,td select{padding:7px 9px;font-size:14px;border-radius:var(--r-xs)}
 .venc .vn{flex:1;min-width:0;font-weight:600;font-size:15px}
 .venc .vn small{display:block;font-weight:400;font-size:12.5px;color:var(--txt-3)}
 .venc .vv{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+
+/* ---- "Paguei": marcar a conta quitada sem sair da lista ----
+   Quitada, a linha continua ali, apagada e riscada no valor: some da contagem
+   mas não some da vista, senão a pessoa acha que o app perdeu o lançamento. */
+.btn-pago{flex:0 0 auto;border:1px solid var(--sep);background:var(--fill);color:var(--txt-2);
+  font-family:inherit;font-size:12px;font-weight:600;line-height:1;padding:9px 12px;
+  border-radius:var(--r-full);cursor:pointer;white-space:nowrap;
+  transition:background .16s,color .16s,border-color .16s}
+.btn-pago:hover{border-color:var(--azul);color:var(--azul-txt)}
+.btn-pago:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+/* Marcada, a cor vem da BORDA e do texto verde de texto (--verde-txt, 6:1).
+   Verde de preenchimento com texto em cima dá 3,5:1 — não passa em 12px. */
+.btn-pago.on{background:var(--verde-fraco);border-color:var(--verde);color:var(--verde-txt)}
+.venc.pago{opacity:.55}
+.venc.pago .vv{text-decoration:line-through}
+.venc.pago .dia{background:color-mix(in srgb,var(--verde) 16%,transparent)}
+
+/* ---- fatura fechada esperando pagamento ---- */
+.pagar{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.pagar .pg-t{flex:1;min-width:150px}
+.pagar .pg-t b{display:block;font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15}
+.pagar .pg-t small{display:block;margin-top:3px;font-size:12.5px;color:var(--txt-3)}
+
+/* ---- o que está guardado para a fatura seguinte ---- */
+.sheet-fatura{margin:10px 0 0;font-size:12.5px;color:var(--txt-3);text-align:center}
+tr.lin-prox>td{background:color-mix(in srgb,var(--indigo) 7%,transparent)}
+tr.sep-prox>td{padding-top:16px;font-size:12.5px;color:var(--txt-3);border-top:2px solid var(--sep)}
+.link.mini{font-size:11.5px;font-weight:500;padding:0}
 
 /* ==========================================================================
    v3 — app premium: navegação por área, folha de lançamento, microinterações

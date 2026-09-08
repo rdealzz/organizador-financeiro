@@ -125,6 +125,9 @@ const meuValor=l=>Math.max(l.valor-(+l.pai||0),0);
 const iso=d=>d.toISOString().slice(0,10);
 const hojeD=()=>{const d=new Date(); d.setHours(0,0,0,0); return d;};
 const dataBR=s=>{const [y,m,d]=s.split('-'); return d+'/'+m+'/'+y;};
+const dataDeISO=s=>{const [y,m,d]=String(s).split('-').map(Number); return new Date(y,(m||1)-1,d||1);};
+const diaDoMes=n=>Math.min(Math.max(Math.round(+n)||1,1),28);
+const ddmm=d=>String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0');
 
 /* ---------- ciclo da fatura ---------- */
 function ultimoFechPassado(){
@@ -135,38 +138,93 @@ function proximoFech(){
   const h=hojeD(), dia=+S.diaFech||5;
   return h.getDate()<dia ? new Date(h.getFullYear(),h.getMonth(),dia) : new Date(h.getFullYear(),h.getMonth()+1,dia);
 }
+/* ---------- fechar ≠ vencer: o gasto de hoje é da PRÓXIMA cobrança ----------
+
+   A fatura que vence daqui a quatro dias já fechou. O que se compra agora não
+   entra nela: entra na fatura que ainda está aberta, e essa só é paga no
+   vencimento seguinte ao fechamento dela. Quem fecha e vence no dia 12 paga em
+   12/10 o que comprou em 08/09 — o app dizia 12/09, que é a fatura anterior,
+   fechada e já arquivada. Era só isso que faltava ele entender.
+
+   `vencDaFatura` é o único lugar que casa as duas datas: recebe o dia em que a
+   fatura FECHA e devolve o dia em que ela é PAGA — o primeiro `diaVenc` depois
+   do fechamento. Fechamento e vencimento no mesmo dia do mês (a configuração de
+   quem só sabe a data do pagamento) caem naturalmente no mês seguinte, que é
+   exatamente o comportamento do cartão. */
+function vencDaFatura(fech){
+  const dv=diaDoMes(S.diaVenc||S.diaFech||5);
+  const d=new Date(fech.getFullYear(),fech.getMonth(),dv);
+  if(d<=fech) d.setMonth(d.getMonth()+1);
+  return d;
+}
+/* A fatura que está sendo formada agora — é nela que cai tudo que se lança
+   hoje, e ela só vira cobrança depois de fechar. */
+function faturaAberta(){ const fecha=proximoFech(); return {fecha,vence:vencDaFatura(fecha)}; }
+/* A fatura que está na mão pra PAGAR é a última arquivada, não a aberta — e só
+   enquanto o vencimento dela não passou. Sem histórico não há o que pagar: quem
+   começou a usar o app agora só tem fatura em formação. */
+function faturaAPagar(){
+  const x=S.hist&&S.hist[0]; if(!x||!x.data||x.pago) return null;
+  const fecha=dataDeISO(x.data);
+  const vence=x.venc?dataDeISO(x.venc):vencDaFatura(fecha);
+  return vence<hojeD()?null:{fecha,vence,bruto:+x.bruto||0,meu:+x.meu||0,ref:x};
+}
+
+/* Um lançamento pode nascer apontando pra fatura SEGUINTE: `l.prox` conta
+   quantos fechamentos ele ainda espera antes de entrar na conta. Enquanto for
+   maior que zero ele fica guardado — não soma nos totais do ciclo, não estoura
+   teto, não é arquivado no fechamento. Só anda uma casa na fila. */
+const naFaturaAberta=l=>!(+l.prox>0);
+const doCiclo=()=>S.lanc.filter(naFaturaAberta);
+const daProxima=()=>S.lanc.filter(l=>+l.prox>0);
+
 function fecharCiclo(dataStr){
+  /* Só fecha o que é DESTA fatura. O que foi lançado apontando pra seguinte
+     não estava nela: não é arquivado, apenas anda uma casa na fila. */
+  const daFatura=S.lanc.filter(naFaturaAberta), adiados=daProxima();
   let bruto=0,meu=0,pai=0; const porCat={};
-  S.lanc.forEach(l=>{ const m=meuValor(l);
+  daFatura.forEach(l=>{ const m=meuValor(l);
     bruto+=l.valor; meu+=m; pai+=Math.min(+l.pai||0,l.valor);
     porCat[l.cat]=(porCat[l.cat]||0)+m; });
-  const itens=S.lanc.map(l=>({nome:l.nome,cat:l.cat,tier:l.tier,valor:l.valor,pai:+l.pai||0,
+  const itens=daFatura.map(l=>({nome:l.nome,cat:l.cat,tier:l.tier,valor:l.valor,pai:+l.pai||0,
     com:l.com||'',tipo:l.tipo,fonte:l.fonte,pRest:+l.pRest||0,venc:+l.venc||0}));
   /* O nome e a cor da pessoa vão CONGELADOS na fatura arquivada, não por
      referência: quem apagar "Mãe" daqui a três meses continua vendo de quem
-     era aquela metade do mercado de setembro. */
-  S.hist.unshift({data:dataStr,bruto,meu,pai,porCat,itens,pessoas:fatiasPessoa(S.lanc)});
+     era aquela metade do mercado de setembro.
+     `venc` também vai gravado: a fatura que fecha hoje é paga no vencimento
+     seguinte, e daqui a seis meses o app não pode ter que adivinhar qual era
+     o dia de vencimento configurado na época. */
+  S.hist.unshift({data:dataStr,venc:iso(vencDaFatura(dataDeISO(dataStr))),
+    bruto,meu,pai,porCat,itens,pessoas:fatiasPessoa(daFatura)});
   S.hist=S.hist.slice(0,24);
   let sumiram=0, andaram=0;
-  S.lanc=S.lanc.filter(l=>{
+  const ficam=daFatura.filter(l=>{
     if(l.tipo==='var'){ l.ref=l.valor; l.valor=0; l.pai=0; return true; }   // `com` fica: a divisão do mercado costuma ser a mesma no mês seguinte
     if(l.tipo==='rec'||l.tipo==='fixo') return true;
     if(l.tipo==='parc'){ l.pRest=Math.max((+l.pRest||0)-1,0); if(l.pRest<=0){ sumiram++; return false; } andaram++; return true; }
     sumiram++; return false;
   });
-  return {sumiram,andaram};
+  adiados.forEach(l=>{ l.prox=Math.max((+l.prox||0)-1,0); });
+  S.lanc=ficam.concat(adiados);
+  return {sumiram,andaram,entraram:adiados.length};
 }
 function rodarCiclos(){
   if(!S.ultimoFech){ S.ultimoFech=iso(ultimoFechPassado()); return; }
-  const h=hojeD(); let n=0, sumiram=0, andaram=0, guarda=0;
+  const h=hojeD(); let n=0, sumiram=0, andaram=0, entraram=0, guarda=0;
   while(guarda++<36){
     const [y,m,d]=S.ultimoFech.split('-').map(Number);
     const prox=new Date(y,m-1+1,+S.diaFech||d);
     if(prox>h) break;
-    const r=fecharCiclo(iso(prox)); sumiram+=r.sumiram; andaram+=r.andaram; n++;
+    const r=fecharCiclo(iso(prox)); sumiram+=r.sumiram; andaram+=r.andaram; entraram+=r.entraram; n++;
     S.ultimoFech=iso(prox);
   }
-  if(n) avisoCiclo=`<div class="nota info"><b>A fatura fechou em ${dataBR(S.ultimoFech)}.</b> ${sumiram} lançamento${sumiram===1?'':'s'} de uma vez só saíram da lista, ${andaram} parcela${andaram===1?'':'s'} andou uma casa e o que é fixo continuou. O ciclo anterior foi pro histórico na aba Renda e meta.</div>`;
+  if(n){
+    const f=faturaAberta();
+    avisoCiclo=`<div class="nota info"><b>A fatura fechou em ${dataBR(S.ultimoFech)}.</b> ${sumiram} lançamento${sumiram===1?'':'s'} de uma vez só saíram da lista, ${andaram} parcela${andaram===1?'':'s'} andou uma casa e o que é fixo continuou.`
+      +(entraram?` ${entraram} gasto${entraram===1?' que estava guardado entrou':'s que estavam guardados entraram'} nesta fatura.`:'')
+      +` O que você lançar de agora em diante entra na fatura que fecha em ${dataBR(iso(f.fecha))} e é cobrada em ${dataBR(iso(f.vence))}.`
+      +` O ciclo anterior foi pro histórico na aba Renda e meta.</div>`;
+  }
 }
 
 /* ---------- persistência em camadas, com verificação real ---------- */
@@ -337,9 +395,13 @@ function restaurarBackup(file){
 /* ---------- cálculo ---------- */
 function calc(){
   const renda=(+S.salario||0)+(+S.extra||0);
+  /* A conta do ciclo é só do que está NESTA fatura. O que foi guardado pra
+     seguinte é somado à parte, em `prox`, e mostrado como o que já está
+     comprometido com a cobrança de depois. */
+  const itens=doCiclo(), prox=daProxima();
   const t={1:0,2:0,3:0}, porCat={};
   let bruto=0, pai=0;
-  S.lanc.forEach(l=>{ const v=meuValor(l); bruto+=l.valor; pai+=Math.min(+l.pai||0,l.valor);
+  itens.forEach(l=>{ const v=meuValor(l); bruto+=l.valor; pai+=Math.min(+l.pai||0,l.valor);
     t[l.tier]+=v; porCat[l.cat]=(porCat[l.cat]||0)+v; });
   const gasto=t[1]+t[2]+t[3];
   const meta=(+S.metaVal>0)?+S.metaVal:renda*((+S.metaPct||0)/100);
@@ -351,10 +413,18 @@ function calc(){
   const tetos={}; Object.entries(CATS).forEach(([k,c])=>{ tetos[k]=S.tetos[k]>0?S.tetos[k]:restante*c.peso/pesosLivres; });
   const excesso={}; let somaExcesso=0;
   Object.keys(CATS).forEach(k=>{ const e=(porCat[k]||0)-tetos[k]; if(e>0.5){ excesso[k]=e; somaExcesso+=e; } });
-  const futuro=S.lanc.reduce((s,l)=>s+meuValor(l)*(+l.pRest||0),0);
-  const fontes={}; S.lanc.forEach(l=>{const f=l.fonte||'Conta'; fontes[f]=(fontes[f]||0)+l.valor;});
+  /* Parcelas por vir conta só o que é PARCELA: das desta fatura, o que ainda
+     falta; das guardadas, uma a mais, porque nem a primeira foi cobrada. Um
+     gasto de uma vez só que está na fila não entra aqui — ele já aparece
+     inteiro em `proxBruto`, e somá-lo nos dois lugares dobrava o valor. */
+  const futuro=itens.reduce((s,l)=>s+meuValor(l)*(+l.pRest||0),0)
+              +prox.reduce((s,l)=>s+meuValor(l)*(l.tipo==='parc'?(+l.pRest||0)+1:0),0);
+  const fontes={}; itens.forEach(l=>{const f=l.fonte||'Conta'; fontes[f]=(fontes[f]||0)+l.valor;});
+  const proxBruto=prox.reduce((s,l)=>s+(+l.valor||0),0);
+  const proxMeu=prox.reduce((s,l)=>s+meuValor(l),0);
   return {renda,gasto,bruto,pai,t,porCat,meta,disponivel,tetos,excesso,somaExcesso,futuro,fontes,
-          fatias:fatiasPessoa(S.lanc),sobra:renda-gasto,corte:t[3]};
+          proxBruto,proxMeu,proxN:prox.length,
+          fatias:fatiasPessoa(itens),sobra:renda-gasto,corte:t[3]};
 }
 
 /* ---------- render ---------- */
@@ -379,10 +449,67 @@ function render(){
   $('#blocoUltimos').classList.toggle('sem-moldura',vazio);
   renderTopCats(c); renderUltimos(c);
   renderMeta(c); renderHist(); renderTetos(c); renderPessoas(c); renderLanc(c); renderCortes(c); renderReserva(c); renderObj(c); renderDiv();
-  renderVenc(c); renderAlertas(c); renderChips();
+  renderVenc(c); renderFatura(c); renderAlertas(c); renderChips();
   if(AREA==='analise'&&SUB.analise==='graficos') renderGraficos(c);
   $('#dlFontes').innerHTML=[...new Set(S.lanc.map(l=>l.fonte).filter(Boolean))].map(f=>`<option value="${esc(f)}">`).join('');
   pintarPagadorForm();   // as opções são as pessoas cadastradas, e elas mudam
+}
+
+/* ---------- em que fatura cai o que estou lançando agora ----------
+
+   A pergunta que o app não respondia. Ela aparece em quatro lugares, sempre
+   com as duas datas juntas — fecha em X, é cobrada em Y — porque é a distância
+   entre elas que confunde: na folha de lançamento (antes de digitar), no bloco
+   de todos os gastos (olhando a lista), junto das datas em Renda e meta (ao
+   configurar) e no cartão da fatura fechada, que é a única que já virou
+   cobrança de verdade. */
+function renderFatura(c){
+  const f=faturaAberta(), fecha=dataBR(iso(f.fecha)), vence=dataBR(iso(f.vence));
+  const pagar=faturaAPagar();
+
+  const st=$('#sheetFatura');
+  if(st) st.innerHTML=`Entra na fatura que fecha em <b>${fecha}</b> · cobrada em <b>${vence}</b>`;
+
+  const sel=$('#lFatura');
+  if(sel){
+    const prox=vencDaFatura(new Date(f.fecha.getFullYear(),f.fecha.getMonth()+1,f.fecha.getDate()));
+    sel.options[0].textContent='Esta — fecha '+ddmm(f.fecha)+', cobrada '+ddmm(f.vence);
+    sel.options[1].textContent='A próxima — cobrada só em '+ddmm(prox);
+  }
+
+  const av=$('#faturaAviso');
+  if(av) av.innerHTML=`<div class="nota info" style="margin:0 0 14px">
+    <b>Esta é a fatura em formação.</b> Ela fecha em ${fecha} e só é cobrada no vencimento de <b>${vence}</b> —
+    o que você lança hoje não entra na fatura que vence antes disso, que já fechou.
+    ${c.proxN?`<br>Há ${c.proxN} gasto${c.proxN===1?'':'s'} guardado${c.proxN===1?'':'s'} pra fatura seguinte, somando ${brl(c.proxBruto)}. ${c.proxN===1?'Ele não entra':'Eles não entram'} nos totais acima.`:''}</div>`;
+
+  const nf=$('#notaFatura');
+  if(nf) nf.innerHTML=`<div class="nota">Um gasto no cartão feito <b>hoje</b> entra na fatura que fecha em
+    <b>${fecha}</b> e é cobrado no vencimento de <b>${vence}</b>. Se as duas datas forem o mesmo dia do mês,
+    o app entende o que o cartão faz: fecha no dia e cobra no mês seguinte.</div>`;
+
+  const bp=$('#blocoPagar');
+  if(bp){
+    if(!pagar){ bp.innerHTML=''; }
+    else{
+      const d=Math.round((pagar.vence-hojeD())/86400000);
+      bp.innerHTML=`<section class="bloco"><div class="bloco-topo"><h2>Fatura fechada a pagar</h2></div>
+        <div class="pagar">
+          <div class="pg-t"><b>${brl(pagar.bruto)}</b>
+            <small>fechou em ${dataBR(iso(pagar.fecha))} · ${d===0?'vence hoje':d===1?'vence amanhã':'vence em '+d+' dias'} (${dataBR(iso(pagar.vence))})</small></div>
+          <button class="btn" id="btnPagouFatura">Já paguei</button>
+        </div>
+        <p class="ajuda" style="margin:10px 0 0">É a fatura que já fechou — a que está em formação agora só é cobrada em ${vence}.</p>
+      </section>`;
+      $('#btnPagouFatura').onclick=()=>{
+        pagar.ref.pago=iso(hojeD());
+        render(); salvar(); vibrar(14);
+        snack('Fatura de '+dataBR(iso(pagar.fecha))+' marcada como paga.','Desfazer',()=>{
+          delete pagar.ref.pago; render(); salvar(); toast('Desfeito');
+        });
+      };
+    }
+  }
 }
 
 function renderMeta(c){
@@ -435,7 +562,9 @@ function renderHist(){
   const selo=l=>(l.tipo==='rec'||l.tipo==='fixo')?'<span class="tag ciclor">fixo</span>'
     :l.tipo==='var'?'<span class="tag ciclov">variável</span>'
     :l.tipo==='parc'?`<span class="tag ciclop">parcela</span>`:'<span class="tag ciclo1">1x</span>';
-  dc.innerHTML=`<h3>Fatura de ${dataBR(x.data)}</h3>
+  const vencX=x.venc?dataDeISO(x.venc):vencDaFatura(dataDeISO(x.data));
+  dc.innerHTML=`<h3>Fatura que fechou em ${dataBR(x.data)}</h3>
+   <p class="ajuda" style="margin:-4px 0 12px">Cobrada no vencimento de <b>${dataBR(iso(vencX))}</b>${x.pago?' · <b style="color:var(--verde)">paga</b>':''}.</p>
    <div class="cards">
      <div class="card"><div class="l">Fatura total</div><div class="v">${brl(x.bruto)}</div></div>
      <div class="card"><div class="l">Meu</div><div class="v" style="color:var(--verde)">${brl(x.meu)}</div></div>
@@ -605,6 +734,7 @@ function renderLanc(c){
     `<div class="card" style="border-color:var(--verde)"><div class="l">Meu</div><div class="v" style="color:var(--verde)">${brl(c.gasto)}</div></div>`+
     c.fatias.map(f=>`<div class="card" style="border-color:${f.cor}"><div class="l">De ${esc(f.nome)}</div><div class="v" style="color:${f.cor}">${brl(f.valor)}</div><div class="n">está na fatura, não é gasto seu</div></div>`).join('')+
     fs.map(([f,v])=>`<div class="card"><div class="l">${esc(f)}</div><div class="v">${brl(v)}</div></div>`).join('')+
+    (c.proxN>0?`<div class="card" style="border-color:var(--indigo)"><div class="l">Guardado pra próxima</div><div class="v" style="color:var(--indigo)">${brl(c.proxBruto)}</div><div class="n">${c.proxN} gasto${c.proxN===1?'':'s'} que só entram na fatura seguinte</div></div>`:'')+
     (c.futuro>0?`<div class="card" style="border-color:var(--alerta)"><div class="l">Parcelas por vir</div><div class="v" style="color:var(--alerta)">${brl(c.futuro)}</div><div class="n">sua parte, nos próximos meses</div></div>`:'')+'</div>';
 
   const tb=$('#tbLanc');
@@ -612,8 +742,11 @@ function renderLanc(c){
   const selo=l=>(l.tipo==='rec'||l.tipo==='fixo')?'<span class="tag ciclor">fixo</span>'
     :l.tipo==='var'?'<span class="tag ciclov">variável</span>'
     :l.tipo==='parc'?`<span class="tag ciclop">faltam ${l.pRest||0}x</span>`:'<span class="tag ciclo1">1x</span>';
-  tb.innerHTML=[...S.lanc].sort((a,b)=>b.valor-a.valor).map(l=>`<tr>
-    <td>${esc(l.nome)} ${selo(l)}<div style="font-size:11.5px;color:var(--txt-3)">${esc(l.fonte||'Conta')} · <span class="tag ${TIER[l.tier].cl}">${TIER[l.tier].n}</span>${+l.pai>0?` · <b style="color:${corPessoa(l.com)}">${esc(nomePessoa(l.com))}</b>`:''}</div></td>
+  /* Uma linha só, usada nas duas listas: a fatura aberta e a fila da seguinte.
+     O botão do fim da segunda linha é o que move o gasto entre elas. */
+  const linha=l=>`<tr${+l.prox>0?' class="lin-prox"':''}>
+    <td>${esc(l.nome)} ${selo(l)}${+l.prox>0?' <span class="tag cicloprox">próxima fatura</span>':''}<div style="font-size:11.5px;color:var(--txt-3)">${esc(l.fonte||'Conta')} · <span class="tag ${TIER[l.tier].cl}">${TIER[l.tier].n}</span>${+l.pai>0?` · <b style="color:${corPessoa(l.com)}">${esc(nomePessoa(l.com))}</b>`:''}
+      · <button class="link mini" data-prox="${l.id}">${+l.prox>0?'trazer pra esta fatura':'jogar pra próxima'}</button></div></td>
     <td><span class="pt" style="background:${CATS[l.cat].c}"></span>${CATS[l.cat].n}</td>
     <td><select data-pag="${l.id}" style="padding:5px 6px;font-size:12.5px;min-width:102px">${opcoesPagador(l,true)}</select></td>
     <td class="v"><input type="number" min="0" step="0.01" data-val="${l.id}" value="${l.valor||''}" placeholder="0,00"
@@ -623,9 +756,23 @@ function renderLanc(c){
         style="width:96px;padding:5px 7px;text-align:right;font-size:13px"
         aria-label="Quanto ${+l.pai>0?esc(nomePessoa(l.com)):'a outra pessoa'} cobre em ${esc(l.nome)}"></td>
     <td class="v" style="font-weight:700;color:${meuValor(l)===0?'var(--pai)':'inherit'}">${brl(meuValor(l))}</td>
-    <td style="text-align:right"><button class="btn-x" data-del="${l.id}" aria-label="Remover">×</button></td></tr>`).join('')
-    +`<tr class="total"><td colspan="3">Total</td><td class="v">${brl(c.bruto)}</td>
-      <td class="v" style="color:var(--pai)">${brl(c.pai)}</td><td class="v">${brl(c.gasto)}</td><td></td></tr>`;
+    <td style="text-align:right"><button class="btn-x" data-del="${l.id}" aria-label="Remover">×</button></td></tr>`;
+  const prox=daProxima(), fab=faturaAberta();
+  tb.innerHTML=doCiclo().sort((a,b)=>b.valor-a.valor).map(linha).join('')
+    +`<tr class="total"><td colspan="3">Total desta fatura</td><td class="v">${brl(c.bruto)}</td>
+      <td class="v" style="color:var(--pai)">${brl(c.pai)}</td><td class="v">${brl(c.gasto)}</td><td></td></tr>`
+    +(prox.length?`<tr class="sep-prox"><td colspan="7">Guardado para a fatura seguinte — cobrada só em
+        ${dataBR(iso(vencDaFatura(new Date(fab.fecha.getFullYear(),fab.fecha.getMonth()+1,fab.fecha.getDate()))))}.
+        Não entra nos totais acima nem nos tetos deste ciclo.</td></tr>`
+      +prox.sort((a,b)=>b.valor-a.valor).map(linha).join('')
+      +`<tr class="total"><td colspan="3">Total da próxima</td><td class="v">${brl(c.proxBruto)}</td>
+        <td class="v" style="color:var(--pai)">${brl(c.proxBruto-c.proxMeu)}</td><td class="v">${brl(c.proxMeu)}</td><td></td></tr>`:'');
+  tb.querySelectorAll('[data-prox]').forEach(b=>b.onclick=e=>{
+    const l=S.lanc.find(x=>String(x.id)===e.currentTarget.dataset.prox); if(!l) return;
+    l.prox=+l.prox>0?0:1;
+    render(); salvar(); vibrar(10);
+    toast(+l.prox>0?'Só entra na próxima fatura':'Voltou pra fatura aberta');
+  });
   tb.querySelectorAll('[data-val]').forEach(i=>i.onchange=e=>{
     const l=S.lanc.find(x=>String(x.id)===e.target.dataset.val);
     if(l){ l.valor=+e.target.value||0; l.pai=Math.min(+l.pai||0,l.valor); render(); salvar(); }});
@@ -647,11 +794,11 @@ function renderLanc(c){
 function renderCortes(c){
   const lista=[];
   Object.entries(c.excesso).forEach(([k,v])=>{
-    const itens=S.lanc.filter(l=>l.cat===k&&meuValor(l)>0).sort((a,b)=>meuValor(b)-meuValor(a));
+    const itens=doCiclo().filter(l=>l.cat===k&&meuValor(l)>0).sort((a,b)=>meuValor(b)-meuValor(a));
     lista.push({tipo:'teto',nome:CATS[k].n,valor:v,alvo:c.tetos[k],hoje:c.porCat[k],
       itens:itens.slice(0,3).map(l=>l.nome+' ('+brl(meuValor(l))+')')});
   });
-  S.lanc.filter(l=>l.tier===3&&!c.excesso[l.cat]&&meuValor(l)>0).forEach(l=>{
+  doCiclo().filter(l=>l.tier===3&&!c.excesso[l.cat]&&meuValor(l)>0).forEach(l=>{
     lista.push({tipo:'zerar',nome:l.nome,valor:meuValor(l),alvo:0,hoje:meuValor(l),itens:[CATS[l.cat].n]});
   });
   lista.sort((a,b)=>b.valor-a.valor);
@@ -918,8 +1065,9 @@ aplicarTema();
 $('#lParc').disabled=true;
 $('#resetTetos').onclick=()=>{ S.tetos={}; render(); salvar(); };
 $('#fecharAgora').onclick=()=>{
-  const n=S.lanc.length;
-  if(!confirm('Fechar a fatura agora?\n\nOs '+n+' lançamentos deste ciclo vão pro arquivo. Os de uma vez só saem da lista, os parcelados perdem uma parcela e os fixos e variáveis continuam.')) return;
+  const n=doCiclo().length, fila=daProxima().length;
+  if(!confirm('Fechar a fatura agora?\n\nOs '+n+' lançamentos desta fatura vão pro arquivo. Os de uma vez só saem da lista, os parcelados perdem uma parcela e os fixos e variáveis continuam.'
+    +(fila?'\n\nOs '+fila+' gastos guardados pra próxima entram na fatura que abre agora.':''))) return;
   const r=fecharCiclo(iso(hojeD()));
   S.ultimoFech=iso(hojeD()); histSel=0;
   avisoCiclo=`<div class="nota info"><b>Fatura fechada e arquivada.</b> ${r.sumiram} lançamento${r.sumiram===1?'':'s'} saíram, ${r.andaram} parcela${r.andaram===1?'':'s'} continuam na próxima.</div>`;
@@ -943,7 +1091,8 @@ $('#addLanc').onclick=()=>{
   const tipo=$('#lTipo').value;
   const l={id:Date.now()+Math.random(),criadoEm:Date.now(),nome,valor,cat:$('#lCat').value,tier:+$('#lTier').value,
     fonte:$('#lFonte').value.trim()||'Conta',tipo,pRest:tipo==='parc'?(+$('#lParc').value||1):0,
-    com:'',pai:Math.min(+$('#lPai').value||0,valor),ref:0,venc:Math.min(Math.max(+$('#lVenc').value||0,0),31)};
+    com:'',pai:Math.min(+$('#lPai').value||0,valor),ref:0,venc:Math.min(Math.max(+$('#lVenc').value||0,0),31),
+    prox:+$('#lFatura').value===1?1:0};
   const pag=$('#lPagador').value;
   if(pag==='eu'||pag==='+'){ l.pai=0; l.com=''; }
   else{
@@ -952,8 +1101,11 @@ $('#addLanc').onclick=()=>{
     l.pai=modo==='t'?valor:(l.pai>0?Math.min(l.pai,valor):+(valor/2).toFixed(2));
   }
   S.lanc.push(l);
-  ['lNome','lValor','lParc','lPai','lVenc'].forEach(i=>$('#'+i).value=''); pintarPagadorForm('eu'); $('#lNome').focus();
+  ['lNome','lValor','lParc','lPai','lVenc'].forEach(i=>$('#'+i).value=''); $('#lFatura').value='0';
+  pintarPagadorForm('eu'); $('#lNome').focus();
   render(); salvar();
+  const f=faturaAberta();
+  toast(l.prox?'Guardado pra próxima fatura':'Entra na fatura cobrada em '+ddmm(f.vence));
 };
 $('#addObj').onclick=()=>{
   const nome=$('#oNome').value.trim(), alvo=+$('#oAlvo').value;
@@ -1491,29 +1643,50 @@ function proximoVenc(dia){
   if(alvo<h) alvo=noMes(h.getFullYear(),h.getMonth()+1);
   return alvo;
 }
-function contasAVencer(){
-  return S.lanc.filter(l=>+l.venc>0&&meuValor(l)>0)
+/* "Já paguei" é por OCORRÊNCIA, não um interruptor: `l.pagoAte` guarda a data
+   do vencimento que foi quitado. No mês seguinte essa data muda sozinha e a
+   conta volta a cobrar atenção — ninguém precisa lembrar de desmarcar nada. */
+const contaPaga=(l,d)=>!!l.pagoAte&&l.pagoAte===iso(d);
+function contasAVencer(comAsPagas){
+  return doCiclo().filter(l=>+l.venc>0&&meuValor(l)>0)
     .map(l=>{const d=proximoVenc(l.venc);
-      return {l,data:d,dias:Math.round((d-hojeD())/86400000)};})
-    .sort((a,b)=>a.dias-b.dias);
+      return {l,data:d,dias:Math.round((d-hojeD())/86400000),pago:contaPaga(l,d)};})
+    .filter(x=>comAsPagas||!x.pago)
+    .sort((a,b)=>(a.pago-b.pago)||(a.dias-b.dias));
+}
+/* Marcar e desmarcar são o mesmo botão: quem clicou por engano desfaz no
+   mesmo lugar, sem menu e sem confirmação. */
+function alternarPago(id){
+  const l=S.lanc.find(x=>String(x.id)===String(id)); if(!l) return;
+  const d=iso(proximoVenc(l.venc));
+  if(l.pagoAte===d){ delete l.pagoAte; toast(l.nome+' voltou pra lista'); }
+  else { l.pagoAte=d; toast(l.nome+' marcado como pago'); vibrar(12); }
+  render(); salvar();
 }
 function renderVenc(){
-  const el=$('#blocoVenc'); const cs=contasAVencer();
+  const el=$('#blocoVenc'); const cs=contasAVencer(true);
   if(!cs.length){ el.innerHTML=''; return; }
-  const total=cs.reduce((s,x)=>s+meuValor(x.l),0);
+  const falta=cs.filter(x=>!x.pago), pagas=cs.length-falta.length;
+  const total=falta.reduce((s,x)=>s+meuValor(x.l),0);
   el.innerHTML=`<h3>Contas a vencer · ${brl(total)}</h3>
-   <p class="ajuda">Lançamentos com dia de vencimento marcado. Ligue o alerta “Conta fixa a vencer” pra ser avisado alguns dias antes.</p>`+
-   cs.map(x=>`<div class="venc${x.dias<=3?' perto':''}">
+   <p class="ajuda">Lançamentos com dia de vencimento marcado. Toque em <b>Paguei</b> quando quitar: a conta sai da contagem e para de avisar até o vencimento do mês que vem.${pagas?` <b>${pagas}</b> já ${pagas===1?'está paga':'estão pagas'} neste mês.`:''}</p>`+
+   cs.map(x=>`<div class="venc${x.pago?' pago':(x.dias<=3?' perto':'')}">
      <div class="dia"><b>${x.data.getDate()}</b><span>${MES_CURTO[x.data.getMonth()]}</span></div>
-     <div class="vn">${esc(x.l.nome)}<small>${x.dias===0?'vence hoje':x.dias===1?'vence amanhã':'em '+x.dias+' dias'} · ${esc(x.l.fonte||'Conta')}</small></div>
-     <div class="vv">${brl(meuValor(x.l))}</div></div>`).join('');
+     <div class="vn">${esc(x.l.nome)}<small>${x.pago?'pago · vence '+ddmm(x.data):(x.dias===0?'vence hoje':x.dias===1?'vence amanhã':'em '+x.dias+' dias')} · ${esc(x.l.fonte||'Conta')}</small></div>
+     <div class="vv">${brl(meuValor(x.l))}</div>
+     <button class="btn-pago${x.pago?' on':''}" data-pago="${x.l.id}" aria-pressed="${x.pago?'true':'false'}"
+       aria-label="${x.pago?'Desmarcar':'Marcar'} ${esc(x.l.nome)} como pago">${x.pago?'✓ pago':'Paguei'}</button>
+   </div>`).join('');
+  el.querySelectorAll('[data-pago]').forEach(b=>b.onclick=()=>alternarPago(b.dataset.pago));
 }
 
 /* ---------- exportar CSV ---------- */
 function exportarCSV(){
-  const cab=['descricao','categoria','peso','tipo','valor_fatura','dividido_com','pago_por_outro','meu_valor','fonte','parcelas_restantes','vence_dia'];
+  const cab=['descricao','categoria','peso','tipo','valor_fatura','dividido_com','pago_por_outro','meu_valor','fonte','parcelas_restantes','vence_dia','entra_na_fatura'];
+  const fab=faturaAberta();
   const lin=S.lanc.map(l=>[l.nome,CATS[l.cat]?CATS[l.cat].n:l.cat,TIER[l.tier].n,l.tipo,
-    l.valor,+l.pai>0?nomePessoa(l.com):'',+l.pai||0,meuValor(l),l.fonte||'Conta',+l.pRest||0,+l.venc||0]);
+    l.valor,+l.pai>0?nomePessoa(l.com):'',+l.pai||0,meuValor(l),l.fonte||'Conta',+l.pRest||0,+l.venc||0,
+    +l.prox>0?'próxima':'aberta ('+dataBR(iso(fab.fecha))+')']);
   const hist=S.hist.flatMap(x=>{
     // O nome vem da fatura arquivada, não da lista de hoje: pessoa apagada
     // continua nomeada na linha do mês em que ela dividiu o gasto.
@@ -1521,12 +1694,13 @@ function exportarCSV(){
     return (x.itens||[]).map(l=>['[fatura '+dataBR(x.data)+'] '+l.nome,
       CATS[l.cat]?CATS[l.cat].n:l.cat,TIER[l.tier]?TIER[l.tier].n:l.tier,l.tipo,l.valor,
       +l.pai>0?(nomes[l.com||'']||nomePessoa(l.com)):'',+l.pai||0,
-      Math.max(l.valor-(+l.pai||0),0),l.fonte||'Conta',+l.pRest||0,+l.venc||0]);});
+      Math.max(l.valor-(+l.pai||0),0),l.fonte||'Conta',+l.pRest||0,+l.venc||0,
+      'fechada em '+dataBR(x.data)]);});
   const cel=v=>typeof v==='number'?String(v).replace('.',','):'"'+String(v).replace(/"/g,'""')+'"';
   const csv='﻿'+[cab.join(';'),...lin.concat(hist).map(l=>l.map(cel).join(';'))].join('\r\n');
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-  a.download='sobra-do-mes-'+iso(hojeD())+'.csv'; a.click();
+  a.download='sobra-mais-'+iso(hojeD())+'.csv'; a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),2000);
   $('#status').textContent='CSV exportado com '+(lin.length+hist.length)+' linhas.';
 }
@@ -1594,17 +1768,22 @@ function alertasPendentes(c){
     if(d<=(+S.aDiasFech||3)){
       fora.push({tag:'fech:'+iso(prox), icone:'📅', ico:'calendario', aba:'hoje',
         titulo:d===0?'A fatura fecha hoje':`A fatura fecha em ${d} dia${d===1?'':'s'}`,
-        corpo:`Estão na fatura ${brl(c.bruto)} (${brl(c.gasto)} seus). Confira os variáveis antes de virar o ciclo.`,
+        corpo:`Estão na fatura ${brl(c.bruto)} (${brl(c.gasto)} seus), cobrados em ${dataBR(iso(vencDaFatura(prox)))}. Confira os variáveis antes de virar o ciclo.`,
         peso:2});
     }
   }
+  /* O que se paga é a fatura JÁ FECHADA — a que está aberta ainda nem virou
+     cobrança. Avisar com o total do ciclo aberto era misturar as duas. */
   if(on('vencimento')){
-    const dv=+S.diaVenc||+S.diaFech||5, pv=proximoVenc(dv), d=Math.round((pv-h)/86400000);
-    if(d<=(+S.aDiasVenc||2)){
-      fora.push({tag:'venc:'+iso(pv), icone:'💳', ico:'cartao', aba:'plano:renda',
-        titulo:d===0?'A fatura vence hoje':`A fatura vence em ${d} dia${d===1?'':'s'}`,
-        corpo:`Pague antes de ${dataBR(iso(pv))} pra não entrar no rotativo — é o juro mais caro que existe.`,
-        peso:3});
+    const fp=faturaAPagar();
+    if(fp){
+      const d=Math.round((fp.vence-h)/86400000);
+      if(d<=(+S.aDiasVenc||2)){
+        fora.push({tag:'venc:'+iso(fp.vence), icone:'💳', ico:'cartao', aba:'hoje',
+          titulo:d===0?'A fatura vence hoje':`A fatura vence em ${d} dia${d===1?'':'s'}`,
+          corpo:`${brl(fp.bruto)} da fatura que fechou em ${dataBR(iso(fp.fecha))}. Pague até ${dataBR(iso(fp.vence))} pra não entrar no rotativo — é o juro mais caro que existe.`,
+          peso:3});
+      }
     }
   }
   if(on('contas')){
@@ -1616,7 +1795,7 @@ function alertasPendentes(c){
     });
   }
   if(on('variavel')){
-    const zerados=S.lanc.filter(l=>l.tipo==='var'&&!(l.valor>0)&&(+l.ref||0)>0);
+    const zerados=doCiclo().filter(l=>l.tipo==='var'&&!(l.valor>0)&&(+l.ref||0)>0);
     if(zerados.length){
       fora.push({tag:'var:'+ck, icone:'✏️', ico:'lapis', aba:'hoje',
         titulo:`${zerados.length} gasto${zerados.length===1?'':'s'} variáve${zerados.length===1?'l':'is'} sem valor`,
@@ -1625,7 +1804,7 @@ function alertasPendentes(c){
     }
   }
   if(on('parcela')){
-    S.lanc.filter(l=>l.tipo==='parc'&&+l.pRest===1).forEach(l=>{
+    doCiclo().filter(l=>l.tipo==='parc'&&+l.pRest===1).forEach(l=>{
       fora.push({tag:'ult:'+l.id+':'+ck, icone:'🎉', ico:'festa', aba:'hoje',
         titulo:`Última parcela de ${l.nome}`,
         corpo:`Depois desta, ${brl(meuValor(l))} por mês voltam pro seu bolso. Já pensou em mandar isso pra reserva?`,
@@ -1897,7 +2076,7 @@ function renderHero(c){
     v.className='hero-v num'+(porDia<0?' neg':'');
     $('#hoje-sub').innerHTML= porDia<0
       ? `Você já passou <b>${brl(-folga)}</b> do que tinha pra este ciclo. Cada gasto novo sai da sua meta de guardar.`
-      : `É o que cabe por dia nos <b>${dias} dia${dias===1?'':'s'}</b> que faltam até a fatura fechar, já descontando o que você quer guardar.`;
+      : `É o que cabe por dia nos <b>${dias} dia${dias===1?'':'s'}</b> que faltam até a fatura fechar (cobrada em ${ddmm(faturaAberta().vence)}), já descontando o que você quer guardar.`;
   }
   document.querySelector('.hero-mini').hidden=!c.renda;
   document.querySelector('.hero-pista').hidden=!c.renda;
@@ -1955,12 +2134,12 @@ function renderUltimos(c){
     <div class="ic" style="background:color-mix(in srgb,${CATS[l.cat].c} 13%,transparent);color:${CATS[l.cat].c}"
       >${icone(ICONE_CAT[l.cat]||'outros')}</div>
     <div class="tx"><div class="nm">${esc(l.nome)}</div>
-      <div class="dt">${CATS[l.cat].n} · ${selo(l)}${l.fonte&&l.fonte!=='Conta'?' · '+esc(l.fonte):''}</div></div>
+      <div class="dt">${CATS[l.cat].n} · ${selo(l)}${l.fonte&&l.fonte!=='Conta'?' · '+esc(l.fonte):''}${+l.prox>0?' · <b style="color:var(--indigo)">próxima fatura</b>':''}</div></div>
     <div class="vl">${brl(l.valor)}${(+l.pai>0)?`<small>meu ${brl(meuValor(l))} · ${esc(nomePessoa(l.com))}</small>`:''}</div>
     <button class="rm" data-del="${l.id}" aria-label="Remover ${esc(l.nome)}">×</button>
   </div>`).join('');
   if(S.lanc.length>6) el.innerHTML+=`<p class="ajuda" style="margin:12px 0 0;text-align:center">
-    e mais ${S.lanc.length-6} no ciclo</p>`;
+    e mais ${S.lanc.length-6} lançado${S.lanc.length-6===1?'':'s'}</p>`;
 }
 
 /* ---------- insights: o app falando como consultor ---------- */
@@ -1976,7 +2155,7 @@ function montarInsights(c){
   if(!c.renda) return out;   // o cartão de onboarding já diz o que fazer
   // ritmo do ciclo — só o que é variável se projeta; fixo e parcela já valem o mês inteiro
   if(S.lanc.length&&decorridos>=7&&dias>0){
-    const variavel=S.lanc.filter(l=>l.tipo==='var'||l.tipo==='unico').reduce((s,l)=>s+meuValor(l),0);
+    const variavel=doCiclo().filter(l=>l.tipo==='var'||l.tipo==='unico').reduce((s,l)=>s+meuValor(l),0);
     const jaFechado=c.gasto-variavel;
     const projetado=jaFechado+variavel/decorridos*(decorridos+dias);
     if(projetado>c.disponivel*1.05)
@@ -1993,14 +2172,14 @@ function montarInsights(c){
       out.push({t:'bom',e:'descendo',txt:`<b>${CATS[k].n}</b> caiu ${pct(1-hoje/m)} em relação à sua média: ${brl(m-hoje)} a menos este mês.`});
   });
   // o maior cortável
-  const corta=S.lanc.filter(l=>l.tier===3&&meuValor(l)>0).sort((a,b)=>meuValor(b)-meuValor(a))[0];
+  const corta=doCiclo().filter(l=>l.tier===3&&meuValor(l)>0).sort((a,b)=>meuValor(b)-meuValor(a))[0];
   if(corta&&c.sobra<c.meta)
     out.push({t:'atencao',e:'tesoura',txt:`Zerar <b>${esc(corta.nome)}</b> devolve ${brl(meuValor(corta))} por mês — ${brl(meuValor(corta)*12)} no ano.`});
   // fatura chegando
   if(dias<=5)
-    out.push({t:'atencao',e:'calendario',txt:`A fatura fecha em <b>${dias} dia${dias===1?'':'s'}</b> com ${brl(c.bruto)}. Confira os variáveis antes que o ciclo vire.`});
+    out.push({t:'atencao',e:'calendario',txt:`A fatura fecha em <b>${dias} dia${dias===1?'':'s'}</b> com ${brl(c.bruto)} — cobrada só em <b>${dataBR(iso(faturaAberta().vence))}</b>. Confira os variáveis antes que o ciclo vire.`});
   // variáveis zerados
-  const zerados=S.lanc.filter(l=>l.tipo==='var'&&!(l.valor>0)&&(+l.ref||0)>0);
+  const zerados=doCiclo().filter(l=>l.tipo==='var'&&!(l.valor>0)&&(+l.ref||0)>0);
   if(zerados.length)
     out.push({t:'atencao',e:'lapis',txt:`${zerados.length} gasto${zerados.length===1?'':'s'} variáve${zerados.length===1?'l':'is'} sem valor (${zerados.slice(0,2).map(l=>esc(l.nome)).join(', ')}). Sem eles a conta do mês sai errada.`});
   // parabéns
@@ -2063,7 +2242,7 @@ function salvarRapido(){
   const p=lerRapido($('#rapido').value);
   if(!p||p.incompleto){ toast('Escreva a descrição e o valor. Ex.: ifood 45',true); $('#rapido').focus(); return; }
   const l={id:Date.now()+Math.random(),criadoEm:Date.now(),nome:p.nome,valor:p.valor,cat:p.cat,
-    tier:p.tier,tipo:p.tipo,fonte:p.fonte,pRest:0,pai:0,ref:0,venc:0};
+    tier:p.tier,tipo:p.tipo,fonte:p.fonte,pRest:0,pai:0,ref:0,venc:0,prox:0};
   S.lanc.push(l);
   $('#rapido').value=''; renderEco();
   render(); salvar(); vibrar(14);
@@ -2174,20 +2353,22 @@ function hhmmAgora(){ const d=new Date();
 /* Mensagem do momento: escolhida pelo estado real das contas, nunca genérica. */
 function mensagemDoMomento(tipo,c){
   const {porDia,folga,dias}=podeGastarHoje(c);
-  const dv=+S.diaVenc||+S.diaFech||5, pv=proximoVenc(dv);
-  const diasV=Math.round((pv-hojeD())/86400000);
+  const fp=faturaAPagar();
+  const diasV=fp?Math.round((fp.vence-hojeD())/86400000):null;
   const estourou=Object.entries(c.excesso||{}).sort((a,b)=>b[1]-a[1])[0];
-  const cortavel=S.lanc.filter(l=>l.tier===3&&meuValor(l)>0).sort((a,b)=>meuValor(b)-meuValor(a))[0];
+  const cortavel=doCiclo().filter(l=>l.tier===3&&meuValor(l)>0).sort((a,b)=>meuValor(b)-meuValor(a))[0];
 
   if(!c.renda) return {titulo:'👋 Falta pouco pra começar',
     corpo:'Coloque sua renda e quanto quer guardar — aí eu passo a te dizer todo dia quanto dá pra gastar.',aba:'plano:renda'};
 
   if(tipo==='fatura'){
-    if(diasV>7) return null;                       // fora da janela: não incomoda
-    const guardar=c.bruto/Math.max(diasV,1);
-    return {titulo:`💳 Fatura de ${brl(c.bruto)} em ${diasV} dia${diasV===1?'':'s'}`,
+    // Sem fatura fechada em aberto não há nada a pagar: o ciclo de agora só
+    // vira cobrança depois de fechar.
+    if(!fp||diasV>7) return null;                  // fora da janela: não incomoda
+    const guardar=fp.bruto/Math.max(diasV,1);
+    return {titulo:`💳 Fatura de ${brl(fp.bruto)} em ${diasV} dia${diasV===1?'':'s'}`,
       corpo:diasV<=1?`Vence ${diasV===0?'hoje':'amanhã'}. Pagar tudo evita o rotativo, que é o juro mais caro que existe.`
-        :`Separando ${brl(guardar)} por dia até lá, a fatura fica paga sem susto.`,aba:'hoje'};
+        :`Separando ${brl(guardar)} por dia até lá, a fatura fica paga sem susto. O que você gasta agora é da fatura seguinte.`,aba:'hoje'};
   }
 
   if(tipo==='manha'){

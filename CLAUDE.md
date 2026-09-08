@@ -49,6 +49,18 @@ Projeto Firebase: **`organizador-financeiro-98e15`**.
    legível pela API — o `sendOobCode` responde 200 de qualquer jeito.
 2. **Contas antigas do Supabase não migram** — é uma base de usuários nova.
 
+## O app se chama Sobra+ (v9.3)
+
+Era "Sobra do Mês". O nome novo está no `<title>`, no splash, na capa, no
+`apple-mobile-web-app-title`, no `manifest.webmanifest` e no título de reserva
+das notificações do `sw.js`.
+
+**As chaves de armazenamento continuam `sobra-do-mes:`** — `KEY_ANTIGA` e
+`sobra-do-mes:u:<uid>`. Renomear a chave apagaria os dados de todo mundo que já
+usa o app, sem trocar um pixel na tela. O `sobra do mês` que aparece na tela
+inicial e na legenda do gráfico também fica: ali é o DADO (o dinheiro que
+sobrou), não a marca.
+
 ## A identidade é azul (v9)
 
 A marca era roxo/magenta com ouro. Agora é azul, em dois lados:
@@ -161,6 +173,60 @@ tabela e para o formulário. O `curto` existe porque "Dividido com Mãe" espremi
 a coluna da tabela até virar "Divi" numa tela de 430 px; na tabela o rótulo é
 "Com Mãe" e o nome por extenso aparece embaixo da descrição, que é a coluna que
 nunca sai da tela.
+
+## A fatura fecha ANTES de ser cobrada (v9.3)
+
+O app tratava `diaVenc` como "o próximo dia 12 no calendário". Com fechamento e
+vencimento no mesmo dia — a configuração de quem só sabe a data do pagamento —
+isso apontava para a fatura ANTERIOR, já fechada e arquivada: o alerta dizia "a
+fatura vence em 4 dias" e o lembrete mostrava o total do ciclo ABERTO junto
+dessa data. Duas faturas diferentes no mesmo cartão.
+
+**`vencDaFatura(fech)` é o único lugar que casa as duas datas.** Recebe o dia em
+que a fatura fecha, devolve o primeiro `diaVenc` DEPOIS dela — `<=` e não `<`,
+por isso fechar e vencer no dia 12 cai naturalmente em 12 do mês seguinte, que é
+o que o cartão faz. Quem precisar da data de cobrança usa isso, nunca
+`proximoVenc(S.diaVenc)`. `proximoVenc` continua existindo e continua certo para
+o que é dele: conta com dia de vencimento próprio (boleto, mensalidade).
+
+Daí saem duas faturas distintas, e confundi-las é o defeito original:
+
+* **`faturaAberta()`** — a que está em formação. Fecha no próximo fechamento e
+  só vira cobrança depois. É nela que cai tudo que se lança hoje.
+* **`faturaAPagar()`** — a última ARQUIVADA, enquanto o vencimento não passou e
+  ninguém marcou como paga. É ela que aparece em *Fatura fechada a pagar*, é o
+  valor dela que vai no alerta de vencimento e no lembrete da agenda.
+
+A fatura arquivada agora grava **`venc`** junto de `data`. Sem isso, daqui a seis
+meses o app teria que adivinhar qual era o dia de vencimento configurado na
+época. As faturas antigas, sem o campo, caem no `vencDaFatura` de hoje.
+
+### Gasto que só entra na próxima fatura
+
+**`l.prox`** conta quantos fechamentos o lançamento ainda espera. Enquanto for
+maior que zero ele não soma em `calc()`, não estoura teto, não conta em *contas
+a vencer* e **não é arquivado no fechamento** — só anda uma casa na fila
+(`fecharCiclo` separa `daProxima()` antes de tudo e não passa esses itens pelas
+regras de variável/parcela/1x, senão um parcelado perderia parcela sem ter sido
+cobrado).
+
+Quem lê o ciclo usa **`doCiclo()`**, não `S.lanc`. Se aparecer um cálculo novo
+sobre `S.lanc` cru, ele vai contar duas vezes o que está guardado.
+
+`futuro` (parcelas por vir) só conta o que é `tipo==='parc'`. Um gasto de uma
+vez só guardado na fila já aparece inteiro em `proxBruto`; somá-lo nos dois
+lugares dobrava o número na tela — foi o que aconteceu na primeira versão.
+
+## "Paguei" é por ocorrência, não um interruptor
+
+`l.pagoAte` guarda **a data do vencimento que foi quitado**, não `true`. A conta
+é considerada paga só enquanto `l.pagoAte === iso(proximoVenc(l.venc))`; quando
+o mês vira, a data deixa de bater e a conta volta sozinha para a lista. Um
+booleano precisaria ser desmarcado à mão todo mês, e ninguém faria isso.
+
+A fatura fechada usa a mesma ideia num campo próprio: `S.hist[0].pago` com a
+data em que foi paga. `faturaAPagar()` devolve `null` quando ele existe, e com
+isso o cartão some e o alerta de vencimento cala junto.
 
 ## Detalhes da implementação que importam
 

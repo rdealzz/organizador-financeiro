@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Sobra do Mês — autenticação e sincronização
+   Sobra+ — autenticação e sincronização
    Falamos direto com as APIs REST do Firebase (Identity Toolkit + Firestore)
    por fetch puro: sem SDK, sem CDN, funciona com o app em cache offline.
 

@@ -1,4 +1,4 @@
-/* Sobra do Mês — esfera de partículas
+/* Sobra+ — esfera de partículas
    ==========================================================================
 
    Por que canvas 2D e não Three.js:

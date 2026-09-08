@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Sobra do Mês — controle financeiro</title>
+<title>Sobra+ — controle financeiro</title>
 <meta name="description" content="Quanto você pode gastar hoje. Registre um gasto em segundos, veja para onde vai seu dinheiro e receba alertas antes de estourar.">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#F4F8FD" media="(prefers-color-scheme: light)">
@@ -12,7 +12,7 @@
 <link rel="icon" href="/icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Sobra do Mês">
+<meta name="apple-mobile-web-app-title" content="Sobra+">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
 <!-- Sem fonte externa de propósito: o app usa a fonte do próprio sistema
@@ -46,7 +46,7 @@ html[data-tema="escuro"] #splash{background:#000}
 
 <div id="splash" role="status" aria-label="Carregando">
   <div class="marca" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-  <div class="nome">Sobra do Mês</div>
+  <div class="nome">Sobra+</div>
 </div>
 
 <!-- ══════════════════════ CENA DE FUNDO ══════════════════════
@@ -77,10 +77,10 @@ html[data-tema="escuro"] #splash{background:#000}
 <!-- ══════════════════════ ABERTURA ══════════════════════
      Sem botão: a tela inteira é a área de clique. -->
 <div class="capa" id="capa" hidden role="button" tabindex="0"
-     aria-label="Entrar no Sobra do Mês">
+     aria-label="Entrar no Sobra+">
   <div class="capa-frente">
     <div class="capa-marca" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-    <h1 class="capa-tit">Sobra do Mês</h1>
+    <h1 class="capa-tit">Sobra+</h1>
     <p class="capa-sub">Quanto sobra no fim do mês, sem planilha.</p>
     <p class="capa-dica"><span>Clique em qualquer lugar para entrar</span></p>
   </div>
@@ -229,6 +229,8 @@ html[data-tema="escuro"] #splash{background:#000}
     <div id="topCats"></div>
   </section>
 
+  <div id="blocoPagar"></div>
+
   <div id="blocoVenc"></div>
 
   <section class="bloco" id="blocoUltimos">
@@ -250,6 +252,7 @@ html[data-tema="escuro"] #splash{background:#000}
   <section class="bloco" id="blocoTodos" hidden>
     <div class="bloco-topo"><h2>Todos os gastos do ciclo</h2>
       <button class="link" id="fecharTodos">recolher</button></div>
+    <div id="faturaAviso"></div>
     <div id="cards2"></div>
     <div style="overflow-x:auto">
     <table><thead><tr><th>Descrição</th><th>Categoria</th><th>Quem paga</th><th style="text-align:right">Na fatura</th><th style="text-align:right">De outro</th><th style="text-align:right">Meu</th><th></th></tr></thead>
@@ -306,7 +309,8 @@ html[data-tema="escuro"] #splash{background:#000}
         <div><label for="diaFech">Dia que a fatura fecha</label><input type="number" inputmode="numeric" id="diaFech" min="1" max="28" step="1" value="5"></div>
         <div><label for="diaVenc">Dia que a fatura vence</label><input type="number" inputmode="numeric" id="diaVenc" min="1" max="28" step="1" value="5"></div>
       </div>
-      <p class="ajuda">No <b>fechamento</b> o app arquiva a fatura e vira o ciclo; o <b>vencimento</b> é a data do pagamento. Na renda variável, use a média dos últimos 3 meses — ou o pior mês, se ela oscila muito.</p>
+      <p class="ajuda">No <b>fechamento</b> o app arquiva a fatura e vira o ciclo; o <b>vencimento</b> é a data do pagamento. No cartão as duas nunca são o mesmo dia da mesma fatura: o que fecha hoje só é cobrado no vencimento seguinte. Na renda variável, use a média dos últimos 3 meses — ou o pior mês, se ela oscila muito.</p>
+      <div id="notaFatura"></div>
     </details>
   </section>
 
@@ -667,6 +671,7 @@ html[data-tema="escuro"] #splash{background:#000}
     <div class="rapido-eco" id="rapidoEco"></div>
 
     <div class="chips" id="chips"></div>
+    <p class="sheet-fatura" id="sheetFatura"></p>
 
     <details class="mais" id="mais">
       <summary>Mais opções</summary>
@@ -689,6 +694,11 @@ html[data-tema="escuro"] #splash{background:#000}
           <option value="eu">Eu, sozinho</option></select></div>
         <div><label for="lPai" id="labPai">Quanto a outra pessoa cobre</label><input type="number" inputmode="decimal" id="lPai" min="0" step="0.01" placeholder="0,00"></div>
         <div><label for="lFonte">Onde caiu</label><input id="lFonte" list="dlFontes" placeholder="Conta"></div>
+        <!-- Em qual fatura o gasto cai. Os rótulos com as datas são escritos
+             por renderFatura(), no app.js — aqui ficam só os textos de reserva. -->
+        <div><label for="lFatura">Entra na fatura</label><select id="lFatura">
+          <option value="0">Esta, a que está aberta</option>
+          <option value="1">A próxima</option></select></div>
       </div>
       <div class="acoes"><button class="btn" id="addLanc">Adicionar com estes detalhes</button></div>
       <p class="ajuda" style="margin:6px 0 0"><b>Quem paga:</b> cadastre cada pessoa com quem você divide — pai, mãe, quem for — em <b>+ Nova pessoa</b>, ali no próprio select. O gasto continua inteiro na fatura, mas só a sua parte conta no teto, e o bloco <b>Dividido com</b> mostra quanto é de cada um. <b>Repetição:</b> <i>variável</i> zera o valor a cada fatura pra você preencher o do mês; <i>fixo</i> repete igual; <i>parcelado</i> desconta uma parcela; <i>1x</i> some no fechamento.</p>

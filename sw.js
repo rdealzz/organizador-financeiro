@@ -1,7 +1,7 @@
-/* Sobra do Mês — service worker
+/* Sobra+ — service worker
    Objetivo: o app abre e funciona sem internet, e as notificações
    continuam sendo entregues pelo sistema mesmo com a aba fechada. */
-const VERSAO = 'sobra-v9.2.0';
+const VERSAO = 'sobra-v9.3.0';
 const CASCA = [
   '/', '/index.html', '/styles.css', '/app.js', '/auth.js', '/intro.js', '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png',
@@ -146,7 +146,7 @@ self.addEventListener('fetch', e => {
 self.addEventListener('message', e => {
   const d = e.data || {};
   if (d.tipo === 'notificar') {
-    self.registration.showNotification(d.titulo || 'Sobra do Mês', {
+    self.registration.showNotification(d.titulo || 'Sobra+', {
       body: d.corpo || '',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',

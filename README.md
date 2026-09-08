@@ -1,4 +1,4 @@
-# Sobra do Mês — controle financeiro
+# Sobra+ — controle financeiro
 
 App web (PWA) para responder uma pergunta só: **quanto sobra no fim do mês.**
 Você diz quanto ganha e quanto quer guardar; o app divide o resto em tetos por
@@ -82,6 +82,33 @@ anterior. O resto dos campos (parcelado, quem paga, vencimento, conta) fica em
 
 Abaixo do campo ficam **chips** dos seus gastos mais frequentes, tirados do
 histórico: um toque preenche a descrição e só falta o valor.
+
+## A fatura fecha antes de ser cobrada
+
+No cartão o gasto de hoje não cai no vencimento mais próximo — aquela fatura já
+fechou. Ele entra na fatura que ainda está aberta, e essa só é paga no
+vencimento **seguinte** ao fechamento dela. Quem fecha e vence no dia 12 paga em
+12/10 o que comprou em 08/09.
+
+O app diz isso onde a dúvida aparece: na folha de lançamento (*entra na fatura
+que fecha em 12/09 · cobrada em 12/10*), no bloco de todos os gastos, junto das
+datas em *Renda e meta* e no lembrete de fechamento. **Fatura fechada a pagar**,
+em *Hoje*, mostra a última fatura arquivada com o valor e o vencimento dela — é
+essa que se paga, não a que está em formação — com um botão **Já paguei** que a
+tira da tela e desliga o alerta de vencimento.
+
+Um gasto pode nascer apontado para a fatura **seguinte**: em *Mais opções →
+Entra na fatura*, ou pelo link `jogar pra próxima` na tabela. Enquanto está na
+fila ele não soma nos totais do ciclo nem estoura teto, aparece à parte na
+tabela e no cartão *Guardado pra próxima*, e entra sozinho quando a fatura vira.
+
+## Contas a vencer com "Paguei"
+
+Lançamentos com dia de vencimento marcado viram uma lista com a data ao lado.
+Quitou? **Paguei** risca o valor, tira a conta da contagem e cala o alerta —
+até o vencimento do mês que vem, quando ela volta sozinha. A marca é por
+ocorrência (`l.pagoAte` guarda a data quitada), então não existe interruptor
+esquecido ligado.
 
 ## Gasto dividido tem nome
 
