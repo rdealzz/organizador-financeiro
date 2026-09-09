@@ -454,6 +454,22 @@ td input,td select{padding:7px 9px;font-size:14px;border-radius:var(--r-xs)}
 .venc.pago .vv{text-decoration:line-through}
 .venc.pago .dia{background:color-mix(in srgb,var(--verde) 16%,transparent)}
 
+/* ---- "como pagou": dois botões, não um select ----
+   É uma escolha entre duas coisas e muda a conta: ver as duas ao mesmo tempo
+   vale mais que economizar espaço com um menu que esconde uma delas. */
+/* `.rot` já existe lá em cima, em CAIXA ALTA, para outra coisa — este rótulo
+   precisa parecer com os `<label>` vizinhos, então tem nome próprio. */
+.rot-seg{display:block;font-size:12px;font-weight:600;color:var(--txt-3);margin-bottom:5px;
+  letter-spacing:0;text-transform:none}
+.segm{display:flex;gap:6px}
+.segm button{flex:1;min-height:44px;padding:10px 8px;border-radius:var(--r-xs);cursor:pointer;
+  border:1px solid var(--sep);background:var(--fill);color:var(--txt-2);
+  font-family:inherit;font-size:13px;font-weight:600;line-height:1.25;
+  transition:background .15s,color .15s,border-color .15s}
+.segm button.on{background:var(--azul);border-color:var(--azul);color:var(--sobre-azul)}
+.segm button:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+.tag.avista{background:var(--teal);color:var(--sobre-azul)}
+
 /* ---- folha de lançamento: o que o app entendeu do nome ----
    Uma linha, logo abaixo dos campos: a categoria deduzida e o caminho para
    discordar dela. Sem isto o palpite seria invisível — e palpite invisível é

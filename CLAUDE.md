@@ -457,6 +457,52 @@ promessas por categoria, e os 35 nomes de atalho contra o `classificar()` de
 verdade. Quem mexer nas regras roda os dois — uma regra nova que rouba um nome
 de outra categoria é silenciosa.
 
+## Nem todo gasto passa pelo cartão (v9.8)
+
+A parcela da moto paga no Pix é gasto do mês, conta no teto e derruba a sobra —
+mas **não está na fatura**, e somá-la ali inflava o valor que vence no dia 12.
+No vencimento se paga a fatura do cartão, não as contas já quitadas por fora.
+
+**`l.meio`** separa as duas coisas:
+
+* `'cartao'` — o padrão, e o que todo lançamento gravado antes desta versão é
+  (o campo não existe neles, e `naFatura()` lê a ausência como cartão).
+* `'avista'` — Pix, débito, dinheiro. Já saiu da conta.
+
+**A distinção é só sobre COBRANÇA.** Peso, categoria, teto, sobra do mês e a
+divisão com outra pessoa continuam valendo igual para os dois: o dinheiro saiu
+do bolso do mesmo jeito. O que muda é uma linha em `calc()` e uma em
+`fecharCiclo()` — `bruto` passa a somar só `naFatura(l)`, e o resto vai para
+`avista`. Daí em diante tudo que já lia `bruto` ficou certo de graça: o cartão
+*Fatura fechada a pagar*, o alerta de vencimento, o lembrete da agenda e
+`faturaAPagar()`.
+
+`hist[].avista` guarda o mesmo corte na fatura arquivada. As faturas gravadas
+antes disto não têm o campo, e zero é a verdade para elas: naquela época tudo
+era cartão.
+
+Três detalhes que custaram teste:
+
+1. **O rodapé da tabela precisou de três linhas.** Com gasto à vista no meio,
+   uma linha de total só mentiria — a coluna "Na fatura" e a coluna "Meu" passam
+   a somar coisas diferentes. Agora são "Na fatura do cartão", "Fora dela" e
+   "Total do ciclo"; sem gasto à vista, continua uma linha só.
+2. **`meioDoTexto()` roda ANTES de procurar o valor** em `lerRapido()`. O leitor
+   procura o número no fim da frase, e em "moto 890 pix" o número não é o último
+   pedaço — respondia "falta o valor". Tirando o "pix" primeiro sobra
+   "moto 890", que ele entende. A palavra também sai do nome, senão o gasto se
+   chamaria "Moto pix".
+3. **`avista` zera `prox`.** "Entra na próxima fatura" não existe para quem já
+   pagou — o campo some do formulário e o link some da tabela.
+
+O alerta de fechamento parou de dizer "estão na fatura X (Y seus)": com gasto à
+vista, Y pode ser MAIOR que X, e a frase entre parênteses lida como parte do
+todo. Agora são duas frases separadas.
+
+`.rot` já existia em CAIXA ALTA para outra coisa no `styles.css` — o rótulo do
+segmented control usa `.rot-seg`, que imita os `<label>` vizinhos. Cuidado ao
+criar classe nova com nome curto e genérico.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

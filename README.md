@@ -154,6 +154,19 @@ Quem já usava o app com o antigo "outra pessoa" não perde nada: na primeira
 abertura essa divisão anônima vira uma pessoa chamada **Outra pessoa** — é só
 renomear para *Pai* e o histórico inteiro vem junto.
 
+## Pix não vence com a fatura
+
+A parcela da moto que você pagou no Pix é gasto seu — conta no teto, derruba a
+sobra do mês, aparece no gráfico da categoria. Mas ela **não está na fatura**:
+no dia 12 você paga o cartão, não o que já quitou por fora.
+
+Por isso todo lançamento diz **como foi pago**: no cartão, ou Pix/débito/
+dinheiro. O resumo mostra os dois separados — *Fatura do cartão* (é isto que
+vence) e *Fora da fatura* (já saiu da conta) — e o total do ciclo soma os dois.
+
+No campo rápido dá para dizer junto: **`moto 890 pix`**. O app tira o "pix" do
+nome e marca o gasto como à vista.
+
 ## O que cobrar de quem dividiu a fatura
 
 Quando a fatura fecha, cada pessoa que dividiu gastos com você vira um cartão:

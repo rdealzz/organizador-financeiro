@@ -245,6 +245,18 @@ function faturaAPagar(){
    quantos fechamentos ele ainda espera antes de entrar na conta. Enquanto for
    maior que zero ele fica guardado — não soma nos totais do ciclo, não estoura
    teto, não é arquivado no fechamento. Só anda uma casa na fila. */
+/* Nem todo gasto passa pelo cartão. A parcela da moto paga no Pix é gasto seu,
+   conta no teto e no quanto sobra — mas NÃO está na fatura, e somá-la ali
+   inflava o valor a pagar no vencimento. `l.meio` separa as duas coisas:
+
+   • 'cartao' (padrão, e o que todo lançamento antigo é) — entra na fatura.
+   • 'avista' (Pix, débito, dinheiro) — já saiu da conta; conta no gasto, não
+     na fatura.
+
+   A distinção é só sobre COBRANÇA. Teto, categoria, sobra do mês e a divisão
+   com outra pessoa continuam valendo igual para os dois: o dinheiro saiu do
+   seu bolso do mesmo jeito. */
+const naFatura=l=>l.meio!=='avista';
 const naFaturaAberta=l=>!(+l.prox>0);
 const doCiclo=()=>S.lanc.filter(naFaturaAberta);
 const daProxima=()=>S.lanc.filter(l=>+l.prox>0);
@@ -253,20 +265,24 @@ function fecharCiclo(dataStr){
   /* Só fecha o que é DESTA fatura. O que foi lançado apontando pra seguinte
      não estava nela: não é arquivado, apenas anda uma casa na fila. */
   const daFatura=S.lanc.filter(naFaturaAberta), adiados=daProxima();
-  let bruto=0,meu=0,pai=0; const porCat={};
+  let bruto=0,avista=0,meu=0,pai=0; const porCat={};
   daFatura.forEach(l=>{ const m=meuValor(l);
-    bruto+=l.valor; meu+=m; pai+=Math.min(+l.pai||0,l.valor);
+    if(naFatura(l)) bruto+=l.valor; else avista+=l.valor;
+    meu+=m; pai+=Math.min(+l.pai||0,l.valor);
     porCat[l.cat]=(porCat[l.cat]||0)+m; });
   const itens=daFatura.map(l=>({nome:l.nome,cat:l.cat,tier:l.tier,valor:l.valor,pai:+l.pai||0,
-    com:l.com||'',tipo:l.tipo,fonte:l.fonte,pRest:+l.pRest||0,venc:+l.venc||0}));
+    com:l.com||'',tipo:l.tipo,fonte:l.fonte,pRest:+l.pRest||0,venc:+l.venc||0,meio:l.meio||'cartao'}));
   /* O nome e a cor da pessoa vão CONGELADOS na fatura arquivada, não por
      referência: quem apagar "Mãe" daqui a três meses continua vendo de quem
      era aquela metade do mercado de setembro.
      `venc` também vai gravado: a fatura que fecha hoje é paga no vencimento
      seguinte, e daqui a seis meses o app não pode ter que adivinhar qual era
      o dia de vencimento configurado na época. */
+  /* `bruto` é a fatura do cartão; `avista` é o que saiu por fora dela. As
+     faturas gravadas antes desta versão não têm `avista` — para elas o campo
+     não existe e vale zero, que é a verdade: naquela época tudo era cartão. */
   S.hist.unshift({data:dataStr,venc:iso(vencDaFatura(dataDeISO(dataStr))),
-    bruto,meu,pai,porCat,itens,pessoas:fatiasPessoa(daFatura)});
+    bruto,avista,meu,pai,porCat,itens,pessoas:fatiasPessoa(daFatura)});
   S.hist=S.hist.slice(0,24);
   let sumiram=0, andaram=0;
   const ficam=daFatura.filter(l=>{
@@ -471,8 +487,13 @@ function calc(){
      comprometido com a cobrança de depois. */
   const itens=doCiclo(), prox=daProxima();
   const t={1:0,2:0,3:0}, porCat={};
-  let bruto=0, pai=0;
-  itens.forEach(l=>{ const v=meuValor(l); bruto+=l.valor; pai+=Math.min(+l.pai||0,l.valor);
+  /* `bruto` é a FATURA — só o que passa no cartão. O que foi no Pix vai em
+     `avista`, à parte. Os dois somam no gasto: peso, categoria e teto não
+     perguntam como você pagou. */
+  let bruto=0, avista=0, avistaMeu=0, pai=0;
+  itens.forEach(l=>{ const v=meuValor(l);
+    if(naFatura(l)) bruto+=l.valor; else { avista+=l.valor; avistaMeu+=v; }
+    pai+=Math.min(+l.pai||0,l.valor);
     t[l.tier]+=v; porCat[l.cat]=(porCat[l.cat]||0)+v; });
   const gasto=t[1]+t[2]+t[3];
   const meta=(+S.metaVal>0)?+S.metaVal:renda*((+S.metaPct||0)/100);
@@ -493,7 +514,7 @@ function calc(){
   const fontes={}; itens.forEach(l=>{const f=l.fonte||'Conta'; fontes[f]=(fontes[f]||0)+l.valor;});
   const proxBruto=prox.reduce((s,l)=>s+(+l.valor||0),0);
   const proxMeu=prox.reduce((s,l)=>s+meuValor(l),0);
-  return {renda,gasto,bruto,pai,t,porCat,meta,disponivel,tetos,excesso,somaExcesso,futuro,fontes,
+  return {renda,gasto,bruto,avista,avistaMeu,pai,t,porCat,meta,disponivel,tetos,excesso,somaExcesso,futuro,fontes,
           proxBruto,proxMeu,proxN:prox.length,
           fatias:fatiasPessoa(itens),sobra:renda-gasto,corte:t[3]};
 }
@@ -687,7 +708,8 @@ function renderHist(){
   dc.innerHTML=`<h3>Fatura que fechou em ${dataBR(x.data)}</h3>
    <p class="ajuda" style="margin:-4px 0 12px">Cobrada no vencimento de <b>${dataBR(iso(vencX))}</b>${x.pago?' · <b style="color:var(--verde)">paga</b>':''}.</p>
    <div class="cards">
-     <div class="card"><div class="l">Fatura total</div><div class="v">${brl(x.bruto)}</div></div>
+     <div class="card"><div class="l">Fatura do cartão</div><div class="v">${brl(x.bruto)}</div></div>
+     ${+x.avista>0?`<div class="card" style="border-color:var(--teal)"><div class="l">Fora da fatura</div><div class="v" style="color:var(--teal)">${brl(x.avista)}</div><div class="n">Pix, débito ou dinheiro</div></div>`:''}
      <div class="card"><div class="l">Meu</div><div class="v" style="color:var(--verde)">${brl(x.meu)}</div></div>
      ${fatiasDoHist(x).map(f=>`<div class="card"><div class="l">De ${esc(f.nome)}</div><div class="v" style="color:${f.cor}">${brl(f.valor)}</div></div>`).join('')}
      ${ant?`<div class="card"><div class="l">Contra o mês anterior</div><div class="v" style="color:${x.meu>ant.meu?'var(--vermelho)':'var(--verde)'}">${x.meu>ant.meu?'+':'−'}${brl(Math.abs(x.meu-ant.meu))}</div></div>`:''}
@@ -873,7 +895,8 @@ function renderPessoas(c){
 function renderLanc(c){
   const fs=Object.entries(c.fontes).sort((a,b)=>b[1]-a[1]);
   $('#cards2').innerHTML='<div class="cards">'+
-    `<div class="card"><div class="l">Fatura total</div><div class="v">${brl(c.bruto)}</div></div>`+
+    `<div class="card"><div class="l">Fatura do cartão</div><div class="v">${brl(c.bruto)}</div><div class="n">é isto que vence</div></div>`+
+    (c.avista>0?`<div class="card" style="border-color:var(--teal)"><div class="l">Fora da fatura</div><div class="v" style="color:var(--teal)">${brl(c.avista)}</div><div class="n">Pix, débito ou dinheiro — já saiu da conta</div></div>`:'')+
     `<div class="card" style="border-color:var(--verde)"><div class="l">Meu</div><div class="v" style="color:var(--verde)">${brl(c.gasto)}</div></div>`+
     c.fatias.map(f=>`<div class="card" style="border-color:${f.cor}"><div class="l">De ${esc(f.nome)}</div><div class="v" style="color:${f.cor}">${brl(f.valor)}</div><div class="n">está na fatura, não é gasto seu</div></div>`).join('')+
     fs.map(([f,v])=>`<div class="card"><div class="l">${esc(f)}</div><div class="v">${brl(v)}</div></div>`).join('')+
@@ -888,8 +911,9 @@ function renderLanc(c){
   /* Uma linha só, usada nas duas listas: a fatura aberta e a fila da seguinte.
      O botão do fim da segunda linha é o que move o gasto entre elas. */
   const linha=l=>`<tr${+l.prox>0?' class="lin-prox"':''}>
-    <td>${esc(l.nome)} ${selo(l)}${+l.prox>0?' <span class="tag cicloprox">próxima fatura</span>':''}<div style="font-size:11.5px;color:var(--txt-3)">${esc(l.fonte||'Conta')} · <span class="tag ${TIER[l.tier].cl}">${TIER[l.tier].n}</span>${+l.pai>0?` · <b style="color:${corPessoa(l.com)}">${esc(nomePessoa(l.com))}</b>`:''}
-      · <button class="link mini" data-prox="${l.id}">${+l.prox>0?'trazer pra esta fatura':'jogar pra próxima'}</button></div></td>
+    <td>${esc(l.nome)} ${selo(l)}${+l.prox>0?' <span class="tag cicloprox">próxima fatura</span>':''}${naFatura(l)?'':' <span class="tag avista">à vista</span>'}<div style="font-size:11.5px;color:var(--txt-3)">${esc(l.fonte||'Conta')} · <span class="tag ${TIER[l.tier].cl}">${TIER[l.tier].n}</span>${+l.pai>0?` · <b style="color:${corPessoa(l.com)}">${esc(nomePessoa(l.com))}</b>`:''}
+      · <button class="link mini" data-meio="${l.id}">${naFatura(l)?'foi no Pix':'foi no cartão'}</button>${naFatura(l)?`
+      · <button class="link mini" data-prox="${l.id}">${+l.prox>0?'trazer pra esta fatura':'jogar pra próxima'}</button>`:''}</div></td>
     <td><span class="pt" style="background:${CATS[l.cat].c}"></span>${CATS[l.cat].n}</td>
     <td><select data-pag="${l.id}" style="padding:5px 6px;font-size:12.5px;min-width:102px">${opcoesPagador(l,true)}</select></td>
     <td class="v"><input type="number" min="0" step="0.01" data-val="${l.id}" value="${l.valor||''}" placeholder="0,00"
@@ -902,14 +926,39 @@ function renderLanc(c){
     <td style="text-align:right"><button class="btn-x" data-del="${l.id}" aria-label="Remover">×</button></td></tr>`;
   const prox=daProxima(), fab=faturaAberta();
   tb.innerHTML=doCiclo().sort((a,b)=>b.valor-a.valor).map(linha).join('')
-    +`<tr class="total"><td colspan="3">Total desta fatura</td><td class="v">${brl(c.bruto)}</td>
-      <td class="v" style="color:var(--pai)">${brl(c.pai)}</td><td class="v">${brl(c.gasto)}</td><td></td></tr>`
+    /* Com gasto à vista no meio, uma linha de total só mentiria: a coluna
+       "Na fatura" e a coluna "Meu" passam a somar coisas diferentes. Três
+       linhas dizem a verdade inteira — o que vence no cartão, o que já saiu, e
+       o que o ciclo custou ao todo. */
+    +(c.avista>0
+      ? `<tr class="total"><td colspan="3">Na fatura do cartão</td><td class="v">${brl(c.bruto)}</td><td></td><td></td><td></td></tr>`
+       +`<tr class="total"><td colspan="3" style="font-weight:500;color:var(--txt-3)">Fora dela — Pix, débito ou dinheiro</td>
+         <td class="v" style="color:var(--teal)">${brl(c.avista)}</td><td></td><td></td><td></td></tr>`
+       +`<tr class="total"><td colspan="3">Total do ciclo</td><td class="v">${brl(c.bruto+c.avista)}</td>
+         <td class="v" style="color:var(--pai)">${brl(c.pai)}</td><td class="v">${brl(c.gasto)}</td><td></td></tr>`
+      : `<tr class="total"><td colspan="3">Total desta fatura</td><td class="v">${brl(c.bruto)}</td>
+         <td class="v" style="color:var(--pai)">${brl(c.pai)}</td><td class="v">${brl(c.gasto)}</td><td></td></tr>`)
     +(prox.length?`<tr class="sep-prox"><td colspan="7">Guardado para a fatura seguinte — cobrada só em
         ${dataBR(iso(vencDaFatura(new Date(fab.fecha.getFullYear(),fab.fecha.getMonth()+1,fab.fecha.getDate()))))}.
         Não entra nos totais acima nem nos tetos deste ciclo.</td></tr>`
       +prox.sort((a,b)=>b.valor-a.valor).map(linha).join('')
       +`<tr class="total"><td colspan="3">Total da próxima</td><td class="v">${brl(c.proxBruto)}</td>
         <td class="v" style="color:var(--pai)">${brl(c.proxBruto-c.proxMeu)}</td><td class="v">${brl(c.proxMeu)}</td><td></td></tr>`:'');
+  /* Trocar o meio de pagamento na própria lista: quem lançou no automático e
+     só depois lembrou que pagou no Pix resolve aqui, sem reabrir formulário. */
+  tb.querySelectorAll('[data-meio]').forEach(b=>b.onclick=e=>{
+    const l=S.lanc.find(x=>String(x.id)===e.currentTarget.dataset.meio); if(!l) return;
+    if(naFatura(l)){
+      l.meio='avista'; l.prox=0;                       // fora da fatura não tem "próxima fatura"
+      if(!l.fonte||l.fonte==='Conta') l.fonte='Pix';
+      toast(l.nome+' saiu da fatura — continua no seu gasto');
+    }else{
+      l.meio='cartao';
+      if(l.fonte==='Pix') l.fonte='Conta';
+      toast(l.nome+' voltou pra fatura do cartão');
+    }
+    render(); salvar(); vibrar(10);
+  });
   tb.querySelectorAll('[data-prox]').forEach(b=>b.onclick=e=>{
     const l=S.lanc.find(x=>String(x.id)===e.currentTarget.dataset.prox); if(!l) return;
     l.prox=+l.prox>0?0:1;
@@ -1156,6 +1205,27 @@ $('#lTipo').onchange=()=>{ ajustarCamposForm(); if($('#lTipo').value==='parc') $
    que o app entendeu, com o caminho para discordar. Se ela mexer, o app para
    de adivinhar: a escolha dela vale mais que a regra. */
 let catNaMao=false;
+/* Como pagou, no formulário. Volta pra 'cartao' a cada lançamento: é o caso
+   comum, e deixar grudado no Pix faria a fatura seguinte nascer errada. */
+let meioForm='cartao';
+function pintarMeio(){
+  const g=$('#lMeio'); if(!g) return;
+  g.querySelectorAll('[data-meio]').forEach(b=>{
+    const on=b.dataset.meio===meioForm;
+    b.classList.toggle('on',on);
+    b.setAttribute('aria-checked',on?'true':'false');
+  });
+  // "entra na fatura" não existe pra quem já pagou à vista
+  const cf=$('#lFatura'); if(cf){ const box=cf.closest('div'); if(box) box.hidden=(meioForm==='avista'); }
+  if(meioForm==='avista'&&cf) cf.value='0';
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('#lMeio [data-meio]'); if(!b) return;
+  meioForm=b.dataset.meio; pintarMeio(); vibrar(8);
+  const f=$('#lFonte');
+  if(meioForm==='avista'&&(!f.value.trim()||f.value.trim()==='Conta')) f.value='Pix';
+  if(meioForm==='cartao'&&f.value.trim()==='Pix') f.value='';
+});
 function palpitarNoForm(){
   const nome=$('#lNome').value.trim();
   const p=$('#lPalpite');
@@ -1250,7 +1320,7 @@ function aplicarTema(){
 // Antes da capa, antes do login, antes de qualquer pintura.
 aplicarTema();
 
-ajustarCamposForm();
+ajustarCamposForm(); pintarMeio();
 $('#resetTetos').onclick=()=>{ S.tetos={}; render(); salvar(); };
 $('#fecharAgora').onclick=()=>{
   const n=doCiclo().length, fila=daProxima().length;
@@ -1280,7 +1350,8 @@ $('#addLanc').onclick=()=>{
   const l={id:Date.now()+Math.random(),criadoEm:Date.now(),nome,valor,cat:$('#lCat').value,tier:+$('#lTier').value,
     fonte:$('#lFonte').value.trim()||'Conta',tipo,pRest:tipo==='parc'?(+$('#lParc').value||1):0,
     com:'',pai:Math.min(+$('#lPai').value||0,valor),ref:0,venc:Math.min(Math.max(+$('#lVenc').value||0,0),31),
-    prox:+$('#lFatura').value===1?1:0};
+    meio:meioForm,
+    prox:(meioForm==='cartao'&&+$('#lFatura').value===1)?1:0};
   const pag=$('#lPagador').value;
   if(pag==='eu'||pag==='+'){ l.pai=0; l.com=''; }
   else{
@@ -1290,11 +1361,13 @@ $('#addLanc').onclick=()=>{
   }
   S.lanc.push(l);
   ['lNome','lValor','lParc','lPai','lVenc'].forEach(i=>$('#'+i).value=''); $('#lFatura').value='0';
-  catNaMao=false; pintarPagadorForm('eu'); ajustarCamposForm(); palpitarNoForm();
+  catNaMao=false; meioForm='cartao'; pintarMeio();
+  pintarPagadorForm('eu'); ajustarCamposForm(); palpitarNoForm();
   $('#lNome').focus();
   render(); salvar();
   const f=faturaAberta();
-  toast(l.prox?'Guardado pra próxima fatura':'Entra na fatura cobrada em '+ddmm(f.vence));
+  toast(l.meio==='avista'?'Fora da fatura — já saiu da conta'
+    :l.prox?'Guardado pra próxima fatura':'Entra na fatura cobrada em '+ddmm(f.vence));
 };
 $('#addObj').onclick=()=>{
   const nome=$('#oNome').value.trim(), alvo=+$('#oAlvo').value;
@@ -1918,11 +1991,12 @@ function renderVenc(){
 
 /* ---------- exportar CSV ---------- */
 function exportarCSV(){
-  const cab=['descricao','categoria','peso','tipo','valor_fatura','dividido_com','pago_por_outro','meu_valor','fonte','parcelas_restantes','vence_dia','entra_na_fatura'];
+  const cab=['descricao','categoria','peso','tipo','valor_fatura','dividido_com','pago_por_outro','meu_valor','fonte','parcelas_restantes','vence_dia','entra_na_fatura','pago_como'];
   const fab=faturaAberta();
   const lin=S.lanc.map(l=>[l.nome,CATS[l.cat]?CATS[l.cat].n:l.cat,TIER[l.tier].n,l.tipo,
     l.valor,+l.pai>0?nomePessoa(l.com):'',+l.pai||0,meuValor(l),l.fonte||'Conta',+l.pRest||0,+l.venc||0,
-    +l.prox>0?'próxima':'aberta ('+dataBR(iso(fab.fecha))+')']);
+    +l.prox>0?'próxima':'aberta ('+dataBR(iso(fab.fecha))+')',
+    naFatura(l)?'cartão':'à vista']);
   const hist=S.hist.flatMap(x=>{
     // O nome vem da fatura arquivada, não da lista de hoje: pessoa apagada
     // continua nomeada na linha do mês em que ela dividiu o gasto.
@@ -1931,7 +2005,7 @@ function exportarCSV(){
       CATS[l.cat]?CATS[l.cat].n:l.cat,TIER[l.tier]?TIER[l.tier].n:l.tier,l.tipo,l.valor,
       +l.pai>0?(nomes[l.com||'']||nomePessoa(l.com)):'',+l.pai||0,
       Math.max(l.valor-(+l.pai||0),0),l.fonte||'Conta',+l.pRest||0,+l.venc||0,
-      'fechada em '+dataBR(x.data)]);});
+      'fechada em '+dataBR(x.data), (l.meio==='avista'?'à vista':'cartão')]);});
   const cel=v=>typeof v==='number'?String(v).replace('.',','):'"'+String(v).replace(/"/g,'""')+'"';
   const csv='﻿'+[cab.join(';'),...lin.concat(hist).map(l=>l.map(cel).join(';'))].join('\r\n');
   const a=document.createElement('a');
@@ -2004,7 +2078,9 @@ function alertasPendentes(c){
     if(d<=(+S.aDiasFech||3)){
       fora.push({tag:'fech:'+iso(prox), icone:'📅', ico:'calendario', aba:'hoje',
         titulo:d===0?'A fatura fecha hoje':`A fatura fecha em ${d} dia${d===1?'':'s'}`,
-        corpo:`Estão na fatura ${brl(c.bruto)} (${brl(c.gasto)} seus), cobrados em ${dataBR(iso(vencDaFatura(prox)))}. Confira os variáveis antes de virar o ciclo.`,
+        corpo:`Estão na fatura ${brl(c.bruto)}, cobrados em ${dataBR(iso(vencDaFatura(prox)))}.`
+          +(c.avista>0?` Fora dela, ${brl(c.avista)} já saíram à vista.`:'')
+          +` Seu gasto no ciclo está em ${brl(c.gasto)} — confira os variáveis antes de virar.`,
         peso:2});
     }
   }
@@ -2437,8 +2513,14 @@ function renderInsights(c){
    Reaproveita classificar() e as REGRAS da importação de extrato.
    ========================================================================== */
 function lerRapido(txt){
-  const bruto=String(txt||'').trim();
-  if(!bruto) return null;
+  const cru=String(txt||'').trim();
+  if(!cru) return null;
+  /* A forma de pagamento sai ANTES de procurar o valor. Em "moto 890 pix" o
+     número não é o último pedaço da frase, e o leitor — que procura o valor no
+     fim — respondia "falta o valor". Tirando o "pix" primeiro sobra
+     "moto 890", que ele entende. */
+  const mp=meioDoTexto(cru);
+  const bruto=mp.nome;
   // valor: último número da frase, aceita 1.234,56 / 1234.56 / 45
   const m=bruto.match(/(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+,\d{1,2}|\d+,\d{1,2}|\d+\.\d{1,2}(?!\d)|\d+)\s*$/i);
   let ini=null;
@@ -2451,7 +2533,8 @@ function lerRapido(txt){
   const valor=parseFloat(n);
   const nome=(m?bruto.slice(0,m.index):ini[2]).replace(/[-–—:]\s*$/,'').replace(/\s+/g,' ').trim();
   if(!nome||!(valor>0)) return {nome:nome||bruto,valor:valor||0,incompleto:true};
-  return Object.assign({nome:nome.charAt(0).toUpperCase()+nome.slice(1),valor},palpiteDoNome(nome));
+  return Object.assign({nome:nome.charAt(0).toUpperCase()+nome.slice(1),valor,meio:mp.meio},
+    palpiteDoNome(nome));
 }
 /* O que o app deduz de um NOME de gasto: categoria, peso, repetição e conta.
 
@@ -2464,6 +2547,15 @@ function lerRapido(txt){
    O histórico manda por cima das regras: se já existe um gasto com esse nome,
    herda tudo dele — inclusive uma categoria que a pessoa tenha corrigido na
    mão antes. É o app aprendendo com ela em vez de insistir na regra. */
+/* "moto 890 pix" — a forma de pagamento dita no meio da frase. Sai do nome
+   (senão o gasto se chamaria "Moto pix") e vira o meio. */
+const DITO_AVISTA=/\b(pix|debito|dinheiro|a vista|avista|especie)\b/;
+function meioDoTexto(nome){
+  if(!DITO_AVISTA.test(semAcento(nome))) return {nome,meio:'cartao'};
+  const corte=String(nome).replace(/\b(pix|d[ée]bito|dinheiro|[àa] vista|avista|esp[ée]cie)\b/gi,'')
+    .replace(/\s{2,}/g,' ').replace(/\s*[-–—,]\s*$/,'').trim();
+  return {nome:corte||nome,meio:'avista'};
+}
 function palpiteDoNome(nome){
   const txt=String(nome||'');
   const [cat,tier]=classificar(txt);
@@ -2485,14 +2577,15 @@ function renderEco(){
   if(!p){ el.innerHTML='<span class="aviso">Escreva o gasto e o valor — <b>qualquer</b> palavra serve, o app acha a categoria. Ex.: <b>'+esc(exemploRapido)+'</b></span>'; return; }
   if(p.incompleto){ el.innerHTML='<span class="aviso">Falta o valor no fim. Ex.: <b>'+esc(p.nome)+' 45</b></span>'; return; }
   el.innerHTML=`<span class="pt" style="background:${CATS[p.cat].c}"></span>
-    <span><b>${esc(p.nome)}</b> · ${brl(p.valor)} · ${CATS[p.cat].n} · ${TIER[p.tier].n}</span>
+    <span><b>${esc(p.nome)}</b> · ${brl(p.valor)} · ${CATS[p.cat].n} · ${TIER[p.tier].n}${p.meio==='avista'?' · <b>à vista, fora da fatura</b>':''}</span>
     ${p.herdado?'<span class="aviso">(como da última vez)</span>':''}`;
 }
 function salvarRapido(){
   const p=lerRapido($('#rapido').value);
   if(!p||p.incompleto){ toast('Escreva a descrição e o valor. Ex.: ifood 45',true); $('#rapido').focus(); return; }
   const l={id:Date.now()+Math.random(),criadoEm:Date.now(),nome:p.nome,valor:p.valor,cat:p.cat,
-    tier:p.tier,tipo:p.tipo,fonte:p.fonte,pRest:0,pai:0,ref:0,venc:0,prox:0};
+    tier:p.tier,tipo:p.tipo,fonte:p.meio==='avista'?'Pix':p.fonte,pRest:0,pai:0,ref:0,venc:0,prox:0,
+    meio:p.meio||'cartao'};
   S.lanc.push(l);
   $('#rapido').value=''; renderEco();
   render(); salvar(); vibrar(14);
@@ -2817,6 +2910,7 @@ function mostrarRetro(x){
       ${dif===null?'<div class="d">Primeiro mês fechado — a partir do próximo dá pra comparar.</div>'
         :`<div class="d" style="color:${economizou?'var(--verde)':'var(--vermelho)'};font-weight:600">
            ${economizou?'▼ '+brl(-dif)+' a menos':'▲ '+brl(dif)+' a mais'} que o mês anterior</div>`}
+      ${+x.avista>0?`<div class="d">${brl(x.bruto)} vencem na fatura do cartão; ${brl(x.avista)} já saíram à vista.</div>`:''}
     </div>
 
     ${x.pai>0?`<div class="re-card" style="animation-delay:.1s">

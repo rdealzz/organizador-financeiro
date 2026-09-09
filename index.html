@@ -690,6 +690,14 @@ html[data-tema="escuro"] #splash{background:#000}
       <div class="grade g2" style="margin-top:14px">
         <div class="full"><label for="lNome">O que foi</label><input id="lNome" placeholder="Ex.: estacionamento"></div>
         <div><label for="lValor">Valor</label><input type="number" inputmode="decimal" id="lValor" min="0" step="0.01" placeholder="0,00"></div>
+        <!-- Como pagou muda quem cobra, não quanto custa: no cartão entra na
+             fatura e vence junto; no Pix já saiu da conta. Nos dois casos o
+             gasto conta igual no teto e na sobra do mês. -->
+        <div class="full"><span class="rot-seg">Como pagou</span>
+          <div class="segm" id="lMeio" role="radiogroup" aria-label="Como pagou">
+            <button type="button" data-meio="cartao" class="on" role="radio" aria-checked="true">No cartão</button>
+            <button type="button" data-meio="avista" role="radio" aria-checked="false">Pix, débito ou dinheiro</button>
+          </div></div>
         <div><label for="lTipo">Repetição</label><select id="lTipo">
           <option value="var">Muda todo mês</option>
           <option value="fixo">Igual todo mês</option>
@@ -724,7 +732,7 @@ html[data-tema="escuro"] #splash{background:#000}
       </details>
 
       <div class="acoes"><button class="btn" id="addLanc">Adicionar</button></div>
-      <p class="ajuda" style="margin:6px 0 0"><b>Repetição:</b> <i>muda todo mês</i> zera o valor a cada fatura pra você preencher o do mês; <i>igual todo mês</i> repete sozinho; <i>parcelado</i> desconta uma parcela por fatura; <i>só neste mês</i> some no fechamento. <b>Quem paga:</b> cadastre quem divide com você — pai, mãe, quem for — em <b>+ Nova pessoa</b>, ali no próprio select. O gasto continua inteiro na fatura, mas só a sua parte conta no teto.</p>
+      <p class="ajuda" style="margin:6px 0 0"><b>Repetição:</b> <i>muda todo mês</i> zera o valor a cada fatura pra você preencher o do mês; <i>igual todo mês</i> repete sozinho; <i>parcelado</i> desconta uma parcela por fatura; <i>só neste mês</i> some no fechamento. <b>Como pagou:</b> <i>no cartão</i> entra na fatura e vence junto com ela; <i>Pix, débito ou dinheiro</i> já saiu da sua conta e fica fora da fatura — mas conta igual no seu gasto do mês e no teto da categoria. <b>Quem paga:</b> cadastre quem divide com você — pai, mãe, quem for — em <b>+ Nova pessoa</b>, ali no próprio select. O gasto continua inteiro no lançamento, mas só a sua parte conta no teto.</p>
     </details>
   </div>
 </div>
