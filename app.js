@@ -593,13 +593,37 @@ function renderFatura(c){
   const nf=$('#notaFatura');
   /* Fechamento e vencimento iguais quase sempre são a mesma data digitada duas
      vezes, por só se conhecer a do pagamento. O app funciona assim mesmo — mas
-     com os dois dias certos a previsão fica exata, então vale dizer. */
-  const mesmoDia=diaDoMes(S.diaFech||5)===diaDoMes(S.diaVenc||S.diaFech||5);
-  if(nf) nf.innerHTML=`<div class="nota">Um gasto no cartão feito <b>hoje</b> entra na fatura que fecha em
-    <b>${fecha}</b> e é cobrado no vencimento de <b>${vence}</b>.`
-    +(mesmoDia?` <br><b>Os dois dias estão iguais.</b> Se o seu cartão fecha num dia e vence noutro — fecha 5, vence 12, por exemplo —
-      ponha os dois aqui: aí o app sabe que a compra de hoje entra na fatura que fecha dia 5 e só é cobrada dia 12.`
-      :'')+`</div>`;
+     lê os dois dias como "fecha hoje, paga no mesmo dia do mês que vem", trinta
+     dias de folga que nenhum cartão dá, e a data de cobrança sai um mês adiante
+     da real.
+
+     Avisar não bastava: dizer "ajuste" e deixar a pessoa fazer a conta de qual
+     dia pôr é empurrar o problema de volta. O botão faz a correção mais comum
+     — a fatura fecha SETE dias antes de vencer — já com o dia calculado no
+     rótulo, e o campo continua ali para quem sabe o dia exato do seu cartão. */
+  const dv=diaDoMes(S.diaVenc||S.diaFech||5);
+  const mesmoDia=diaDoMes(S.diaFech||5)===dv;
+  const seteAntes=((dv-7-1+28)%28)+1;
+  if(nf){
+    nf.innerHTML=`<div class="nota">Um gasto no cartão feito <b>hoje</b> entra na fatura que fecha em
+      <b>${fecha}</b> e é cobrado no vencimento de <b>${vence}</b>.`
+      +(mesmoDia?` <br><b>Os dois dias estão iguais</b>, e aí o app entende que a fatura fecha e só é paga no mesmo dia do mês seguinte.
+        Quase nenhum cartão funciona assim: o normal é fechar alguns dias antes de vencer.
+        <div style="margin-top:10px"><button class="btn sec" id="btnFecha7">Fechar dia ${seteAntes}, sete dias antes de vencer</button></div>`
+        :'')+`</div>`;
+    const b7=$('#btnFecha7');
+    if(b7) b7.onclick=()=>{
+      S.diaFech=seteAntes;
+      $('#diaFech').value=seteAntes;
+      /* Mudar o dia do fechamento move a régua do ciclo — o mesmo que o campo
+         faz quando a pessoa digita nele. Sem isto o app acharia que a fatura
+         atual já fechou (ou ainda não), e viraria ciclo na hora errada. */
+      S.ultimoFech=iso(ultimoFechPassado());
+      render(); salvar(); vibrar(12);
+      const f=faturaAberta();
+      toast('Fecha dia '+seteAntes+' · o que você gastar hoje é cobrado em '+ddmm(f.vence));
+    };
+  }
 
   const bp=$('#blocoPagar');
   if(bp){

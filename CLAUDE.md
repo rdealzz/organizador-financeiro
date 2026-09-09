@@ -275,9 +275,16 @@ splash preta e app claro.
 
 O padrão de datas do cartão também mudou: **fecha dia 5, vence dia 12**. O
 antigo era 5 e 5, que na leitura correta significa "fecha hoje e paga no mesmo
-dia do mês que vem" — 30 dias de folga que nenhum cartão dá. Quem já tem conta
-mantém o que configurou; a nota em *Renda e meta* avisa quando os dois dias
-estão iguais.
+dia do mês que vem" — 30 dias de folga que nenhum cartão dá.
+
+Quem já tem conta mantém o que configurou, e para esses a nota em *Renda e meta*
+avisa quando os dois dias estão iguais — **com um botão que corrige**. Avisar
+sozinho não bastava: dizer "ajuste" e deixar a pessoa calcular qual dia pôr é
+empurrar o problema de volta. O botão aplica a forma mais comum (fecha sete dias
+antes de vencer), já com o dia no rótulo, e o campo continua ali para quem sabe
+o dia exato do seu cartão. Ele também refaz `S.ultimoFech` — mudar o dia do
+fechamento move a régua do ciclo, e sem isso o app viraria a fatura na hora
+errada.
 
 ## "Falha ao sincronizar" — três causas, três correções (v9.5)
 
