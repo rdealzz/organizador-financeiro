@@ -394,6 +394,69 @@ o primeiro atalho da pessoa com o valor que ela mesma lançou naquela linha.
 "Ex.: mercado 820" para quem não faz mercado ensina o formato com um gasto que
 ela não tem.
 
+## A folha de lançamento encolheu (v9.7)
+
+Eram onze campos numa grade, todos ao mesmo tempo, um deles desabilitado
+(`$('#lParc').disabled=true`) esperando alguém escolher "parcelado". Campo
+desabilitado ocupa espaço sem servir para nada, e onze campos de uma vez fazem
+parecer difícil o que é fácil.
+
+Agora são **quatro à vista** — o que foi, valor, repetição, quem paga — e o
+resto aparece por consequência:
+
+* `ajustarCamposForm()` mostra **parcelas** só quando a repetição é parcelado, e
+  **quanto a outra pessoa cobre** só quando alguém divide. É chamada da troca de
+  repetição, da troca de pagador, na partida e depois de cada lançamento.
+* Categoria, peso, onde caiu, vence dia e "entra na fatura" foram para uma
+  gaveta interna (`#mais2`) — são ajuste fino, não decisão.
+
+Cuidado ao testar `<details>` com Playwright: no Chromium atual o conteúdo de um
+`details` fechado é escondido com `content-visibility`, então **`offsetParent`
+continua não-nulo** e um teste ingênuo diz que o campo está visível. Use
+`checkVisibility({checkVisibilityCSS:true, contentVisibilityAuto:true})`.
+
+## O palpite pelo nome vale nos DOIS caminhos (v9.7)
+
+`classificar()` já existia e acertava, mas morava dentro de `lerRapido()` — do
+campo rápido. O formulário completo não adivinhava nada: quem escrevia
+"Estacionamento" ali tinha que achar "Carro e transporte" numa lista de dez, com
+a resposta certa a uma chamada de distância.
+
+**`palpiteDoNome(nome)`** é agora o lugar único: categoria, peso, repetição e
+conta. `lerRapido()` a usa, e `palpitarNoForm()` também — enquanto a pessoa não
+mexer na categoria à mão (`catNaMao`), ela vai sendo preenchida a cada tecla, e
+a linha `#lPalpite` diz o que o app entendeu com um "trocar" que abre a gaveta.
+Se ela mexer, o app **para de adivinhar**: a escolha dela vale mais que a regra.
+
+Dentro de `palpiteDoNome` o histórico manda por cima das regras — um nome já
+usado herda tudo do lançamento anterior, inclusive uma categoria corrigida na
+mão. E ali é `S.lanc` inteiro, não `doCiclo()`: aprender o nome não tem nada a
+ver com em qual fatura o gasto caiu.
+
+### As regras de categoria cresceram
+
+Uma medição antes de mexer: de 81 nomes comuns, **21 caíam em "outros"**. Depois
+das adições (manutenção, borracharia, troca de óleo, detran, multa, lava rápido,
+zona azul e seguro do carro em transporte; lanchonete, quentinha, self service,
+salgado, pastel e `eats` em comida; faxineira, encanador, pedreiro, veterinário
+em casa; remédio, óculos, fisioterapia, nutricionista, clínica em saúde; show,
+viagem, hotel, airbnb, teatro, barbeiro, manicure em lazer; matrícula, inglês,
+autoescola em estudo; sicredi, sicoob, picpay, C6 e afins em dívida) sobraram
+**3**: bebida, refrigerante e correios — genuinamente ambíguos, e para esses
+"outros" é a resposta honesta.
+
+`eats` entrou em COMIDA de propósito, e funciona porque comida é testada antes
+de transporte: "uber eats" ia para transporte por causa do `\buber\b`.
+
+**A ordem do array `REGRAS` é significativa** — a primeira que casa ganha. Lazer
+vem primeiro, então não dá para pôr ali termos genéricos como "parque", que
+roubaria "estacionamento do parque" de transporte.
+
+Há dois testes automáticos guardando isto: 126 nomes contra a tabela de
+promessas por categoria, e os 35 nomes de atalho contra o `classificar()` de
+verdade. Quem mexer nas regras roda os dois — uma regra nova que rouba um nome
+de outra categoria é silenciosa.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

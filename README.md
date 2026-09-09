@@ -77,8 +77,13 @@ Um campo só. Você escreve `ifood 45` e o app entende descrição, valor,
 categoria, peso e recorrência provável — reaproveitando o mesmo classificador
 que lê extratos do banco. Aceita `mercado 1.234,56`, `r$ 89 netflix`,
 `farmácia 97,50`. Se já existe um gasto com aquele nome, ele herda tudo do
-anterior. O resto dos campos (parcelado, quem paga, vencimento, conta) fica em
-*Mais opções*, para quando realmente precisar.
+anterior. O resto fica em *Mais opções* — e lá também são só quatro campos: o que foi,
+valor, repetição e quem paga. **A categoria vem preenchida pelo nome**: escreva
+"estacionamento" e o app já sabe que é carro e transporte, "restaurante" que é
+comida fora, "aluguel" que é casa e que repete todo mês. Uma linha embaixo diz o
+que ele entendeu, com um *trocar* ao lado — e se você trocar, ele para de
+adivinhar naquele lançamento. Parcelas só aparece quando você escolhe parcelado;
+quanto a outra pessoa cobre, só quando alguém divide.
 
 Abaixo do campo ficam **atalhos que seguem o seu dinheiro**: primeiro o que
 você mais lança, depois nomes das categorias em que você mais gasta. Quem vive

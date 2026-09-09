@@ -681,33 +681,50 @@ html[data-tema="escuro"] #splash{background:#000}
 
     <details class="mais" id="mais">
       <summary>Mais opções</summary>
+      <!-- Quatro campos à vista, e só. Categoria, peso e repetição chegam
+           preenchidos pelo nome (palpiteDoNome, no app.js): quem escreve
+           "estacionamento" não precisa procurar "Carro e transporte" numa
+           lista de dez. O resto aparece quando faz sentido — parcelas quando
+           é parcelado, quanto o outro cobre quando alguém divide — e o que
+           é ajuste fino fica numa gaveta. -->
       <div class="grade g2" style="margin-top:14px">
-        <div class="full"><label for="lNome">Descrição</label><input id="lNome" placeholder="Ex.: jaqueta"></div>
-        <div><label for="lValor">Valor da parcela/mês</label><input type="number" inputmode="decimal" id="lValor" min="0" step="0.01" placeholder="0,00"></div>
-        <div><label for="lCat">Categoria</label><select id="lCat"></select></div>
-        <div><label for="lTier">Peso</label><select id="lTier">
-          <option value="1">Essencial</option><option value="2">Vale a pena</option><option value="3">Pode cortar</option></select></div>
+        <div class="full"><label for="lNome">O que foi</label><input id="lNome" placeholder="Ex.: estacionamento"></div>
+        <div><label for="lValor">Valor</label><input type="number" inputmode="decimal" id="lValor" min="0" step="0.01" placeholder="0,00"></div>
         <div><label for="lTipo">Repetição</label><select id="lTipo">
-          <option value="var">Variável (todo mês, valor muda)</option>
-          <option value="fixo">Fixo (mesmo valor todo mês)</option>
+          <option value="var">Muda todo mês</option>
+          <option value="fixo">Igual todo mês</option>
           <option value="parc">Parcelado</option>
-          <option value="unico">Só neste mês (1x)</option></select></div>
-        <div><label for="lParc">Parcelas restantes</label><input type="number" inputmode="numeric" id="lParc" min="0" step="1" placeholder="0"></div>
-        <div><label for="lVenc">Vence dia</label><input type="number" inputmode="numeric" id="lVenc" min="1" max="31" step="1" placeholder="—"></div>
+          <option value="unico">Só neste mês</option></select></div>
+        <div class="full" id="campoParc" hidden><label for="lParc">Quantas parcelas ainda faltam</label>
+          <input type="number" inputmode="numeric" id="lParc" min="0" step="1" placeholder="Ex.: 8"></div>
         <!-- As opções deste select são as pessoas cadastradas: quem monta é
              pintarPagadorForm(), no app.js. -->
-        <div><label for="lPagador">Quem paga</label><select id="lPagador">
+        <div class="full"><label for="lPagador">Quem paga</label><select id="lPagador">
           <option value="eu">Eu, sozinho</option></select></div>
-        <div><label for="lPai" id="labPai">Quanto a outra pessoa cobre</label><input type="number" inputmode="decimal" id="lPai" min="0" step="0.01" placeholder="0,00"></div>
-        <div><label for="lFonte">Onde caiu</label><input id="lFonte" list="dlFontes" placeholder="Conta"></div>
-        <!-- Em qual fatura o gasto cai. Os rótulos com as datas são escritos
-             por renderFatura(), no app.js — aqui ficam só os textos de reserva. -->
-        <div><label for="lFatura">Entra na fatura</label><select id="lFatura">
-          <option value="0">Esta, a que está aberta</option>
-          <option value="1">A próxima</option></select></div>
+        <div class="full" id="campoPai" hidden><label for="lPai" id="labPai">Quanto a outra pessoa cobre</label>
+          <input type="number" inputmode="decimal" id="lPai" min="0" step="0.01" placeholder="0,00"></div>
       </div>
-      <div class="acoes"><button class="btn" id="addLanc">Adicionar com estes detalhes</button></div>
-      <p class="ajuda" style="margin:6px 0 0"><b>Quem paga:</b> cadastre cada pessoa com quem você divide — pai, mãe, quem for — em <b>+ Nova pessoa</b>, ali no próprio select. O gasto continua inteiro na fatura, mas só a sua parte conta no teto, e o bloco <b>Dividido com</b> mostra quanto é de cada um. <b>Repetição:</b> <i>variável</i> zera o valor a cada fatura pra você preencher o do mês; <i>fixo</i> repete igual; <i>parcelado</i> desconta uma parcela; <i>1x</i> some no fechamento.</p>
+
+      <p class="palpite" id="lPalpite" hidden></p>
+
+      <details class="mais2" id="mais2">
+        <summary>Categoria, conta e outros ajustes</summary>
+        <div class="grade g2" style="margin-top:12px">
+          <div><label for="lCat">Categoria</label><select id="lCat"></select></div>
+          <div><label for="lTier">Peso</label><select id="lTier">
+            <option value="1">Essencial</option><option value="2">Vale a pena</option><option value="3">Pode cortar</option></select></div>
+          <div><label for="lFonte">Onde caiu</label><input id="lFonte" list="dlFontes" placeholder="Conta"></div>
+          <div><label for="lVenc">Vence dia</label><input type="number" inputmode="numeric" id="lVenc" min="1" max="31" step="1" placeholder="—"></div>
+          <!-- Em qual fatura o gasto cai. Os rótulos com as datas são escritos
+               por renderFatura(), no app.js — aqui ficam só os textos de reserva. -->
+          <div class="full"><label for="lFatura">Entra na fatura</label><select id="lFatura">
+            <option value="0">Esta, a que está aberta</option>
+            <option value="1">A próxima</option></select></div>
+        </div>
+      </details>
+
+      <div class="acoes"><button class="btn" id="addLanc">Adicionar</button></div>
+      <p class="ajuda" style="margin:6px 0 0"><b>Repetição:</b> <i>muda todo mês</i> zera o valor a cada fatura pra você preencher o do mês; <i>igual todo mês</i> repete sozinho; <i>parcelado</i> desconta uma parcela por fatura; <i>só neste mês</i> some no fechamento. <b>Quem paga:</b> cadastre quem divide com você — pai, mãe, quem for — em <b>+ Nova pessoa</b>, ali no próprio select. O gasto continua inteiro na fatura, mas só a sua parte conta no teto.</p>
     </details>
   </div>
 </div>

@@ -1135,8 +1135,51 @@ $('#lPagador').onchange=e=>{
   else if(escolha.startsWith('t:')) $('#lPai').value=v||'';
   else if(v) $('#lPai').value=(v/2).toFixed(2);
   rotularPai();
+  ajustarCamposForm();   // escolheu alguém: o campo do quanto aparece agora
 };
-$('#lTipo').onchange=e=>{ $('#lParc').disabled=(e.target.value!=='parc'); if(e.target.value!=='parc') $('#lParc').value=''; };
+/* Campo desabilitado é campo que ocupa espaço sem servir pra nada. Parcelas só
+   existe quando o gasto é parcelado; "quanto a outra pessoa cobre" só quando
+   alguém divide. O formulário encolhe e cresce conforme a resposta anterior —
+   é o que faz ele caber numa olhada. */
+function ajustarCamposForm(){
+  const parc=$('#lTipo').value==='parc';
+  const cp=$('#campoParc'); if(cp) cp.hidden=!parc;
+  if(!parc) $('#lParc').value='';
+  const pag=$('#lPagador').value, divide=(pag!=='eu'&&pag!=='+');
+  const cpai=$('#campoPai'); if(cpai) cpai.hidden=!divide;
+  if(!divide) $('#lPai').value='';
+}
+$('#lTipo').onchange=()=>{ ajustarCamposForm(); if($('#lTipo').value==='parc') $('#lParc').focus(); };
+
+/* O palpite pelo NOME, no formulário completo. Enquanto a pessoa não mexer na
+   categoria à mão, ela vai sendo preenchida sozinha — e a linha embaixo diz o
+   que o app entendeu, com o caminho para discordar. Se ela mexer, o app para
+   de adivinhar: a escolha dela vale mais que a regra. */
+let catNaMao=false;
+function palpitarNoForm(){
+  const nome=$('#lNome').value.trim();
+  const p=$('#lPalpite');
+  if(!nome){ if(p){ p.hidden=true; p.innerHTML=''; } return; }
+  const g=palpiteDoNome(nome);
+  if(!catNaMao){
+    $('#lCat').value=g.cat;
+    $('#lTier').value=String(g.tier);
+    $('#lTipo').value=g.tipo;
+    if(!$('#lFonte').value.trim()&&g.fonte&&g.fonte!=='Conta') $('#lFonte').value=g.fonte;
+    ajustarCamposForm();
+  }
+  if(!p) return;
+  const c=CATS[$('#lCat').value]||CATS.outros;
+  p.hidden=false;
+  p.innerHTML=`<span class="pt" style="background:${c.c}"></span>`
+    +(catNaMao?`Categoria escolhida por você: <b>${c.n}</b>.`
+      :`Entendi como <b>${c.n}</b>${g.herdado?' (como da última vez)':''}. `
+       +`<button type="button" class="link" id="lTrocarCat">trocar</button>`);
+  const t=$('#lTrocarCat');
+  if(t) t.onclick=()=>{ const m=$('#mais2'); if(m) m.open=true; $('#lCat').focus(); };
+}
+$('#lNome').addEventListener('input',palpitarNoForm);
+$('#lCat').addEventListener('change',()=>{ catNaMao=true; palpitarNoForm(); });
 /* ==========================================================================
    Tema: uma preferência do APARELHO, aplicada antes de qualquer tela
 
@@ -1207,7 +1250,7 @@ function aplicarTema(){
 // Antes da capa, antes do login, antes de qualquer pintura.
 aplicarTema();
 
-$('#lParc').disabled=true;
+ajustarCamposForm();
 $('#resetTetos').onclick=()=>{ S.tetos={}; render(); salvar(); };
 $('#fecharAgora').onclick=()=>{
   const n=doCiclo().length, fila=daProxima().length;
@@ -1247,7 +1290,8 @@ $('#addLanc').onclick=()=>{
   }
   S.lanc.push(l);
   ['lNome','lValor','lParc','lPai','lVenc'].forEach(i=>$('#'+i).value=''); $('#lFatura').value='0';
-  pintarPagadorForm('eu'); $('#lNome').focus();
+  catNaMao=false; pintarPagadorForm('eu'); ajustarCamposForm(); palpitarNoForm();
+  $('#lNome').focus();
   render(); salvar();
   const f=faturaAberta();
   toast(l.prox?'Guardado pra próxima fatura':'Entra na fatura cobrada em '+ddmm(f.vence));
@@ -1295,15 +1339,15 @@ $('#zerar').onclick=()=>{ if(confirm('Apagar tudo e recomeçar do zero?')){
 const semAcento=t=>String(t).toLowerCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 const REGRAS=[
-  [/mercadolivre|mercado livre|\bmp\*|shopee|amazon|magalu|aliexpress|shein|americanas|renner|riachuelo|zara|centauro|nike|adidas|steam|playstation|xbox|nintendo|cinema|ingresso|barbearia|cabelereir|salao|tatuagem|cerveja|bar\b|balada|presente|roupa|tenis|perfum/,'lazer',3],
-  [/ifood|rappi|delivery|mcdonald|burger|pizza|lanche|hamburg|sushi|padaria|panificadora|restaurante|subway|\bcafe|starbucks|habib|marmita|almoco|jantar|sorvete|acai|doceria|espetinho|churrasc/,'comida',3],
+  [/mercadolivre|mercado livre|\bmp\*|shopee|amazon|magalu|aliexpress|shein|americanas|renner|riachuelo|zara|centauro|nike|adidas|steam|playstation|xbox|nintendo|cinema|ingresso|barbearia|barbeiro|cabelereir|salao|manicure|pedicure|tatuagem|cerveja|bar\b|balada|\bshow\b|teatro|boliche|festa|viagem|hotel|pousada|airbnb|\bspa\b|presente|roupa|tenis|perfum/,'lazer',3],
+  [/ifood|rappi|delivery|\beats\b|food|mcdonald|burger|pizza|lanche|lanchonete|hamburg|sushi|padaria|panificadora|restaurante|subway|\bcafe|starbucks|habib|marmita|quentinha|self.?service|almoco|jantar|sorvete|acai|doceria|salgado|coxinha|pastel|espetinho|churrasc/,'comida',3],
   [/supermerc|\bmercado\b|mercado |carrefour|assai|atacad|condor|muffato|angeloni|hortifruti|acougue|pao de acucar|big\b|extra\b|tenda|dia\b|sacolao|feira|quitanda|compra do mes/,'mercado',1],
-  [/posto|ipiranga|shell|petrobr|combust|gasolin|etanol|alcool|diesel|\buber\b|99app|99pop|indriver|taxi|onibus|metro|\bbus\b|passagem|pedagio|estacion|\bpark|oficina|mecanic|\bipva\b|licenciam|seguro auto|pneu|lavagem|revisao/,'transporte',1],
+  [/posto|ipiranga|shell|petrobr|combust|gasolin|etanol|alcool|diesel|\buber\b|99app|99pop|indriver|taxi|onibus|metro|\bbus\b|passagem|pedagio|estacion|\bpark|zona azul|oficina|mecanic|manutencao|borracharia|alinhament|balanceament|troca de oleo|lava.?(rapido|jato)|\bipva\b|licenciam|detran|multa|seguro (auto|do carro|do veiculo|veicular)|pneu|lavagem|revisao|\bcarro\b|\bmoto\b/,'transporte',1],
   [/netflix|spotify|disney|hbo|\bmax\b|prime video|deezer|youtube|apple\.com|\bicloud|google \*|canva|chatgpt|anthropic|claude|assinatura|globoplay|paramount|crunchyroll|telecine|plano do cartao|anuidade/,'assinatura',3],
-  [/farmacia|drogaria|drogasil|pacheco|panvel|raia|nissei|unimed|amil|hapvida|plano de saude|dentista|medic|consulta|exame|laborator|academia|smartfit|bluefit|gympass|suplement|whey|psicolog|terapia|vacina/,'saude',1],
-  [/aluguel|condominio|energia|copel|cemig|enel|light\b|\bluz\b|\bagua\b|sanepar|sabesp|\bgas\b|comgas|ultragaz|internet|\bvivo\b|claro|\btim\b|oi fibra|nextfibra|\biptu\b|celular|telefone|recarga|faxina|diarista|gato|racao|pet/,'casa',1],
-  [/faculdade|mensalidade|escola|colegio|curso|udemy|alura|coursera|ieduc|apostila|livro|material escolar|impress|xerox|papelaria|certifica/,'estudo',2],
-  [/fatura|cartao|emprestimo|financiamento|consorcio|parcela|juros|rotativo|nubank|inter\b|itau|bradesco|santander|caixa\b/,'divida',1]
+  [/farmacia|drogaria|drogasil|pacheco|panvel|raia|nissei|remedio|unimed|amil|hapvida|plano de saude|dentista|ortodont|medic|consulta|clinica|exame|laborator|oculos|optica|fisioterap|nutricion|academia|smartfit|bluefit|gympass|suplement|whey|psicolog|terapia|vacina/,'saude',1],
+  [/aluguel|condominio|energia|copel|cemig|enel|light\b|\bluz\b|\bagua\b|sanepar|sabesp|\bgas\b|comgas|ultragaz|internet|\bvivo\b|claro|\btim\b|oi fibra|nextfibra|\biptu\b|celular|telefone|recarga|faxin|diarist|empregada|jardineir|encanador|eletricista|pedreiro|dedetiza|seguro residencial|gato|racao|\bpet|veterinar/,'casa',1],
+  [/faculdade|mensalidade|matricula|semestre|pos.?graduacao|escola|colegio|curso|idiomas|\bingles\b|autoescola|udemy|alura|coursera|ieduc|apostila|livro|material escolar|impress|xerox|papelaria|certifica/,'estudo',2],
+  [/fatura|cartao|emprestimo|financiamento|consorcio|parcela|juros|rotativo|nubank|inter\b|itau|bradesco|santander|caixa\b|sicredi|sicoob|banrisul|banco pan|crefisa|agibank|picpay|\bneon\b|\bc6\b|dm ?card/,'divida',1]
 ];
 /* O que se repete IGUAL todo mês.
 
@@ -2407,17 +2451,31 @@ function lerRapido(txt){
   const valor=parseFloat(n);
   const nome=(m?bruto.slice(0,m.index):ini[2]).replace(/[-–—:]\s*$/,'').replace(/\s+/g,' ').trim();
   if(!nome||!(valor>0)) return {nome:nome||bruto,valor:valor||0,incompleto:true};
-  const [cat,tier]=classificar(nome);
-  // aprende com o histórico: se já existe um gasto com esse nome, herda tudo dele
-  const igual=[...S.lanc,...S.hist.flatMap(h=>h.itens||[])]
-    .find(l=>l.nome&&l.nome.toLowerCase()===nome.toLowerCase());
+  return Object.assign({nome:nome.charAt(0).toUpperCase()+nome.slice(1),valor},palpiteDoNome(nome));
+}
+/* O que o app deduz de um NOME de gasto: categoria, peso, repetição e conta.
+
+   Isto era código de dentro do campo rápido, e por isso o formulário completo
+   não adivinhava nada: quem escrevia "Estacionamento" ali tinha que procurar
+   "Carro e transporte" na lista à mão, com a resposta certa a um `classificar()`
+   de distância. Agora é um lugar só, e os dois caminhos de lançamento sabem a
+   mesma coisa.
+
+   O histórico manda por cima das regras: se já existe um gasto com esse nome,
+   herda tudo dele — inclusive uma categoria que a pessoa tenha corrigido na
+   mão antes. É o app aprendendo com ela em vez de insistir na regra. */
+function palpiteDoNome(nome){
+  const txt=String(nome||'');
+  const [cat,tier]=classificar(txt);
+  /* Aqui é `S.lanc` inteiro, não `doCiclo()`: aprender o nome não tem nada a
+     ver com em qual fatura o gasto caiu. */
+  const igual=S.lanc.concat(S.hist.flatMap(h=>h.itens||[]))
+    .find(l=>l.nome&&l.nome.toLowerCase()===txt.toLowerCase());
   return {
-    nome:nome.charAt(0).toUpperCase()+nome.slice(1),
-    valor,
     cat: igual?igual.cat:cat,
     tier: igual?igual.tier:tier,
     tipo: igual?igual.tipo
-         :((cat==='casa'||cat==='assinatura'||RECORRENTE.test(semAcento(nome)))?'fixo':'var'),
+         :((cat==='casa'||cat==='assinatura'||RECORRENTE.test(semAcento(txt)))?'fixo':'var'),
     fonte: igual?(igual.fonte||'Conta'):'Conta',
     herdado: !!igual
   };

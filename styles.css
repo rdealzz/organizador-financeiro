@@ -454,6 +454,22 @@ td input,td select{padding:7px 9px;font-size:14px;border-radius:var(--r-xs)}
 .venc.pago .vv{text-decoration:line-through}
 .venc.pago .dia{background:color-mix(in srgb,var(--verde) 16%,transparent)}
 
+/* ---- folha de lançamento: o que o app entendeu do nome ----
+   Uma linha, logo abaixo dos campos: a categoria deduzida e o caminho para
+   discordar dela. Sem isto o palpite seria invisível — e palpite invisível é
+   a mesma coisa que campo errado. */
+.palpite{margin:10px 0 0;font-size:13px;color:var(--txt-2);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.palpite .pt{flex:0 0 auto}
+.palpite .link{font-size:13px}
+/* Gaveta de dentro da folha: os ajustes que quase ninguém muda. Mais discreta
+   que a de fora, senão parecem duas seções do mesmo peso. */
+.mais2{margin-top:14px;border-top:1px solid var(--sep);padding-top:12px}
+.mais2 summary{cursor:pointer;font-size:13.5px;font-weight:600;color:var(--azul-txt);
+  list-style:none;padding:4px 0}
+.mais2 summary::-webkit-details-marker{display:none}
+.mais2 summary::before{content:'▸ ';font-size:11px}
+.mais2[open] summary::before{content:'▾ '}
+
 /* ---- o que cobrar de quem dividiu a fatura ----
    Cada pessoa é um cartão fechado: quem deve, de quê, quanto, e os dois botões
    que resolvem — mandar a lista e marcar que já pagou. */
