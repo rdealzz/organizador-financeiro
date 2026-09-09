@@ -150,6 +150,11 @@ function usarChaveDe(uid){ KEY = uid ? ('sobra-do-mes:u:'+uid) : KEY_ANTIGA; }
    a capa continuava por cima dele. Quem entrava pelo formulário nunca via o
    problema, porque aí o arquivo já tinha terminado de carregar. */
 let cena=null, capaSaindo=false;
+/* Como pagou, no formulário de lançamento. Volta pra 'cartao' a cada gasto: é
+   o caso comum, e deixar grudado no Pix faria a fatura seguinte nascer errada.
+   Mora AQUI no topo, junto de `cena`, porque renderFatura() o lê e render()
+   roda antes do fim deste arquivo quando o app reabre com sessão salva. */
+let meioForm='cartao';
 /* Retrospectiva que está esperando o portal sair da frente — ver abrirApp(). */
 let retroPendente=null;
 /* Promessa que só resolve quando a capa sai. Quem revela o app espera por ela,
@@ -555,12 +560,22 @@ function render(){
    de todos os gastos (olhando a lista), junto das datas em Renda e meta (ao
    configurar) e no cartão da fatura fechada, que é a única que já virou
    cobrança de verdade. */
+/* A linha da folha de lançamento muda com o que está sendo lançado: um gasto à
+   vista não entra em fatura nenhuma, e deixar "entra na fatura que fecha em
+   05/10" logo acima de um eco que diz "fora da fatura" é o app se contradizendo
+   em duas linhas coladas. */
+function linhaFaturaDaFolha(avista){
+  const st=$('#sheetFatura'); if(!st) return;
+  const f=faturaAberta();
+  st.innerHTML=avista
+    ? 'Pago à vista — <b>não entra em fatura nenhuma</b>, mas conta no seu gasto do mês'
+    : `Entra na fatura que fecha em <b>${dataBR(iso(f.fecha))}</b> · cobrada em <b>${dataBR(iso(f.vence))}</b>`;
+}
 function renderFatura(c){
   const f=faturaAberta(), fecha=dataBR(iso(f.fecha)), vence=dataBR(iso(f.vence));
   const pagar=faturaAPagar();
 
-  const st=$('#sheetFatura');
-  if(st) st.innerHTML=`Entra na fatura que fecha em <b>${fecha}</b> · cobrada em <b>${vence}</b>`;
+  linhaFaturaDaFolha(meioForm==='avista');
 
   const sel=$('#lFatura');
   if(sel){
@@ -1205,9 +1220,6 @@ $('#lTipo').onchange=()=>{ ajustarCamposForm(); if($('#lTipo').value==='parc') $
    que o app entendeu, com o caminho para discordar. Se ela mexer, o app para
    de adivinhar: a escolha dela vale mais que a regra. */
 let catNaMao=false;
-/* Como pagou, no formulário. Volta pra 'cartao' a cada lançamento: é o caso
-   comum, e deixar grudado no Pix faria a fatura seguinte nascer errada. */
-let meioForm='cartao';
 function pintarMeio(){
   const g=$('#lMeio'); if(!g) return;
   g.querySelectorAll('[data-meio]').forEach(b=>{
@@ -1221,7 +1233,7 @@ function pintarMeio(){
 }
 document.addEventListener('click',e=>{
   const b=e.target.closest('#lMeio [data-meio]'); if(!b) return;
-  meioForm=b.dataset.meio; pintarMeio(); vibrar(8);
+  meioForm=b.dataset.meio; pintarMeio(); linhaFaturaDaFolha(meioForm==='avista'); vibrar(8);
   const f=$('#lFonte');
   if(meioForm==='avista'&&(!f.value.trim()||f.value.trim()==='Conta')) f.value='Pix';
   if(meioForm==='cartao'&&f.value.trim()==='Pix') f.value='';
@@ -2574,6 +2586,7 @@ function palpiteDoNome(nome){
 }
 function renderEco(){
   const el=$('#rapidoEco'), p=lerRapido($('#rapido').value);
+  linhaFaturaDaFolha((p&&!p.incompleto)?p.meio==='avista':meioForm==='avista');
   if(!p){ el.innerHTML='<span class="aviso">Escreva o gasto e o valor — <b>qualquer</b> palavra serve, o app acha a categoria. Ex.: <b>'+esc(exemploRapido)+'</b></span>'; return; }
   if(p.incompleto){ el.innerHTML='<span class="aviso">Falta o valor no fim. Ex.: <b>'+esc(p.nome)+' 45</b></span>'; return; }
   el.innerHTML=`<span class="pt" style="background:${CATS[p.cat].c}"></span>
