@@ -80,8 +80,11 @@ que lê extratos do banco. Aceita `mercado 1.234,56`, `r$ 89 netflix`,
 anterior. O resto dos campos (parcelado, quem paga, vencimento, conta) fica em
 *Mais opções*, para quando realmente precisar.
 
-Abaixo do campo ficam **chips** dos seus gastos mais frequentes, tirados do
-histórico: um toque preenche a descrição e só falta o valor.
+Abaixo do campo ficam **atalhos que seguem o seu dinheiro**: primeiro o que
+você mais lança, depois nomes das categorias em que você mais gasta. Quem vive
+no carro vê estacionamento, Uber e pedágio; quem quase não faz mercado vê
+mercado lá no fim — mas toda categoria continua a um toque. Até o exemplo
+embaixo do campo usa um gasto seu, não um genérico.
 
 ## A fatura fecha antes de ser cobrada
 
@@ -145,6 +148,20 @@ CSV exportado ganhou a coluna `dividido_com`.
 Quem já usava o app com o antigo "outra pessoa" não perde nada: na primeira
 abertura essa divisão anônima vira uma pessoa chamada **Outra pessoa** — é só
 renomear para *Pai* e o histórico inteiro vem junto.
+
+## O que cobrar de quem dividiu a fatura
+
+Quando a fatura fecha, cada pessoa que dividiu gastos com você vira um cartão:
+os gastos dela item a item, quanto de cada um é dela, o total, um botão que
+manda a lista pronta pelo WhatsApp (ou copia, no computador) e um **Já recebi**
+que tira ela da conta. O cabeçalho soma só quem ainda não pagou.
+
+Antes de fechar, o bloco *Dividido com* mostra a mesma lista como prévia — o
+texto compartilhado avisa que a fatura ainda não fechou, para ninguém receber
+uma cobrança que vai mudar.
+
+O nome de quem dividiu fica congelado na fatura. Apagar a pessoa do cadastro em
+dezembro não apaga de quem era a metade do mercado de setembro.
 
 ## O número principal
 

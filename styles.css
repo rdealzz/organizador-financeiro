@@ -454,6 +454,33 @@ td input,td select{padding:7px 9px;font-size:14px;border-radius:var(--r-xs)}
 .venc.pago .vv{text-decoration:line-through}
 .venc.pago .dia{background:color-mix(in srgb,var(--verde) 16%,transparent)}
 
+/* ---- o que cobrar de quem dividiu a fatura ----
+   Cada pessoa é um cartão fechado: quem deve, de quê, quanto, e os dois botões
+   que resolvem — mandar a lista e marcar que já pagou. */
+.cobranca{border:1px solid var(--sep);border-radius:var(--r-s);padding:13px 14px;margin:0 0 10px}
+.cobranca.pago{opacity:.6}
+.cb-topo{display:flex;align-items:center;gap:11px}
+.cb-ini{flex:0 0 36px;height:36px;border-radius:var(--r-full);display:flex;align-items:center;
+  justify-content:center;font-weight:700;font-size:15px}
+.cb-nome{flex:1;min-width:0;font-weight:600;font-size:15.5px}
+.cb-nome small{display:block;font-weight:400;font-size:12px;color:var(--txt-3)}
+.cb-v{font-variant-numeric:tabular-nums;font-weight:700;font-size:17px;white-space:nowrap}
+.cobranca.pago .cb-v{text-decoration:line-through}
+.cb-itens{margin-top:10px;border-top:1px solid var(--sep);padding-top:8px}
+.cb-i{display:flex;align-items:baseline;gap:8px;padding:4px 0;font-size:13.5px}
+.cb-in{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt-2)}
+.cb-iv{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+.cb-iv small{display:block;font-weight:400;font-size:11px;color:var(--txt-3);text-align:right}
+.cb-acoes{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.cb-acoes .btn{flex:1;min-width:150px;font-size:14px;padding:10px 14px}
+/* Prévia do ciclo aberto: mesma lista, recolhida, sem o peso do cartão. */
+.previa{margin:-4px 0 10px 57px}
+.previa summary{cursor:pointer;font-size:12.5px;color:var(--azul-txt);padding:4px 0;list-style:none}
+.previa summary::-webkit-details-marker{display:none}
+.previa summary::before{content:'▸ ';font-size:11px}
+.previa[open] summary::before{content:'▾ '}
+.previa .cb-itens{border-top:none;padding-top:2px;margin-top:0}
+
 /* ---- fatura fechada esperando pagamento ---- */
 .pagar{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .pagar .pg-t{flex:1;min-width:150px}

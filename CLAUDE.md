@@ -330,6 +330,70 @@ O projeto Firebase foi reverificado em 08/09/2026 pelas APIs REST (cadastro,
 `:commit` com increment, leitura de volta, refresh, 403 esperado em doc alheio,
 conta de teste apagada) — está saudável. A falha era toda do lado do cliente.
 
+## O que cobrar de quem dividiu a fatura (v9.6)
+
+`fatiasPessoa()` responde "quanto é de cada um" — um número por pessoa. Para
+COBRAR isso não basta: ninguém transfere R$ 730 sem saber de quê. **`cobrancas(itens, congeladas)`**
+devolve a mesma divisão ITEMIZADA — a pessoa, os gastos dela e quanto de cada
+um é dela — e serve tanto para a fatura arquivada quanto para o ciclo aberto,
+mudando só a lista de itens que entra.
+
+`congeladas` são as fatias gravadas na fatura (`hist[].pessoas`). **Quando
+existem, o nome e a cor vêm delas, nunca do cadastro de hoje** — é a mesma
+regra do resto do histórico, e há teste para ela: apagar a pessoa não muda a
+cobrança de setembro.
+
+Onde isso aparece:
+
+* **Fatura arquivada** (`blocoCobrancas`): um cartão por pessoa com os itens, o
+  total, *Enviar/Copiar cobrança* e *Já recebi*. O cabeçalho soma só quem
+  **ainda não** pagou.
+* **Ciclo aberto** (`Dividido com`): a mesma lista, recolhida num `<details>`,
+  rotulada como prévia — o texto compartilhado diz "até agora (fecha em
+  05/10)", senão a pessoa do outro lado recebe uma cobrança que ainda vai mudar.
+
+**`x.recebido`** é um objeto na própria fatura arquivada, `{idPessoa: data}`.
+Mora ali, e não no cadastro da pessoa, porque "a Mãe já me pagou" é verdade
+sobre UMA fatura: no mês seguinte a cobrança é nova. Cobrar de novo o que já
+foi pago é o erro que estraga a relação com quem divide a conta.
+
+`enviarCobranca` usa `navigator.share` quando existe (no celular é o caminho do
+WhatsApp) e cai para a área de transferência quando não — e o `copiar()` tem o
+plano B do textarea escondido, porque `navigator.clipboard` não existe em todo
+contexto. `AbortError` do share é a pessoa fechando a folha: não é erro, não
+mostra aviso.
+
+## Os atalhos de gasto seguem o SEU dinheiro (v9.6)
+
+Antes: seis atalhos por frequência, e o resto preenchido com `CHIP_PADRAO` na
+ordem em que a lista está escrita — mercado primeiro, sempre. Quem gasta em
+transporte e quase nada em mercado via "Mercado" em destaque e não tinha atalho
+nenhum para estacionamento.
+
+Agora `categoriasPorGasto()` ordena as categorias pelo dinheiro real da pessoa
+(ciclo aberto com peso 3, quatro últimas faturas com peso 1) e a folha é montada
+nesta ordem:
+
+1. os seis nomes que ela mais lança;
+2. os extras (`CHIP_EXTRA`) das **duas** categorias onde mais gasta — é isto que
+   faz estacionamento, Uber e pedágio aparecerem para quem vive no carro;
+3. um nome por categoria ainda não coberta, também na ordem do gasto — **toda
+   categoria continua a um toque**, que era o ponto da correção anterior;
+4. o que sobrar, com os extras das categorias seguintes.
+
+`CHIPS_MAX` subiu de 10 para 12.
+
+**A regra dos nomes vale para as duas listas: cada um tem que cair na categoria
+que promete.** Há uma conferência automática para isso — 35 nomes, todos
+passando pelo `classificar()` de verdade. Se mexer em `CHIP_PADRAO` ou
+`CHIP_EXTRA`, rode-a de novo; um atalho que cai na categoria errada é pior do
+que não existir.
+
+O exemplo embaixo do campo (`exemploRapido`) também deixou de ser fixo: ele usa
+o primeiro atalho da pessoa com o valor que ela mesma lançou naquela linha.
+"Ex.: mercado 820" para quem não faz mercado ensina o formato com um gasto que
+ela não tem.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

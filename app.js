@@ -49,6 +49,70 @@ function fatiasPessoa(itens){
   return Object.entries(m).map(([id,valor])=>({id,nome:nomePessoa(id),cor:corPessoa(id),valor}))
     .sort((a,b)=>b.valor-a.valor);
 }
+/* ---------- o que cobrar de cada pessoa ----------
+
+   `fatiasPessoa` responde "quanto é de cada um" — um número por pessoa. Para
+   COBRAR isso não basta: ninguém transfere R$ 427 para alguém sem saber de
+   quê. Aqui a mesma divisão vem ITEMIZADA, com o gasto e o quanto dele é dela,
+   que é o que se manda pra pessoa conferir.
+
+   Serve para os dois lados da vida da fatura: a que está aberta (prévia, ainda
+   muda) e a arquivada (fechada, é essa que se cobra). Só muda a lista de itens
+   que entra. `congeladas` são as fatias gravadas na fatura arquivada — quando
+   existem, o nome e a cor vêm DELAS, nunca do cadastro de hoje: quem apagar
+   "Mãe" em dezembro continua vendo de quem era a cobrança de setembro. */
+function cobrancas(itens,congeladas){
+  const m={};
+  (itens||[]).forEach(l=>{
+    const v=Math.min(+l.pai||0,+l.valor||0); if(!(v>0)) return;
+    const k=l.com||'';
+    if(!m[k]) m[k]={id:k,itens:[],total:0};
+    m[k].itens.push({nome:l.nome,cat:l.cat,valor:v,cheio:+l.valor||0});
+    m[k].total+=v;
+  });
+  return Object.values(m).map(g=>{
+    const cong=(congeladas||[]).find(f=>String(f.id)===String(g.id));
+    g.nome=(cong&&cong.nome)||nomePessoa(g.id);
+    g.cor=(cong&&cong.cor)||corPessoa(g.id);
+    g.itens.sort((a,b)=>b.valor-a.valor);
+    return g;
+  }).sort((a,b)=>b.total-a.total);
+}
+/* O texto que vai pro WhatsApp. Item a item de propósito: uma cobrança que
+   chega só com o total vira conversa; com a lista, a pessoa confere e paga. */
+function textoCobranca(g,quando){
+  return `Fatura de ${quando}\n\n`
+    +g.itens.map(i=>'• '+i.nome+': '+brl(i.valor)).join('\n')
+    +`\n\nTotal: ${brl(g.total)}`;
+}
+/* Copiar tem que funcionar mesmo onde a API nova não existe (navegador antigo,
+   página sem contexto seguro): o textarea escondido é o plano B de sempre. */
+async function copiar(txt){
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){ await navigator.clipboard.writeText(txt); return true; }
+  }catch(e){}
+  try{
+    const t=document.createElement('textarea');
+    t.value=txt; t.setAttribute('readonly',''); t.style.position='fixed'; t.style.opacity='0';
+    document.body.appendChild(t); t.select();
+    const ok=document.execCommand('copy');
+    document.body.removeChild(t);
+    return ok;
+  }catch(e){ return false; }
+}
+/* Um botão só, com o rótulo que faz sentido no aparelho: onde há folha de
+   compartilhamento do sistema (celular), "enviar" abre o WhatsApp junto de
+   tudo mais; onde não há, "copiar" é o caminho honesto. */
+async function enviarCobranca(g,quando){
+  const txt=textoCobranca(g,quando);
+  if(navigator.share){
+    try{ await navigator.share({text:txt}); return; }
+    catch(e){ if(e&&e.name==='AbortError') return; }   // a pessoa fechou a folha: não é erro
+  }
+  const ok=await copiar(txt);
+  toast(ok?'Cobrança de '+g.nome+' copiada':'Não consegui copiar aqui',!ok);
+}
+
 /* Estado de antes desta versão: havia valor em `pai` e pessoa nenhuma. Em vez
    de jogar essa informação fora, ela vira uma pessoa de verdade chamada
    "Outra pessoa" — basta renomear pra "Pai" e o histórico inteiro vem junto.
@@ -546,6 +610,50 @@ function fatiasDoHist(x){
   if(Array.isArray(x.pessoas)&&x.pessoas.length) return x.pessoas;
   return x.pai>0?[{id:'',nome:'Outra pessoa',cor:'var(--pai)',valor:x.pai}]:[];
 }
+/* "Já me pagou" mora na própria fatura arquivada (`x.recebido`), com a data.
+   Fica preso ao mês certo: cobrar de novo o que já foi pago é o erro que
+   estraga a relação com quem divide a conta. */
+function recebeuDe(x,id){ return !!(x.recebido&&x.recebido[id||'']); }
+function alternarRecebido(x,id){
+  x.recebido=x.recebido||{};
+  const k=id||'';
+  if(x.recebido[k]){ delete x.recebido[k]; }
+  else { x.recebido[k]=iso(hojeD()); vibrar(12); }
+  renderHist(); salvar();
+}
+/* A lista do que cobrar numa fatura fechada: cada pessoa com os itens dela,
+   o total, o botão de enviar e o de marcar que já pagou. */
+function blocoCobrancas(x){
+  const gs=cobrancas(x.itens,fatiasDoHist(x));
+  if(!gs.length) return '';
+  const quando=dataBR(x.data);
+  const falta=gs.filter(g=>!recebeuDe(x,g.id)).reduce((t,g)=>t+g.total,0);
+  const pagos=gs.filter(g=>recebeuDe(x,g.id)).length;
+  return `<h3>Para cobrar · ${brl(falta)}</h3>
+   <p class="ajuda" style="margin:-6px 0 12px">O que cada pessoa deve desta fatura, item a item.
+     ${pagos?`<b>${pagos}</b> já ${pagos===1?'acertou':'acertaram'}.`:'Toque em <b>Enviar</b> para mandar a lista pronta.'}</p>`
+   +gs.map(g=>{
+     const pago=recebeuDe(x,g.id);
+     return `<div class="cobranca${pago?' pago':''}">
+      <div class="cb-topo">
+        <span class="cb-ini" style="background:color-mix(in srgb,${g.cor} 16%,transparent);color:${g.cor}"
+          >${esc(g.nome.trim().charAt(0).toUpperCase()||'?')}</span>
+        <div class="cb-nome">${esc(g.nome)}<small>${g.itens.length} gasto${g.itens.length===1?'':'s'}${pago?' · pago em '+dataBR(x.recebido[g.id||''])
+          :''}</small></div>
+        <div class="cb-v" style="color:${pago?'var(--txt-3)':g.cor}">${brl(g.total)}</div>
+      </div>
+      <div class="cb-itens">${g.itens.map(i=>`<div class="cb-i">
+        <span class="pt" style="background:${CATS[i.cat]?CATS[i.cat].c:'var(--cout)'}"></span>
+        <span class="cb-in">${esc(i.nome)}</span>
+        <span class="cb-iv">${brl(i.valor)}${i.cheio>i.valor+0.005?`<small>de ${brl(i.cheio)}</small>`:''}</span>
+      </div>`).join('')}</div>
+      <div class="cb-acoes">
+        <button class="btn sec" data-cobrar="${esc(g.id)}">${navigator.share?'Enviar':'Copiar'} cobrança</button>
+        <button class="btn-pago${pago?' on':''}" data-recebi="${esc(g.id)}"
+          aria-pressed="${pago?'true':'false'}">${pago?'✓ recebido':'Já recebi'}</button>
+      </div></div>`;}).join('');
+}
+
 function renderHist(){
   const lc=$('#listaCiclos'), dc=$('#detalheCiclo');
   if(!S.hist.length){
@@ -584,6 +692,7 @@ function renderHist(){
      ${fatiasDoHist(x).map(f=>`<div class="card"><div class="l">De ${esc(f.nome)}</div><div class="v" style="color:${f.cor}">${brl(f.valor)}</div></div>`).join('')}
      ${ant?`<div class="card"><div class="l">Contra o mês anterior</div><div class="v" style="color:${x.meu>ant.meu?'var(--vermelho)':'var(--verde)'}">${x.meu>ant.meu?'+':'−'}${brl(Math.abs(x.meu-ant.meu))}</div></div>`:''}
    </div>
+   ${blocoCobrancas(x)}
    ${cats.length?'<h3>Por categoria</h3>'+cats.map(([k,v])=>{
       const antV=ant&&ant.porCat?(ant.porCat[k]||0):null;
       const d=antV===null?null:v-antV;
@@ -598,6 +707,11 @@ function renderHist(){
       <td>${CATS[l.cat]?CATS[l.cat].n:l.cat}</td><td class="v">${brl(l.valor)}</td>
       <td class="v" style="font-weight:600">${brl(Math.max(l.valor-(l.pai||0),0))}</td></tr>`).join('')+
      `</tbody></table>`:''}`;
+  const gs=cobrancas(x.itens,fatiasDoHist(x));
+  dc.querySelectorAll('[data-cobrar]').forEach(b=>b.onclick=()=>{
+    const g=gs.find(g=>String(g.id)===b.dataset.cobrar); if(g) enviarCobranca(g,dataBR(x.data));
+  });
+  dc.querySelectorAll('[data-recebi]').forEach(b=>b.onclick=()=>alternarRecebido(x,b.dataset.recebi));
 }
 
 function renderTetos(c){
@@ -707,13 +821,17 @@ function renderPessoas(c){
   if(sec.hidden){ el.innerHTML=''; return; }
   const linhas=reg.map(p=>({id:p.id,nome:p.nome,cor:p.cor||'var(--pai)'})).concat(soltas)
     .map(p=>{
-      const itens=S.lanc.filter(l=>(l.com||'')===p.id&&+l.pai>0);
+      const itens=doCiclo().filter(l=>(l.com||'')===p.id&&+l.pai>0);
       const dela=itens.reduce((t,l)=>t+Math.min(+l.pai||0,l.valor),0);
       const minha=itens.reduce((t,l)=>t+meuValor(l),0);
       const n=itens.length;
       return {p,dela,minha,n};
     }).sort((a,b)=>b.dela-a.dela);
   const total=linhas.reduce((t,x)=>t+x.dela,0);
+  /* Aberto por dentro: o total já existia, o que faltava era o "de quê". A
+     lista fica recolhida para não empurrar o resto da tela — quem só quer o
+     número continua vendo o número. */
+  const prev={}; cobrancas(doCiclo()).forEach(g=>{ prev[g.id]=g; });
   el.innerHTML=linhas.map(({p,dela,minha,n})=>`<div class="item">
     <div class="ic" style="background:color-mix(in srgb,${p.cor} 14%,transparent);color:${p.cor}"
       ><span class="pessoa-ini">${esc(p.nome.trim().charAt(0).toUpperCase()||'?')}</span></div>
@@ -722,13 +840,25 @@ function renderPessoas(c){
         ${achaPessoa(p.id)?`<button class="link" data-ren="${esc(p.id)}">renomear</button>`:''}</div></div>
     <div class="vl" style="color:${dela>0?p.cor:'var(--txt-3)'}">${brl(dela)}${dela>0?'<small>não é seu</small>':''}</div>
     ${achaPessoa(p.id)?`<button class="rm" data-rmp="${esc(p.id)}" aria-label="Remover ${esc(p.nome)}">×</button>`:''}
-  </div>`).join('')
+  </div>`+(prev[p.id]?`<details class="previa"><summary>${prev[p.id].itens.length===1?'ver o gasto':'ver os '+prev[p.id].itens.length+' gastos'} de ${esc(p.nome)}</summary>
+    <div class="cb-itens">${prev[p.id].itens.map(i=>`<div class="cb-i">
+      <span class="pt" style="background:${CATS[i.cat]?CATS[i.cat].c:'var(--cout)'}"></span>
+      <span class="cb-in">${esc(i.nome)}</span>
+      <span class="cb-iv">${brl(i.valor)}${i.cheio>i.valor+0.005?`<small>de ${brl(i.cheio)}</small>`:''}</span></div>`).join('')}</div>
+    <button class="btn sec" data-prev="${esc(p.id)}" style="margin-top:10px">${navigator.share?'Enviar':'Copiar'} prévia</button>
+   </details>`:'')).join('')
    +`<p class="ajuda" style="margin:12px 0 0">${total>0
-      ? 'Ao todo <b>'+brl(total)+'</b> da fatura deste ciclo é de outra pessoa. Esse valor aparece na fatura, mas não entra nos seus tetos.'
+      ? 'Ao todo <b>'+brl(total)+'</b> da fatura deste ciclo é de outra pessoa. Esse valor aparece na fatura, mas não entra nos seus tetos. A cobrança fechada, item a item e com o “já recebi”, aparece quando a fatura fechar — em <b>Análises → Faturas</b>.'
       : 'Marque quem divide cada gasto na coluna <b>Quem paga</b>, em “Todos os gastos do ciclo”.'}</p>
     <div class="nova-pessoa">
       <input id="pNome" maxlength="28" placeholder="Ex.: Mãe" aria-label="Nome da pessoa">
       <button class="btn sec" id="addPessoa">Adicionar pessoa</button></div>`;
+  el.querySelectorAll('[data-prev]').forEach(b=>b.onclick=()=>{
+    const g=prev[b.dataset.prev];
+    // Prévia é prévia: o rótulo diz que a fatura ainda não fechou, senão a
+    // pessoa do outro lado recebe uma cobrança que ainda vai mudar.
+    if(g) enviarCobranca(g,'até agora (fecha em '+ddmm(faturaAberta().fecha)+')');
+  });
   el.querySelectorAll('[data-ren]').forEach(b=>b.onclick=()=>renomearPessoa(b.dataset.ren));
   el.querySelectorAll('[data-rmp]').forEach(b=>b.onclick=()=>removerPessoa(b.dataset.rmp));
   const add=()=>{
@@ -2294,7 +2424,7 @@ function lerRapido(txt){
 }
 function renderEco(){
   const el=$('#rapidoEco'), p=lerRapido($('#rapido').value);
-  if(!p){ el.innerHTML='<span class="aviso">Escreva o gasto e o valor. Ex.: <b>mercado 820</b></span>'; return; }
+  if(!p){ el.innerHTML='<span class="aviso">Escreva o gasto e o valor — <b>qualquer</b> palavra serve, o app acha a categoria. Ex.: <b>'+esc(exemploRapido)+'</b></span>'; return; }
   if(p.incompleto){ el.innerHTML='<span class="aviso">Falta o valor no fim. Ex.: <b>'+esc(p.nome)+' 45</b></span>'; return; }
   el.innerHTML=`<span class="pt" style="background:${CATS[p.cat].c}"></span>
     <span><b>${esc(p.nome)}</b> · ${brl(p.valor)} · ${CATS[p.cat].n} · ${TIER[p.tier].n}</span>
@@ -2335,9 +2465,50 @@ const CHIP_PADRAO=[
   ['Aluguel','casa'],    ['Farmácia','saude'],         ['Faculdade','estudo'],
   ['Netflix','assinatura'], ['Roupa','lazer'],         ['Fatura do cartão','divida']
 ];
-const CHIPS_MAX=10;
+/* Um nome por categoria não basta para quem gasta MUITO numa delas. Quem
+   abastece, estaciona e paga pedágio tem três gastos de transporte por semana
+   e via um chip só: "Combustível". Estes extras entram para as categorias em
+   que a pessoa realmente gasta, na ordem do dinheiro — é o que faz a folha
+   deixar de ser a mesma para todo mundo.
+
+   Mesma regra da lista de cima, e ela é séria: cada nome foi conferido contra
+   classificar() e cai na categoria que promete. Se mexer aqui, rode a
+   conferência de novo. */
+const CHIP_EXTRA={
+  transporte:['Estacionamento','Uber','Pedágio','Oficina'],
+  comida:['Almoço','Padaria','Lanche'],
+  mercado:['Feira','Açougue'],
+  casa:['Luz','Internet','Água','Condomínio'],
+  lazer:['Cinema','Bar','Presente'],
+  saude:['Academia','Consulta','Dentista'],
+  estudo:['Curso','Apostila','Impressão'],
+  assinatura:['Spotify','Disney'],
+  divida:['Empréstimo','Parcela']
+};
+const CHIPS_MAX=12;
+/* Valor de exemplo por categoria, para o atalho que a pessoa ainda não lançou
+   nenhuma vez. Serve só para ensinar o formato "nome valor" com um número que
+   não soa absurdo — assim que ela lançar o gasto de verdade, o exemplo passa a
+   usar o valor dela. */
+const VALOR_EXEMPLO={mercado:820,transporte:15,comida:45,casa:120,assinatura:30,
+                     lazer:90,saude:60,estudo:400,divida:250,outros:50};
+/* O exemplo que aparece embaixo do campo de gasto. Nasce genérico e passa a
+   ser o do primeiro atalho da pessoa assim que renderChips roda. */
+let exemploRapido='mercado 820';
 
 /* ---------- chips: o que você mais lança ---------- */
+/* As categorias na ordem do DINHEIRO da pessoa — do ciclo aberto e das quatro
+   últimas faturas. É esta ordem que manda na folha: quem gasta em transporte
+   vê transporte primeiro, e quem quase não faz mercado vê mercado por último.
+   Categoria sem gasto nenhum vai para o fim, mas continua na lista: sumir com
+   ela deixaria a pessoa sem caminho para lançar o primeiro. */
+function categoriasPorGasto(){
+  const g={};
+  const soma=(l,peso)=>{ if(!l||!CATS[l.cat]) return; g[l.cat]=(g[l.cat]||0)+(+l.valor||0)*peso; };
+  doCiclo().forEach(l=>soma(l,3));
+  S.hist.slice(0,4).forEach(h=>(h.itens||[]).forEach(l=>soma(l,1)));
+  return {ordem:Object.keys(CATS).sort((a,b)=>(g[b]||0)-(g[a]||0)),gasto:g};
+}
 function renderChips(){
   const el=$('#chips'); if(!el) return;
   const conta={};
@@ -2345,19 +2516,44 @@ function renderChips(){
     const k=nome.toLowerCase();
     conta[k]=conta[k]||{nome,cat,n:0,ult:0};
     conta[k].n+=peso; };
-  S.lanc.forEach(l=>registra(l.nome,l.cat,3));
+  doCiclo().forEach(l=>registra(l.nome,l.cat,3));
   S.hist.slice(0,4).forEach(h=>(h.itens||[]).forEach(l=>registra(l.nome,l.cat,1)));
   // Primeiro o que a pessoa mais lança — esses são os atalhos que valem.
   let its=Object.values(conta).sort((a,b)=>b.n-a.n).slice(0,6);
-  /* Depois completa com as categorias que ainda NÃO apareceram, para que toda
-     categoria continue a um toque de distância mesmo com o histórico cheio. */
   const temCat=new Set(its.map(x=>x.cat));
   const temNome=new Set(its.map(x=>x.nome.toLowerCase()));
-  CHIP_PADRAO.forEach(([nome,cat])=>{
+  const poe=(nome,cat)=>{
     if(its.length>=CHIPS_MAX) return;
-    if(temCat.has(cat)||temNome.has(nome.toLowerCase())) return;
-    its.push({nome,cat,n:0}); temCat.add(cat);
+    if(temNome.has(nome.toLowerCase())) return;
+    its.push({nome,cat,n:0}); temNome.add(nome.toLowerCase()); temCat.add(cat);
+  };
+  const {ordem,gasto}=categoriasPorGasto();
+  /* 1. Os extras das DUAS categorias onde o dinheiro mais vai. É o que resolve
+        o "gasto com estacionamento e não tem atalho": quem gasta em transporte
+        passa a ver estacionamento, Uber e pedágio, não só combustível. */
+  ordem.filter(c=>gasto[c]>0).slice(0,2)
+    .forEach(cat=>(CHIP_EXTRA[cat]||[]).slice(0,3).forEach(n=>poe(n,cat)));
+  /* 2. Uma entrada para cada categoria ainda não coberta, também na ordem do
+        gasto — toda categoria continua a um toque, mas as que pesam vêm antes. */
+  ordem.forEach(cat=>{
+    if(temCat.has(cat)) return;
+    const d=CHIP_PADRAO.find(([,c])=>c===cat);
+    if(d) poe(d[0],cat);
   });
+  /* 3. Sobrou espaço? Mais nomes das categorias seguintes. */
+  ordem.filter(c=>gasto[c]>0).slice(2)
+    .forEach(cat=>(CHIP_EXTRA[cat]||[]).forEach(n=>poe(n,cat)));
+  /* "Ex.: mercado 820" para quem não faz mercado ensina o formato com um gasto
+     que a pessoa não tem. O exemplo passa a ser o do primeiro atalho — que já
+     é, por construção, o mais provável dela — com o valor que ela mesma lançou
+     naquela linha, quando existe. */
+  if(its.length){
+    const um=its[0];
+    const ref=doCiclo().concat(S.hist.slice(0,4).flatMap(h=>h.itens||[]))
+      .find(l=>l.nome&&l.nome.toLowerCase()===um.nome.toLowerCase()&&+l.valor>0);
+    exemploRapido=um.nome.toLowerCase()+' '+(ref?Math.round(+ref.valor):(VALOR_EXEMPLO[um.cat]||50));
+    const inp=$('#rapido'); if(inp) inp.placeholder=exemploRapido;
+  }
   el.innerHTML=its.map(x=>`<button type="button" class="chip-s" data-chip="${esc(x.nome)}">
     <i style="background:${CATS[x.cat]?CATS[x.cat].c:'var(--cout)'}"></i>${esc(x.nome)}</button>`).join('');
   el.querySelectorAll('[data-chip]').forEach(b=>b.onclick=()=>{
@@ -2571,7 +2767,8 @@ function mostrarRetro(x){
       ${fatiasDoHist(x).length>1?fatiasDoHist(x).map(f=>`<div class="re-linha">
         <span class="pt" style="background:${f.cor}"></span><span class="rn">${esc(f.nome)}</span>
         <span class="rv">${brl(f.valor)}</span><span class="rd"></span></div>`).join(''):''}
-      <div class="d">Estava na fatura, mas não saiu do seu bolso.</div></div>`:''}
+      <div class="d">Estava na fatura, mas não saiu do seu bolso — é isso que você tem a cobrar.
+        A lista item a item de cada pessoa está em <b>Ver a fatura</b>, aqui embaixo.</div></div>`:''}
 
     <div class="re-card" style="animation-delay:.15s">
       <div class="l">Para onde foi</div>
