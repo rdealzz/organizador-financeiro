@@ -647,9 +647,12 @@ h1#tituloArea{font-size:clamp(26px,6vw,32px);margin:2px 0 0}
 .rapido-eco .aviso{color:var(--txt-3)}
 
 /* chips de sugestão */
-.chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
-.chip-s{display:inline-flex;align-items:center;gap:7px;background:var(--fill);border:none;
-  border-radius:var(--r-full);padding:11px 16px;min-height:44px;font-size:14px;font-weight:600;color:var(--txt);
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 4px}
+/* Compacto de propósito: com doze atalhos, cada pixel de padding vira uma
+   linha a mais e a folha deixa de caber numa olhada. O `min-height:44px` NÃO
+   muda — é o alvo mínimo de toque, e encolher isso quebra o dedo grosso. */
+.chip-s{display:inline-flex;align-items:center;gap:6px;background:var(--fill);border:none;
+  border-radius:var(--r-full);padding:10px 13px;min-height:44px;font-size:13.5px;font-weight:600;color:var(--txt);
   cursor:pointer;font-family:inherit;letter-spacing:-.01em;
   transition:transform .16s var(--mola),background .16s}
 .chip-s:hover{background:var(--fill-2)}
