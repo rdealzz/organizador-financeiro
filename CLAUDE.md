@@ -510,6 +510,56 @@ todo. Agora são duas frases separadas.
 segmented control usa `.rot-seg`, que imita os `<label>` vizinhos. Cuidado ao
 criar classe nova com nome curto e genérico.
 
+## O padrão é COMPRA ÚNICA (v9.9)
+
+Duas coisas erradas se somavam numa garrafa de água de R$ 7,50: ela caía em
+"Casa e contas", e o app a tratava como gasto que volta todo mês.
+
+**A repetição mudou de padrão.** Antes `palpiteDoNome()` só sabia duas
+respostas — `casa`/`assinatura`/`RECORRENTE` viravam `fixo`, e **todo o resto**
+virava `var`. Só que `var` não quer dizer "gasto qualquer": é a linha que
+SOBREVIVE ao fechamento com o valor zerado, esperando o valor do mês. Um
+cinema, uma farmácia, uma garrafa de água entravam nessa fila e voltavam em
+branco na fatura seguinte, todo mês, para sempre. Agora **`unico` é o padrão** e
+repetir é que precisa de motivo, em `tipoDoNome(txt, cat)`:
+
+* `fixo` — `assinatura`, `RECORRENTE` ou `CONTA_MENSAL` (luz, internet, celular,
+  IPTU, conta de água): volta igual.
+* `var` — `mercado` ou `MENSAL_VARIAVEL` (feira, açougue, combustível, posto):
+  volta todo mês com valor diferente.
+* `unico` — o resto, que é a maioria do que se lança no dia a dia.
+
+`cat==='casa'` deixou de bastar para `fixo`: a conta de luz é fixa, a faxineira
+de uma vez não é — dentro de "casa" cabem as duas. O histórico continua mandando
+por cima de tudo isso: um nome já usado herda a repetição do lançamento anterior,
+inclusive uma corrigida à mão.
+
+**Os rótulos passaram a dizer o que a coisa é.** "Só neste mês" lia-se como
+filtro de exibição, não como a natureza do gasto; e "1x" na lista não dizia nada
+a ninguém. Agora o select é *Compra única — não repete* / *Todo mês, valor muda*
+/ *Todo mês, valor igual* / *Parcelado*, **nessa ordem** — a compra única vem
+primeiro porque é o caso comum e porque a primeira `<option>` é o padrão da
+folha. O selo da tabela virou "única", e o de *Últimos lançamentos*, "compra
+única" e "todo mês".
+
+No campo rápido não há select para mostrar a decisão, então `renderEco()`
+escreve a repetição **só quando o gasto REPETE** (`ROT_TIPO`). Compra única é o
+padrão e a maioria — anunciá-la a cada tecla só engordaria a linha; já "isto vai
+voltar todo mês" é decisão que a pessoa precisa ver antes de salvar.
+
+### "Água" sozinha é bebida; a conta pede contexto
+
+`\bagua\b` estava só em `casa`, então qualquer água era conta de consumo. Mas
+quem escreve "agua 7,50" comprou uma garrafa. Agora o termo solto está em
+**comida**, e a conta é reconhecida pelo contexto: `conta de água`, `água e
+esgoto`, `sanepar`, `sabesp`, `copasa`, `cedae` e afins.
+
+Essa regra de conta de consumo é a **primeira** do array `REGRAS`, e isso não é
+arrumação: `comida` é testada antes de `casa`, então sem ela "conta de água"
+cairia em comida pelo próprio `\bagua\b`. Pelo mesmo motivo o atalho de casa
+deixou de se chamar "Água" e virou **"Conta de água"** — um atalho tem que cair
+na categoria que promete, e há conferência automática para isso.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

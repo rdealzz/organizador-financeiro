@@ -742,7 +742,7 @@ function renderHist(){
   const itens=[...(x.itens||[])].sort((a,b)=>b.valor-a.valor);
   const selo=l=>(l.tipo==='rec'||l.tipo==='fixo')?'<span class="tag ciclor">fixo</span>'
     :l.tipo==='var'?'<span class="tag ciclov">variável</span>'
-    :l.tipo==='parc'?`<span class="tag ciclop">parcela</span>`:'<span class="tag ciclo1">1x</span>';
+    :l.tipo==='parc'?`<span class="tag ciclop">parcela</span>`:'<span class="tag ciclo1">única</span>';
   const vencX=x.venc?dataDeISO(x.venc):vencDaFatura(dataDeISO(x.data));
   dc.innerHTML=`<h3>Fatura que fechou em ${dataBR(x.data)}</h3>
    <p class="ajuda" style="margin:-4px 0 12px">Cobrada no vencimento de <b>${dataBR(iso(vencX))}</b>${x.pago?' · <b style="color:var(--verde)">paga</b>':''}.</p>
@@ -946,7 +946,7 @@ function renderLanc(c){
   if(!S.lanc.length){ tb.innerHTML='<tr><td colspan="7" class="vazio">Nenhum gasto neste ciclo.</td></tr>'; return; }
   const selo=l=>(l.tipo==='rec'||l.tipo==='fixo')?'<span class="tag ciclor">fixo</span>'
     :l.tipo==='var'?'<span class="tag ciclov">variável</span>'
-    :l.tipo==='parc'?`<span class="tag ciclop">faltam ${l.pRest||0}x</span>`:'<span class="tag ciclo1">1x</span>';
+    :l.tipo==='parc'?`<span class="tag ciclop">faltam ${l.pRest||0}x</span>`:'<span class="tag ciclo1">única</span>';
   /* Uma linha só, usada nas duas listas: a fatura aberta e a fila da seguinte.
      O botão do fim da segunda linha é o que move o gasto entre elas. */
   const linha=l=>`<tr${+l.prox>0?' class="lin-prox"':''}>
@@ -1448,13 +1448,18 @@ $('#zerar').onclick=()=>{ if(confirm('Apagar tudo e recomeçar do zero?')){
 const semAcento=t=>String(t).toLowerCase()
   .normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 const REGRAS=[
+  /* Conta de consumo vem PRIMEIRO de propósito. Desde que água sozinha passou a
+     ser bebida (regra de comida, logo abaixo), a conta precisa de contexto pra ser
+     reconhecida — e precisa ser lida ANTES, senão "conta de água" cairia em comida
+     pelo próprio \bagua\b. */
+  [/conta de (agua|luz|energia|gas)|agua e esgoto|\bsanepar\b|\bsabesp\b|\bcopasa\b|\bcedae\b|\bcagece\b|\bcaesb\b|\bembasa\b|\bcorsan\b|\bcasan\b|aguas d[eo]\b/,'casa',1],
   [/mercadolivre|mercado livre|\bmp\*|shopee|amazon|magalu|aliexpress|shein|americanas|renner|riachuelo|zara|centauro|nike|adidas|steam|playstation|xbox|nintendo|cinema|ingresso|barbearia|barbeiro|cabelereir|salao|manicure|pedicure|tatuagem|cerveja|bar\b|balada|\bshow\b|teatro|boliche|festa|viagem|hotel|pousada|airbnb|\bspa\b|presente|roupa|tenis|perfum/,'lazer',3],
-  [/ifood|rappi|delivery|\beats\b|food|mcdonald|burger|pizza|lanche|lanchonete|hamburg|sushi|padaria|panificadora|restaurante|subway|\bcafe|starbucks|habib|marmita|quentinha|self.?service|almoco|jantar|sorvete|acai|doceria|salgado|coxinha|pastel|espetinho|churrasc/,'comida',3],
+  [/ifood|rappi|delivery|\beats\b|food|mcdonald|burger|pizza|lanche|lanchonete|hamburg|sushi|padaria|panificadora|restaurante|subway|\bcafe|starbucks|habib|marmita|quentinha|self.?service|almoco|jantar|sorvete|acai|doceria|agua mineral|agua de coco|\bagua\b|\bsuco\b|refrigerante|salgado|coxinha|pastel|espetinho|churrasc/,'comida',3],
   [/supermerc|\bmercado\b|mercado |carrefour|assai|atacad|condor|muffato|angeloni|hortifruti|acougue|pao de acucar|big\b|extra\b|tenda|dia\b|sacolao|feira|quitanda|compra do mes/,'mercado',1],
   [/posto|ipiranga|shell|petrobr|combust|gasolin|etanol|alcool|diesel|\buber\b|99app|99pop|indriver|taxi|onibus|metro|\bbus\b|passagem|pedagio|estacion|\bpark|zona azul|oficina|mecanic|manutencao|borracharia|alinhament|balanceament|troca de oleo|lava.?(rapido|jato)|\bipva\b|licenciam|detran|multa|seguro (auto|do carro|do veiculo|veicular)|pneu|lavagem|revisao|\bcarro\b|\bmoto\b/,'transporte',1],
   [/netflix|spotify|disney|hbo|\bmax\b|prime video|deezer|youtube|apple\.com|\bicloud|google \*|canva|chatgpt|anthropic|claude|assinatura|globoplay|paramount|crunchyroll|telecine|plano do cartao|anuidade/,'assinatura',3],
   [/farmacia|drogaria|drogasil|pacheco|panvel|raia|nissei|remedio|unimed|amil|hapvida|plano de saude|dentista|ortodont|medic|consulta|clinica|exame|laborator|oculos|optica|fisioterap|nutricion|academia|smartfit|bluefit|gympass|suplement|whey|psicolog|terapia|vacina/,'saude',1],
-  [/aluguel|condominio|energia|copel|cemig|enel|light\b|\bluz\b|\bagua\b|sanepar|sabesp|\bgas\b|comgas|ultragaz|internet|\bvivo\b|claro|\btim\b|oi fibra|nextfibra|\biptu\b|celular|telefone|recarga|faxin|diarist|empregada|jardineir|encanador|eletricista|pedreiro|dedetiza|seguro residencial|gato|racao|\bpet|veterinar/,'casa',1],
+  [/aluguel|condominio|energia|copel|cemig|enel|light\b|\bluz\b|sanepar|sabesp|\bgas\b|comgas|ultragaz|internet|\bvivo\b|claro|\btim\b|oi fibra|nextfibra|\biptu\b|celular|telefone|recarga|faxin|diarist|empregada|jardineir|encanador|eletricista|pedreiro|dedetiza|seguro residencial|gato|racao|\bpet|veterinar/,'casa',1],
   [/faculdade|mensalidade|matricula|semestre|pos.?graduacao|escola|colegio|curso|idiomas|\bingles\b|autoescola|udemy|alura|coursera|ieduc|apostila|livro|material escolar|impress|xerox|papelaria|certifica/,'estudo',2],
   [/fatura|cartao|emprestimo|financiamento|consorcio|parcela|juros|rotativo|nubank|inter\b|itau|bradesco|santander|caixa\b|sicredi|sicoob|banrisul|banco pan|crefisa|agibank|picpay|\bneon\b|\bc6\b|dm ?card/,'divida',1]
 ];
@@ -1464,7 +1469,8 @@ const REGRAS=[
    mensalidade da faculdade, que é fixa, quanto uma apostila ou uma xerox, que
    não são — marcar a categoria inteira como fixa erraria metade dos casos.
    Por isso a recorrência é lida do NOME do gasto, e vale por cima da regra de
-   categoria: casa e assinatura continuam fixas como sempre foram.
+   categoria: assinatura continua fixa como sempre foi, e casa passou a depender
+   do nome — a conta de luz é fixa, a faxineira de uma vez não é.
 
    Importa acertar: um gasto "variável" tem o valor zerado a cada fatura para a
    pessoa preencher o do mês. Uma mensalidade marcada como variável sumiria do
@@ -1472,6 +1478,31 @@ const REGRAS=[
 /* Os \b não são enfeite: sem eles "material escolar" casava com `escola` e
    virava gasto fixo, e "concurso" casaria com `curso`. */
 const RECORRENTE=/mensalidade|semestralidade|anuidade|matricula|faculdade|universidade|colegio|\bescola\b|creche|\bcurso\b|academia|smartfit|bluefit|gympass|plano de saude|unimed|amil|hapvida|\bseguro\b|previdencia|financiamento|consorcio|emprestimo|aluguel|condominio/;
+/* O que é COMPRA ÚNICA e o que volta todo mês.
+
+   Antes só existiam duas respostas: casa/assinatura/RECORRENTE viravam "fixo" e
+   TODO o resto virava "variável". Variável não quer dizer "gasto qualquer" — é
+   uma linha que SOBREVIVE ao fechamento com o valor zerado, esperando o valor do
+   mês. Uma garrafa de água, um cinema, uma farmácia entravam nessa fila e voltavam
+   em branco na fatura seguinte, todo mês, pra sempre. A resposta certa pra elas é
+   "compra única": entra neste ciclo, é arquivada no fechamento e não volta.
+
+   Agora o padrão é `unico`, e repetir é que precisa de motivo:
+   - `fixo`   — mensalidade, aluguel, assinatura, conta de consumo: volta igual;
+   - `var`    — mercado e combustível: volta todo mês, com valor diferente;
+   - `unico`  — o resto, que é a maioria do que se lança no dia a dia.
+
+   O histórico continua mandando por cima disto em palpiteDoNome(): um nome já
+   usado herda a repetição do lançamento anterior, inclusive uma corrigida à mão. */
+const ROT_TIPO={fixo:'todo mês, valor igual',var:'todo mês, valor muda',parc:'parcelado',unico:'compra única'};
+const CONTA_MENSAL=/conta de (agua|luz|energia|gas)|agua e esgoto|\bluz\b|energia|copel|cemig|enel|sanepar|sabesp|copasa|cedae|comgas|ultragaz|internet|\bvivo\b|\bclaro\b|\btim\b|oi fibra|nextfibra|celular|telefone|\biptu\b|plano do cartao/;
+const MENSAL_VARIAVEL=/supermerc|\bmercado\b|compra do mes|feira|hortifruti|sacolao|quitanda|acougue|combust|gasolin|etanol|\bdiesel\b|\bposto\b|ipiranga|shell|petrobr/;
+function tipoDoNome(txt,cat){
+  const t=semAcento(txt);
+  if(cat==='assinatura'||RECORRENTE.test(t)||CONTA_MENSAL.test(t)) return 'fixo';
+  if(cat==='mercado'||MENSAL_VARIAVEL.test(t)) return 'var';
+  return 'unico';
+}
 function classificar(txt){
   const t=semAcento(txt);
   for(const [re,cat,tier] of REGRAS) if(re.test(t)) return [cat,tier];
@@ -2477,7 +2508,7 @@ function renderUltimos(c){
     return;
   }
   const its=[...S.lanc].sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0)||b.valor-a.valor).slice(0,6);
-  const selo=l=>(l.tipo==='fixo')?'fixo':l.tipo==='var'?'variável':l.tipo==='parc'?`faltam ${l.pRest||0}x`:'1x';
+  const selo=l=>(l.tipo==='fixo')?'todo mês':l.tipo==='var'?'todo mês, valor muda':l.tipo==='parc'?`faltam ${l.pRest||0}x`:'compra única';
   el.innerHTML=its.map(l=>`<div class="item">
     <div class="ic" style="background:color-mix(in srgb,${CATS[l.cat].c} 13%,transparent);color:${CATS[l.cat].c}"
       >${icone(ICONE_CAT[l.cat]||'outros')}</div>
@@ -2602,8 +2633,7 @@ function palpiteDoNome(nome){
   return {
     cat: igual?igual.cat:cat,
     tier: igual?igual.tier:tier,
-    tipo: igual?igual.tipo
-         :((cat==='casa'||cat==='assinatura'||RECORRENTE.test(semAcento(txt)))?'fixo':'var'),
+    tipo: igual?igual.tipo:tipoDoNome(txt,cat),
     fonte: igual?(igual.fonte||'Conta'):'Conta',
     herdado: !!igual
   };
@@ -2613,8 +2643,12 @@ function renderEco(){
   linhaFaturaDaFolha((p&&!p.incompleto)?p.meio==='avista':meioForm==='avista');
   if(!p){ el.innerHTML='<span class="aviso">Escreva o gasto e o valor — <b>qualquer</b> palavra serve, o app acha a categoria. Ex.: <b>'+esc(exemploRapido)+'</b></span>'; return; }
   if(p.incompleto){ el.innerHTML='<span class="aviso">Falta o valor no fim. Ex.: <b>'+esc(p.nome)+' 45</b></span>'; return; }
+  /* A repetição só aparece aqui quando o gasto REPETE. Compra única é o padrão
+     e a esmagadora maioria do que se lança — anunciá-la a cada tecla só engorda
+     a linha. Já "isto vai voltar todo mês" é decisão do app que a pessoa tem
+     que ver antes de salvar, porque o campo rápido não tem select pra mostrar. */
   el.innerHTML=`<span class="pt" style="background:${CATS[p.cat].c}"></span>
-    <span><b>${esc(p.nome)}</b> · ${brl(p.valor)} · ${CATS[p.cat].n} · ${TIER[p.tier].n}${p.meio==='avista'?' · <b>à vista, fora da fatura</b>':''}</span>
+    <span><b>${esc(p.nome)}</b> · ${brl(p.valor)} · ${CATS[p.cat].n} · ${TIER[p.tier].n}${p.tipo&&p.tipo!=='unico'?' · <b>'+ROT_TIPO[p.tipo]+'</b>':''}${p.meio==='avista'?' · <b>à vista, fora da fatura</b>':''}</span>
     ${p.herdado?'<span class="aviso">(como da última vez)</span>':''}`;
 }
 function salvarRapido(){
@@ -2666,7 +2700,7 @@ const CHIP_EXTRA={
   transporte:['Estacionamento','Uber','Pedágio','Oficina'],
   comida:['Almoço','Padaria','Lanche'],
   mercado:['Feira','Açougue'],
-  casa:['Luz','Internet','Água','Condomínio'],
+  casa:['Luz','Internet','Conta de água','Condomínio'],
   lazer:['Cinema','Bar','Presente'],
   saude:['Academia','Consulta','Dentista'],
   estudo:['Curso','Apostila','Impressão'],
