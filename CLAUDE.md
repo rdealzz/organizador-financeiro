@@ -560,6 +560,20 @@ cairia em comida pelo próprio `\bagua\b`. Pelo mesmo motivo o atalho de casa
 deixou de se chamar "Água" e virou **"Conta de água"** — um atalho tem que cair
 na categoria que promete, e há conferência automática para isso.
 
+### Categoria errada se arruma na própria linha
+
+A coluna *Categoria* da tabela era texto. Quem tivesse um gasto no lugar errado
+— a água em "Casa e contas", por exemplo — só tinha um caminho: apagar e lançar
+de novo. E o erro se repetia, porque `palpiteDoNome()` aprende com o histórico.
+
+Agora ela é um `<select>` (`data-cat`), irmão do de "quem paga" que já morava na
+linha; as `<option>`s vêm de **`opcoesCat(sel)`**, que o `#lCat` do formulário
+também usa. Trocar ali corrige o gasto **e** ensina o app.
+
+**Não há migração automática de categoria**, e isso é decisão, não esquecimento:
+dentro de "casa" cabem tanto a garrafa de água quanto a conta da Sanepar, e
+adivinhar qual é qual no estado de quem já usa o app trocaria um erro por outro.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem
