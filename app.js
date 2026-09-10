@@ -3950,7 +3950,9 @@ function fecharRetro(){ $('#retro').hidden=true; document.body.style.overflow=''
 $('#fab').onclick=()=>{ abrirFolha(); vibrar(10); };
 
 /* ---------- ligações do calendário e da folha de edição ---------- */
-$('#abrirCal').onclick=()=>{ abrirCalendario(); vibrar(8); };
+['#abrirCal','#btnCalTopo'].forEach(id=>{
+  const b=$(id); if(b) b.onclick=()=>{ abrirCalendario(); vibrar(8); };
+});
 $('#calFechar').onclick=fecharCalendario;
 $('#calAnt').onclick=()=>andarMes(-1);
 $('#calProx').onclick=()=>andarMes(1);

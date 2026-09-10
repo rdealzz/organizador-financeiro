@@ -540,8 +540,8 @@ body{padding-bottom:calc(var(--barra-h) + 12px)}
 
 /* cabeçalho enxuto */
 header{position:relative;padding:6px 2px 14px}
-.eyebrow{padding-right:108px}
-@media(max-width:430px){.eyebrow{padding-right:104px}}
+.eyebrow{padding-right:156px}
+@media(max-width:430px){.eyebrow{padding-right:152px}}
 h1#tituloArea{font-size:clamp(26px,6vw,32px);margin:2px 0 0}
 
 /* blocos (cards) */
@@ -2946,6 +2946,18 @@ h1, .capa-tit, .portal-tit, .carta-tit, .auth-tit, .etapa h2{
 /* Com o calendário aberto, nada flutua por cima dele. O botão de tema da capa
    vive em z-index 180 e caía justamente sobre as setas de navegação. */
 body.cal-aberto .tema-flutua{display:none}
+/* O ícone do calendário no cabeçalho. Mesmo tamanho e mesmo peso visual do
+   botão de tema — são vizinhos, e dois botões redondos de tamanhos diferentes
+   lado a lado leem como erro. */
+.cal-btn{width:44px;height:44px;flex:0 0 44px;padding:0;border:none;cursor:pointer;
+  border-radius:var(--r-full);background:var(--fill);color:var(--txt);
+  display:flex;align-items:center;justify-content:center;transition:background .2s,transform .12s}
+.cal-btn:hover{background:var(--fill-2)}
+.cal-btn:active{transform:scale(.94)}
+.cal-btn:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+.cal-btn svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.cal-btn svg circle{fill:currentColor;stroke:none}
 .cal-abre{margin:0 0 14px}
 .cal-abre .btn{display:inline-flex;align-items:center;gap:8px}
 .cal-abre .ico{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;

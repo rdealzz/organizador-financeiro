@@ -873,6 +873,23 @@ Detalhes que custaram medição:
 * **O painel volta ao topo ao virar o mês**: rolado no meio, a troca mostra um
   pedaço de texto sem cabeça e parece que nada mudou.
 
+### O calendário tem ícone no cabeçalho (v10.5)
+
+O calendário abria só pela tela **Hoje**, e ele não é uma tela de Hoje — é uma
+camada que serve a qualquer momento. Agora existe um ícone no cabeçalho, ao lado
+do tema, que abre de onde a pessoa estiver.
+
+Ele **não virou uma quinta aba** de propósito: a barra de baixo lista ÁREAS
+(`AREAS`, com `aria-selected` e sub-abas), e o calendário é uma camada sobre o
+app, como o menu de perfil. Uma aba que abre uma camada e não muda a área mente
+sobre o que a barra significa.
+
+O botão grande em *Hoje* continua onde estava — ele é a descoberta para quem
+ainda não sabe que existe calendário; o ícone é o atalho de quem já sabe. E a
+`.eyebrow` teve o `padding-right` aumentado nos dois tamanhos: ela reserva o
+espaço do canto direito do cabeçalho, e um botão novo sem esse ajuste faria
+"Controle financeiro pessoal" passar por baixo dos ícones.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

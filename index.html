@@ -173,6 +173,13 @@ html[data-tema="escuro"] #splash{background:#000}
   <div class="cab-acoes">
     <button class="sinc" id="sinc" type="button" aria-live="polite">
       <i aria-hidden="true"></i><span>—</span></button>
+    <!-- O calendário mora numa camada, não numa área: por isso ele é um ícone do
+         cabeçalho, ao lado do tema, e não uma quinta aba. Assim abre de qualquer
+         tela — o botão grande em Hoje continua existindo, para quem chega ali sem
+         saber que existe calendário. -->
+    <button class="cal-btn" id="btnCalTopo" type="button" aria-label="Abrir o calendário de contas" title="Calendário de contas">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.6h17M8.2 3.5v3M15.8 3.5v3"/><circle cx="8.6" cy="13.4" r="1.05"/><circle cx="12" cy="13.4" r="1.05"/><circle cx="15.4" cy="13.4" r="1.05"/></svg>
+    </button>
     <button class="tema-btn" id="btnTema" aria-label="Alternar tema"></button>
   </div>
   <div class="cab-linha">
