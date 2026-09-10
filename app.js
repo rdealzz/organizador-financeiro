@@ -1018,7 +1018,7 @@ function renderLanc(c){
      app. O select é irmão do de "quem paga", que já morava nesta linha. */
   tb.querySelectorAll('[data-cat]').forEach(sl=>sl.onchange=e=>{
     const l=S.lanc.find(x=>String(x.id)===e.target.dataset.cat); if(!l) return;
-    l.cat=e.target.value;
+    l.cat=e.target.value; l.catManual=true;   // escolha da pessoa: é ela que ensina o app
     render(); salvar(); vibrar(10);
     toast(l.nome+' agora é '+CATS[l.cat].n);
   });
@@ -1402,6 +1402,7 @@ $('#addLanc').onclick=()=>{
   if(!nome||!(valor>0)){ $('#lNome').focus(); return; }
   const tipo=$('#lTipo').value;
   const l={id:Date.now()+Math.random(),criadoEm:Date.now(),nome,valor,cat:$('#lCat').value,tier:+$('#lTier').value,
+    catManual:catNaMao,
     fonte:$('#lFonte').value.trim()||'Conta',tipo,pRest:tipo==='parc'?(+$('#lParc').value||1):0,
     com:'',pai:Math.min(+$('#lPai').value||0,valor),ref:0,venc:Math.min(Math.max(+$('#lVenc').value||0,0),31),
     meio:meioForm,
@@ -1415,6 +1416,10 @@ $('#addLanc').onclick=()=>{
   }
   S.lanc.push(l);
   ['lNome','lValor','lParc','lPai','lVenc'].forEach(i=>$('#'+i).value=''); $('#lFatura').value='0';
+  /* A repetição volta ao padrão a cada lançamento. Sem isto, o "todo mês"
+     escolhido para o aluguel continuaria selecionado no cinema lançado logo
+     depois — e ninguém confere um campo que já estava certo da última vez. */
+  $('#lTipo').value='unico';
   catNaMao=false; meioForm='cartao'; pintarMeio();
   pintarPagadorForm('eu'); ajustarCamposForm(); palpitarNoForm();
   $('#lNome').focus();
@@ -1481,46 +1486,25 @@ const REGRAS=[
   [/faculdade|mensalidade|matricula|semestre|pos.?graduacao|escola|colegio|curso|idiomas|\bingles\b|autoescola|udemy|alura|coursera|ieduc|apostila|livro|material escolar|impress|xerox|papelaria|certifica/,'estudo',2],
   [/fatura|cartao|emprestimo|financiamento|consorcio|parcela|juros|rotativo|nubank|inter\b|itau|bradesco|santander|caixa\b|sicredi|sicoob|banrisul|banco pan|crefisa|agibank|picpay|\bneon\b|\bc6\b|dm ?card/,'divida',1]
 ];
-/* O que se repete IGUAL todo mês.
+/* O app NUNCA decide sozinho que um gasto se repete.
 
-   A categoria sozinha não dá conta disso. Dentro de "estudo" cabem tanto a
-   mensalidade da faculdade, que é fixa, quanto uma apostila ou uma xerox, que
-   não são — marcar a categoria inteira como fixa erraria metade dos casos.
-   Por isso a recorrência é lida do NOME do gasto, e vale por cima da regra de
-   categoria: assinatura continua fixa como sempre foi, e casa passou a depender
-   do nome — a conta de luz é fixa, a faxineira de uma vez não é.
+   Esta é a regra, e ela vale mais que qualquer acerto de adivinhação: repetir é
+   escolha da pessoa, feita no campo "Repetição". O palpite do nome cuida de
+   categoria, peso e conta — nunca da repetição, que sai sempre como `unico`.
 
-   Importa acertar: um gasto "variável" tem o valor zerado a cada fatura para a
-   pessoa preencher o do mês. Uma mensalidade marcada como variável sumiria do
-   mês seguinte e o app calcularia uma sobra maior do que a real. */
-/* Os \b não são enfeite: sem eles "material escolar" casava com `escola` e
-   virava gasto fixo, e "concurso" casaria com `curso`. */
-const RECORRENTE=/mensalidade|semestralidade|anuidade|matricula|faculdade|universidade|colegio|\bescola\b|creche|\bcurso\b|academia|smartfit|bluefit|gympass|plano de saude|unimed|amil|hapvida|\bseguro\b|previdencia|financiamento|consorcio|emprestimo|aluguel|condominio/;
-/* O que é COMPRA ÚNICA e o que volta todo mês.
+   Por que tão duro: `fixo` e `var` são linhas que SOBREVIVEM ao fechamento. Um
+   gasto marcado assim por engano volta na fatura do mês seguinte, e do outro, e
+   do outro — sozinho, sem ninguém ter pedido, engordando o mês com dinheiro que
+   não saiu. Uma compra única marcada como única não corre risco nenhum: no pior
+   caso a pessoa lança de novo no mês que vem, que é o que ela faria de qualquer
+   jeito. O erro tem custos MUITO diferentes dos dois lados, e é por isso que o
+   lado barato é o padrão.
 
-   Antes só existiam duas respostas: casa/assinatura/RECORRENTE viravam "fixo" e
-   TODO o resto virava "variável". Variável não quer dizer "gasto qualquer" — é
-   uma linha que SOBREVIVE ao fechamento com o valor zerado, esperando o valor do
-   mês. Uma garrafa de água, um cinema, uma farmácia entravam nessa fila e voltavam
-   em branco na fatura seguinte, todo mês, pra sempre. A resposta certa pra elas é
-   "compra única": entra neste ciclo, é arquivada no fechamento e não volta.
-
-   Agora o padrão é `unico`, e repetir é que precisa de motivo:
-   - `fixo`   — mensalidade, aluguel, assinatura, conta de consumo: volta igual;
-   - `var`    — mercado e combustível: volta todo mês, com valor diferente;
-   - `unico`  — o resto, que é a maioria do que se lança no dia a dia.
-
-   O histórico continua mandando por cima disto em palpiteDoNome(): um nome já
-   usado herda a repetição do lançamento anterior, inclusive uma corrigida à mão. */
-const ROT_TIPO={fixo:'todo mês, valor igual',var:'todo mês, valor muda',parc:'parcelado',unico:'compra única'};
-const CONTA_MENSAL=/conta de (agua|luz|energia|gas)|agua e esgoto|\bluz\b|energia|copel|cemig|enel|sanepar|sabesp|copasa|cedae|comgas|ultragaz|internet|\bvivo\b|\bclaro\b|\btim\b|oi fibra|nextfibra|celular|telefone|\biptu\b|plano do cartao/;
-const MENSAL_VARIAVEL=/supermerc|\bmercado\b|compra do mes|feira|hortifruti|sacolao|quitanda|acougue|combust|gasolin|etanol|\bdiesel\b|\bposto\b|ipiranga|shell|petrobr/;
-function tipoDoNome(txt,cat){
-  const t=semAcento(txt);
-  if(cat==='assinatura'||RECORRENTE.test(t)||CONTA_MENSAL.test(t)) return 'fixo';
-  if(cat==='mercado'||MENSAL_VARIAVEL.test(t)) return 'var';
-  return 'unico';
-}
+   Nem o histórico reabre essa porta: `palpiteDoNome()` deixou de herdar a
+   repetição do lançamento anterior, e `addLanc` devolve o campo a "compra única"
+   depois de cada lançamento — senão o "todo mês" escolhido para o aluguel
+   pegaria carona no cinema lançado logo em seguida. Conta fixa de verdade é
+   lançada UMA vez e o app a carrega ciclo a ciclo; não é caso de adivinhar. */
 function classificar(txt){
   const t=semAcento(txt);
   for(const [re,cat,tier] of REGRAS) if(re.test(t)) return [cat,tier];
@@ -2646,14 +2630,22 @@ function palpiteDoNome(nome){
   const [cat,tier]=classificar(txt);
   /* Aqui é `S.lanc` inteiro, não `doCiclo()`: aprender o nome não tem nada a
      ver com em qual fatura o gasto caiu. */
-  const igual=S.lanc.concat(S.hist.flatMap(h=>h.itens||[]))
-    .find(l=>l.nome&&l.nome.toLowerCase()===txt.toLowerCase());
+  const mesmoNome=l=>l.nome&&l.nome.toLowerCase()===txt.toLowerCase();
+  const antes=S.lanc.concat(S.hist.flatMap(h=>h.itens||[])).filter(mesmoNome);
+  /* O app aprende com as CORREÇÕES da pessoa, não com os próprios palpites.
+
+     Antes qualquer lançamento com o mesmo nome mandava por cima das regras — e
+     um palpite errado se perpetuava: "agua" tinha caído em Casa e contas uma vez,
+     então continuava caindo lá para sempre, mesmo depois de a regra ser
+     corrigida. `catManual` marca quem escolheu a categoria à mão (no formulário
+     ou no select da tabela); só essa escolha vale mais que a regra de hoje. */
+  const corrigido=antes.find(l=>l.catManual);
   return {
-    cat: igual?igual.cat:cat,
-    tier: igual?igual.tier:tier,
-    tipo: igual?igual.tipo:tipoDoNome(txt,cat),
-    fonte: igual?(igual.fonte||'Conta'):'Conta',
-    herdado: !!igual
+    cat: corrigido?corrigido.cat:cat,
+    tier: corrigido?corrigido.tier:tier,
+    tipo: 'unico',                       // repetir é escolha, nunca palpite
+    fonte: antes.length?(antes[0].fonte||'Conta'):'Conta',
+    herdado: !!corrigido
   };
 }
 function renderEco(){
@@ -2661,12 +2653,8 @@ function renderEco(){
   linhaFaturaDaFolha((p&&!p.incompleto)?p.meio==='avista':meioForm==='avista');
   if(!p){ el.innerHTML='<span class="aviso">Escreva o gasto e o valor — <b>qualquer</b> palavra serve, o app acha a categoria. Ex.: <b>'+esc(exemploRapido)+'</b></span>'; return; }
   if(p.incompleto){ el.innerHTML='<span class="aviso">Falta o valor no fim. Ex.: <b>'+esc(p.nome)+' 45</b></span>'; return; }
-  /* A repetição só aparece aqui quando o gasto REPETE. Compra única é o padrão
-     e a esmagadora maioria do que se lança — anunciá-la a cada tecla só engorda
-     a linha. Já "isto vai voltar todo mês" é decisão do app que a pessoa tem
-     que ver antes de salvar, porque o campo rápido não tem select pra mostrar. */
   el.innerHTML=`<span class="pt" style="background:${CATS[p.cat].c}"></span>
-    <span><b>${esc(p.nome)}</b> · ${brl(p.valor)} · ${CATS[p.cat].n} · ${TIER[p.tier].n}${p.tipo&&p.tipo!=='unico'?' · <b>'+ROT_TIPO[p.tipo]+'</b>':''}${p.meio==='avista'?' · <b>à vista, fora da fatura</b>':''}</span>
+    <span><b>${esc(p.nome)}</b> · ${brl(p.valor)} · ${CATS[p.cat].n} · ${TIER[p.tier].n}${p.meio==='avista'?' · <b>à vista, fora da fatura</b>':''}</span>
     ${p.herdado?'<span class="aviso">(como da última vez)</span>':''}`;
 }
 function salvarRapido(){

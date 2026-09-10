@@ -515,24 +515,35 @@ criar classe nova com nome curto e genérico.
 Duas coisas erradas se somavam numa garrafa de água de R$ 7,50: ela caía em
 "Casa e contas", e o app a tratava como gasto que volta todo mês.
 
-**A repetição mudou de padrão.** Antes `palpiteDoNome()` só sabia duas
-respostas — `casa`/`assinatura`/`RECORRENTE` viravam `fixo`, e **todo o resto**
-virava `var`. Só que `var` não quer dizer "gasto qualquer": é a linha que
-SOBREVIVE ao fechamento com o valor zerado, esperando o valor do mês. Um
-cinema, uma farmácia, uma garrafa de água entravam nessa fila e voltavam em
-branco na fatura seguinte, todo mês, para sempre. Agora **`unico` é o padrão** e
-repetir é que precisa de motivo, em `tipoDoNome(txt, cat)`:
+**O app NUNCA decide sozinho que um gasto se repete.** Antes
+`palpiteDoNome()` só sabia duas respostas — `casa`/`assinatura`/`RECORRENTE`
+viravam `fixo`, e **todo o resto** virava `var`. Só que `var` não quer dizer
+"gasto qualquer": `fixo` e `var` são linhas que SOBREVIVEM ao fechamento. Um
+gasto marcado assim por engano volta na fatura do mês seguinte, e do outro, e do
+outro — sozinho, sem ninguém ter pedido, engordando o mês com dinheiro que não
+saiu. Uma compra única marcada como única não corre risco nenhum: no pior caso a
+pessoa lança de novo no mês que vem, que é o que ela faria de qualquer jeito.
+**O erro custa coisas muito diferentes dos dois lados, e por isso o lado barato é
+o padrão.**
 
-* `fixo` — `assinatura`, `RECORRENTE` ou `CONTA_MENSAL` (luz, internet, celular,
-  IPTU, conta de água): volta igual.
-* `var` — `mercado` ou `MENSAL_VARIAVEL` (feira, açougue, combustível, posto):
-  volta todo mês com valor diferente.
-* `unico` — o resto, que é a maioria do que se lança no dia a dia.
+Uma primeira versão tentou adivinhar melhor (`tipoDoNome()`, com
+`CONTA_MENSAL` e `MENSAL_VARIAVEL`: luz e internet viravam `fixo`, mercado e
+combustível viravam `var`). Foi retirada de propósito — adivinhar melhor ainda é
+adivinhar, e o palpite errado aqui cria uma conta que a pessoa não pediu. Hoje
+`palpiteDoNome()` devolve **sempre** `tipo:'unico'`; repetir é escolha, feita no
+campo *Repetição*.
 
-`cat==='casa'` deixou de bastar para `fixo`: a conta de luz é fixa, a faxineira
-de uma vez não é — dentro de "casa" cabem as duas. O histórico continua mandando
-por cima de tudo isso: um nome já usado herda a repetição do lançamento anterior,
-inclusive uma corrigida à mão.
+Duas portas dos fundos ficaram fechadas junto:
+
+1. **O histórico não herda mais a repetição.** Herdava, e um `var` adivinhado
+   por uma versão antiga voltaria a se propagar pelo nome.
+2. **`addLanc` devolve `#lTipo` a "compra única" depois de cada lançamento** —
+   senão o "todo mês" escolhido para o aluguel pegaria carona no cinema lançado
+   logo em seguida, e ninguém confere um campo que já estava certo da última vez.
+
+Isso não tira nada de quem tem conta fixa de verdade: ela é lançada UMA vez e o
+app a carrega ciclo a ciclo sozinha. Adivinhar só serviria para o primeiro
+lançamento — e é exatamente ali que o engano nasce.
 
 **Os rótulos passaram a dizer o que a coisa é.** "Só neste mês" lia-se como
 filtro de exibição, não como a natureza do gasto; e "1x" na lista não dizia nada
@@ -542,10 +553,17 @@ primeiro porque é o caso comum e porque a primeira `<option>` é o padrão da
 folha. O selo da tabela virou "única", e o de *Últimos lançamentos*, "compra
 única" e "todo mês".
 
-No campo rápido não há select para mostrar a decisão, então `renderEco()`
-escreve a repetição **só quando o gasto REPETE** (`ROT_TIPO`). Compra única é o
-padrão e a maioria — anunciá-la a cada tecla só engordaria a linha; já "isto vai
-voltar todo mês" é decisão que a pessoa precisa ver antes de salvar.
+### O app aprende com as CORREÇÕES, não com os próprios palpites
+
+`palpiteDoNome()` deixava qualquer lançamento de mesmo nome mandar por cima das
+regras. O efeito: um palpite errado se perpetuava. "agua" tinha caído em Casa e
+contas uma vez, então continuava caindo lá **mesmo depois de a regra ser
+corrigida** — o app estava aprendendo com o próprio erro.
+
+Agora só a escolha da pessoa vale mais que a regra de hoje, marcada em
+**`l.catManual`**: `true` quando ela mexeu na categoria à mão, no formulário
+(`catNaMao`) ou no select da tabela. Sem essa marca, a regra atual decide. O
+`fonte` continua vindo do lançamento anterior de mesmo nome, com marca ou sem.
 
 ### "Água" sozinha é bebida; a conta pede contexto
 
@@ -573,6 +591,9 @@ também usa. Trocar ali corrige o gasto **e** ensina o app.
 **Não há migração automática de categoria**, e isso é decisão, não esquecimento:
 dentro de "casa" cabem tanto a garrafa de água quanto a conta da Sanepar, e
 adivinhar qual é qual no estado de quem já usa o app trocaria um erro por outro.
+O que a versão nova conserta sozinha é o FUTURO: como o palpite deixou de herdar
+de si mesmo, o próximo "agua" já nasce em Comida — a linha antiga é que precisa
+do toque no select.
 
 ## Detalhes da implementação que importam
 
