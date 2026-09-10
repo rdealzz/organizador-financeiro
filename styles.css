@@ -2869,3 +2869,16 @@ h1, .capa-tit, .portal-tit, .carta-tit, .auth-tit, .etapa h2{
 .orca-sobra{border-top:1px solid var(--sep);margin-top:4px}
 .btn.mini{padding:7px 12px;font-size:13px}
 @media(max-width:430px){ .orca-de{margin-left:0;width:100%} }
+
+/* ---------- barras 3D de onde cortar ----------
+   `touch-action:pan-y` é a linha que faz o gráfico conviver com a página: o
+   arrasto horizontal gira a cena, o vertical continua rolando a tela. Sem ela
+   um gráfico de 300px engole a rolagem do dedo e a pessoa fica presa nele. */
+#viz3d{margin:2px 0 18px}
+#viz3dTela{width:100%;height:300px;display:block;touch-action:pan-y;cursor:grab}
+#viz3dTela:active{cursor:grabbing}
+.viz3d-leg{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px}
+.viz3d-c{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--txt-3)}
+.viz3d-diz{margin:8px 0 0;font-size:13.5px;line-height:1.55;color:var(--txt-2);min-height:38px}
+.viz3d-diz b{color:var(--txt)}
+@media(max-width:430px){ #viz3dTela{height:260px} }

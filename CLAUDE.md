@@ -699,6 +699,61 @@ depois**, como manda a nota acima): clique no ícone abre, segundo clique fecha,
 clique fora fecha, *Editar perfil* leva para a aba da conta, e o mesmo rosto na
 tela de cartas (`#portalPerfil`, que tinha o mesmo defeito) também abre.
 
+## Barras 3D de onde cortar (v10.2)
+
+`viz3d.js` desenha, na aba *Análises → O que fazer, em ordem*, uma cena 3D dos
+gastos do ciclo. **Duas dimensões de dado é o que justifica a terceira dimensão
+de tela** — sem isso 3D é enfeite:
+
+* **altura** — quanto você gasta ali;
+* **profundidade** — o peso. *Pode cortar* na fileira da FRENTE, *essencial* na
+  de trás.
+
+Daí sai a leitura que a barra 2D não dá num olhar: barra alta na frente é
+dinheiro grande que a própria pessoa classificou como cortável. Alta e no fundo
+é caro e necessário — não é corte, é negociação. **A cor continua sendo a
+CATEGORIA** (regra das cores de dado do projeto): a fileira da frente ganha
+contorno e opacidade cheia, não uma cor própria. Pintar tudo de vermelho apagaria
+justamente a informação de ONDE cortar.
+
+Canvas 2D com projeção em perspectiva escrita à mão, como o `intro.js` — e pelos
+mesmos motivos, que vale repetir porque a tentação volta: `script-src 'self'` na
+CSP recusa CDN, o app é offline-first, e vendorizar meio megabyte para desenhar
+trinta caixas custaria mais que o app inteiro. São ~150 polígonos por quadro,
+ordenados do fundo para a frente (algoritmo do pintor) — com faces convexas e
+opacas isso dispensa buffer de profundidade.
+
+### O que custou teste
+
+* **A cena se enquadra sozinha** (`enquadrar()`). Girando, a silhueta muda de
+  largura o tempo todo: com escala fixa, ora metade do gráfico saía da caixa,
+  ora sobrava um deserto. Agora cada quadro projeta primeiro *sem* escala,
+  calcula o retângulo que contém tudo — cantos das barras, quinas do chão e
+  âncoras dos rótulos — e só então escala e centraliza.
+* **A calha dos rótulos é MEDIDA** (`medirCalha`), não chutada: com 70px fixos
+  "Pode cortar" saía cortado pela borda, porque a largura da fonte do sistema
+  muda entre aparelhos.
+* **O toque acerta pelo TAMPO da barra**, com teste de ponto-em-polígono e as
+  mais próximas testadas primeiro. Pela distância até o centro, barra baixa e
+  barra alta vizinhas disputavam o dedo e a errada ganhava.
+* **`touch-action:pan-y`** no canvas: arrasto horizontal gira, vertical continua
+  rolando a página. Um gráfico de 300px que engole a rolagem é pior que um
+  gráfico sem giro.
+* **Fora da tela não se desenha.** A aba pode ficar escondida por horas com o
+  gráfico montado; girar uma cena que ninguém vê é bateria queimada.
+* **A cena não é remontada a cada `render()`** — uma CHAVE (categoria, peso,
+  valor e tema) diz se mudou alguma coisa. Sem isso o giro voltava ao zero a
+  cada tecla digitada em outra tela.
+* **Menos de duas barras não é gráfico**, é uma caixa girando: aí a caixa fica
+  escondida e a lista embaixo diz tudo.
+
+As cores saem do CSS (`rgbDe` resolve `var(--c10)` mesmo quando ela aponta para
+outra var, pedindo a cor computada de um elemento fora da tela), então o gráfico
+acompanha a troca de tema — `aplicarTema()` chama `repintar()`. Por isso
+`viz3d`/`viz3dChave` são declaradas **no topo do `app.js`**, junto de `cena`:
+`aplicarTema()` roda na partida, antes do fim do arquivo, e um `let` lá embaixo
+estaria na zona morta temporal.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

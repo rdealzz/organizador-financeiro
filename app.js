@@ -151,6 +151,10 @@ function usarChaveDe(uid){ KEY = uid ? ('sobra-do-mes:u:'+uid) : KEY_ANTIGA; }
    a capa continuava por cima dele. Quem entrava pelo formulário nunca via o
    problema, porque aí o arquivo já tinha terminado de carregar. */
 let cena=null, capaSaindo=false;
+/* Declarado AQUI pelo mesmo motivo de `cena` e `retroPendente`: `aplicarTema()`
+   roda na partida, antes do fim deste arquivo, e um `let` lá embaixo estaria na
+   zona morta temporal — ler a variável lançaria e derrubaria a abertura. */
+let viz3d=null, viz3dChave='';
 /* Como pagou, no formulário de lançamento. Volta pra 'cartao' a cada gasto: é
    o caso comum, e deixar grudado no Pix faria a fatura seguinte nascer errada.
    Mora AQUI no topo, junto de `cena`, porque renderFatura() o lê e render()
@@ -1375,7 +1379,75 @@ function renderLanc(c){
     render(); salvar();});
 }
 
+
+/* ---------- as barras 3D de onde cortar ----------
+
+   Quem desenha é o `viz3d.js`; daqui sai só o DADO e a frase embaixo. A
+   separação importa: o gráfico não sabe nada de fatura, de teto ou de pessoa —
+   ele recebe uma lista de barras com valor, categoria e peso.
+
+   Duas coisas que custaram atenção:
+
+   1. **O gráfico não é recriado a cada render.** `render()` roda a cada
+      digitação, e remontar a cena zeraria o giro no meio do dedo da pessoa.
+      Uma CHAVE resume o que está desenhado (categoria, peso, valor e tema);
+      só quando ela muda a cena é remontada.
+   2. **A ordem das categorias é a do gasto**, da maior para a menor, da
+      esquerda para a direita — a mesma ordem da lista embaixo. Se as duas
+      discordassem, o gráfico viraria enfeite. */
+function barras3D(){
+  const itens=doCiclo();
+  const totalCat={};
+  itens.forEach(l=>{ const v=meuValor(l); if(v>0) totalCat[l.cat]=(totalCat[l.cat]||0)+v; });
+  const ordem=Object.keys(totalCat).sort((a,b)=>totalCat[b]-totalCat[a]);
+  const barras=[];
+  ordem.forEach(k=>{
+    [1,2,3].forEach(t=>{
+      const v=itens.filter(l=>l.cat===k&&l.tier===t).reduce((s,l)=>s+meuValor(l),0);
+      if(v>0.5) barras.push({cat:k,nome:CATS[k].n,cor:CATS[k].c,tier:t,valor:v,total:totalCat[k]});
+    });
+  });
+  return barras;
+}
+function frase3D(b){
+  const el=$('#viz3dDiz'); if(!el) return;
+  if(!b){
+    el.innerHTML='Arraste para girar · toque numa barra para ver o que ela é. '
+      +'<b>Altura</b> é quanto você gasta, <b>profundidade</b> é o peso — o que dá pra cortar fica na frente.';
+    return;
+  }
+  const ano=b.valor*12;
+  el.innerHTML=`<span class="pt" style="background:${CATS[b.cat].c}"></span>`
+    +`<b>${esc(b.nome)}</b> · ${TIER[b.tier].n} · <b>${brl(b.valor)}</b> neste ciclo`
+    +(b.tier===3?` — zerar isso devolve <b>${brl(ano)}</b> no ano.`
+      :b.tier===2?' — dá pra reduzir sem doer muito.'
+      :' — essencial: aqui não se corta, se negocia (plano, fornecedor, prazo).');
+}
+function renderViz3D(){
+  const caixa=$('#viz3d'), tela=$('#viz3dTela');
+  if(!caixa||!tela) return;
+  const barras=barras3D();
+  /* Menos de duas barras não é gráfico, é uma caixa girando. A lista embaixo
+     já diz tudo que há para dizer nesse caso. */
+  if(!window.Viz3D||barras.length<2){
+    caixa.hidden=true;
+    if(viz3d){ viz3d.encerrar(); viz3d=null; viz3dChave=''; }
+    return;
+  }
+  caixa.hidden=false;
+  const chave=barras.map(b=>b.cat+b.tier+Math.round(b.valor)).join('|')+'#'+temaAtual();
+  if(chave===viz3dChave) return;
+  viz3dChave=chave;
+  if(viz3d) viz3d.encerrar();
+  viz3d=Viz3D.montar(tela,barras,{aoSelecionar:frase3D});
+  frase3D(null);
+  const vistas=[]; barras.forEach(b=>{ if(!vistas.includes(b.cat)) vistas.push(b.cat); });
+  $('#viz3dLeg').innerHTML=vistas.map(k=>
+    `<span class="viz3d-c"><span class="pt" style="background:${CATS[k].c}"></span>${esc(CATS[k].n)}</span>`).join('');
+}
+
 function renderCortes(c){
+  renderViz3D();
   const lista=[];
   Object.entries(c.excesso).forEach(([k,v])=>{
     const itens=doCiclo().filter(l=>l.cat===k&&meuValor(l)>0).sort((a,b)=>meuValor(b)-meuValor(a));
@@ -1687,6 +1759,7 @@ function aplicarTema(){
   const cor=esc?'#000000':'#F4F8FD';
   document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute('content',cor));
   document.documentElement.setAttribute('data-tema',esc?'escuro':'claro');
+  if(viz3d) viz3d.repintar();      // as cores das barras vêm do CSS: mudou o tema, mudaram elas
   const rotulo=esc?'Mudar para o tema claro':'Mudar para o tema escuro';
   /* Esta função roda ANTES do resto do arquivo — é o que evita a abertura
      piscar no tema errado —, e nesse instante a tabela de ícones ainda não

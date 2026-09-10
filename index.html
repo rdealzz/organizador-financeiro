@@ -393,6 +393,14 @@ html[data-tema="escuro"] #splash{background:#000}
 
   <section class="bloco" id="t-cortes" hidden>
     <h2>O que fazer, em ordem</h2>
+    <!-- Barras 3D: altura é quanto você gasta, profundidade é o peso. Quem
+         desenha é o viz3d.js; aqui fica só a caixa. -->
+    <div id="viz3d" hidden>
+      <canvas id="viz3dTela" height="300" role="img"
+              aria-label="Gráfico 3D dos seus gastos por categoria e peso. A mesma informação está na lista abaixo."></canvas>
+      <div class="viz3d-leg" id="viz3dLeg"></div>
+      <p class="viz3d-diz" id="viz3dDiz"></p>
+    </div>
         <div id="cortes"></div>
     <div class="cards" id="cardsCorte"></div>
     <div id="notaCorte"></div>
@@ -768,6 +776,7 @@ html[data-tema="escuro"] #splash{background:#000}
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="/auth.js"></script>
+<script src="/viz3d.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>
