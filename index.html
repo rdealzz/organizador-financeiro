@@ -237,6 +237,13 @@ html[data-tema="escuro"] #splash{background:#000}
 
   <div id="blocoPagar"></div>
 
+  <!-- O calendário abre daqui e da lista de contas a vencer. Fica FORA do
+       #blocoVenc de propósito: aquele bloco some quando não há conta com dia
+       marcado, e o botão sumiria junto justamente para quem ainda não marcou
+       nenhuma. -->
+  <div class="cal-abre"><button class="btn sec" id="abrirCal">
+    <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.6h17M8.2 3.5v3M15.8 3.5v3"/></svg>
+    Calendário de contas</button></div>
   <div id="blocoVenc"></div>
 
   <section class="bloco" id="blocoUltimos">
@@ -671,6 +678,77 @@ html[data-tema="escuro"] #splash{background:#000}
   </div>
 
 <!-- ══════════════════════ FOLHA DE LANÇAMENTO ══════════════════════ -->
+<!-- ══════════════════════ EDITAR UM LANÇAMENTO ══════════════════════
+     Mesma folha do "novo gasto" em espírito, mas com TODOS os campos: até aqui
+     a tabela deixava mudar valor, categoria e quem paga, e o resto — nome,
+     repetição, parcelas, dia de vencimento — só apagando e lançando de novo. -->
+<div class="sheet-bg" id="edBg"></div>
+<div class="sheet" id="edFolha" role="dialog" aria-modal="true" aria-labelledby="edTit">
+  <div class="sheet-alca" aria-hidden="true"></div>
+  <div class="sheet-corpo">
+    <div class="sheet-cab">
+      <h2 id="edTit">Editar gasto</h2>
+      <button class="btn-x" id="edFechar" aria-label="Fechar">×</button>
+    </div>
+    <div class="grade g2" style="margin-top:8px">
+      <div class="full"><label for="eNome">O que foi</label><input id="eNome"></div>
+      <div><label for="eValor">Valor</label><input type="number" inputmode="decimal" id="eValor" min="0" step="0.01" placeholder="0,00"></div>
+      <div><label for="eFonte">Onde caiu</label><input id="eFonte" list="dlFontes" placeholder="Conta"></div>
+      <div class="full"><span class="rot-seg">Como pagou</span>
+        <div class="segm" id="eMeio" role="radiogroup" aria-label="Como pagou">
+          <button type="button" data-emeio="cartao" class="on" role="radio" aria-checked="true">No cartão</button>
+          <button type="button" data-emeio="avista" role="radio" aria-checked="false">Pix, débito ou dinheiro</button>
+        </div></div>
+      <div><label for="eTipo">Repetição</label><select id="eTipo">
+        <option value="unico">Compra única — não repete</option>
+        <option value="var">Todo mês, valor muda</option>
+        <option value="fixo">Todo mês, valor igual</option>
+        <option value="parc">Parcelado</option></select></div>
+      <div><label for="eVenc">Vence todo dia</label><input type="number" inputmode="numeric" id="eVenc" min="1" max="31" step="1" placeholder="—"></div>
+      <div class="full" id="eCampoParc" hidden><label for="eParc">Parcelas que ainda faltam</label>
+        <input type="number" inputmode="numeric" id="eParc" min="0" step="1" placeholder="Ex.: 8"></div>
+      <div class="full"><label for="ePagador">Quem paga</label><select id="ePagador"><option value="eu">Eu, sozinho</option></select></div>
+      <div class="full" id="eCampoPai" hidden><label for="ePai" id="eLabPai">Quanto a outra pessoa cobre</label>
+        <input type="number" inputmode="decimal" id="ePai" min="0" step="0.01" placeholder="0,00"></div>
+      <div><label for="eCat">Categoria</label><select id="eCat"></select></div>
+      <div><label for="eTier">Peso</label><select id="eTier">
+        <option value="1">Essencial</option><option value="2">Vale a pena</option><option value="3">Pode cortar</option></select></div>
+      <div class="full" id="eCampoFatura"><label for="eFatura">Entra na fatura</label><select id="eFatura">
+        <option value="0">Esta, a que está aberta</option><option value="1">A próxima</option></select></div>
+    </div>
+    <p class="ajuda" id="eAviso" style="margin:10px 0 0"></p>
+    <div class="acoes" style="margin-top:14px">
+      <button class="btn" id="edSalvar">Salvar</button>
+      <button class="btn sec" id="edApagar">Apagar gasto</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ CALENDÁRIO ══════════════════════
+     Tela quase inteira de propósito: um calendário pequeno não deixa ver o mês.
+     Quem projeta as ocorrências é o app.js — parcela sabe onde termina, conta
+     fixa segue até alguém dizer que não. -->
+<div class="cal" id="cal" role="dialog" aria-modal="true" aria-labelledby="calTit" hidden>
+  <div class="cal-cab">
+    <div>
+      <span class="rot">Calendário de contas</span>
+      <h2 id="calTit">—</h2>
+    </div>
+    <div class="cal-nav">
+      <button class="btn-nav" id="calAnoAnt" aria-label="Ano anterior" title="Ano anterior">«</button>
+      <button class="btn-nav" id="calAnt" aria-label="Mês anterior">‹</button>
+      <button class="btn sec mini" id="calHoje">Hoje</button>
+      <button class="btn-nav" id="calProx" aria-label="Próximo mês">›</button>
+      <button class="btn-nav" id="calAnoProx" aria-label="Próximo ano" title="Próximo ano">»</button>
+      <button class="btn-x" id="calFechar" aria-label="Fechar calendário">×</button>
+    </div>
+  </div>
+  <div class="cal-corpo">
+    <div class="cal-grade" id="calGrade"></div>
+    <aside class="cal-lado" id="calLado"></aside>
+  </div>
+</div>
+
 <div class="sheet-bg" id="sheetBg"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTit">
   <div class="sheet-alca"></div>
@@ -717,8 +795,14 @@ html[data-tema="escuro"] #splash{background:#000}
           <option value="var">Todo mês, valor muda</option>
           <option value="fixo">Todo mês, valor igual</option>
           <option value="parc">Parcelado</option></select></div>
-        <div class="full" id="campoParc" hidden><label for="lParc">Quantas parcelas ainda faltam</label>
+        <!-- Parcelas e dia de vencimento andam juntos: é o par que o calendário
+             usa para espalhar a conta pelos meses. Ficavam separados — um aqui,
+             outro escondido na gaveta — e sem o dia a parcela não tinha onde cair. -->
+        <div id="campoParc" hidden><label for="lParc">Parcelas que ainda faltam</label>
           <input type="number" inputmode="numeric" id="lParc" min="0" step="1" placeholder="Ex.: 8"></div>
+        <div id="campoVenc" hidden><label for="lVenc">Vence todo dia</label>
+          <input type="number" inputmode="numeric" id="lVenc" min="1" max="31" step="1" placeholder="—"></div>
+        <p class="ajuda full" id="lPrazo" style="margin:0" hidden></p>
         <!-- As opções deste select são as pessoas cadastradas: quem monta é
              pintarPagadorForm(), no app.js. -->
         <div class="full"><label for="lPagador">Quem paga</label><select id="lPagador">
@@ -736,7 +820,6 @@ html[data-tema="escuro"] #splash{background:#000}
           <div><label for="lTier">Peso</label><select id="lTier">
             <option value="1">Essencial</option><option value="2">Vale a pena</option><option value="3">Pode cortar</option></select></div>
           <div><label for="lFonte">Onde caiu</label><input id="lFonte" list="dlFontes" placeholder="Conta"></div>
-          <div><label for="lVenc">Vence dia</label><input type="number" inputmode="numeric" id="lVenc" min="1" max="31" step="1" placeholder="—"></div>
           <!-- Em qual fatura o gasto cai. Os rótulos com as datas são escritos
                por renderFatura(), no app.js — aqui ficam só os textos de reserva. -->
           <div class="full"><label for="lFatura">Entra na fatura</label><select id="lFatura">

@@ -1291,6 +1291,7 @@ function renderLanc(c){
      O botão do fim da segunda linha é o que move o gasto entre elas. */
   const linha=l=>`<tr${+l.prox>0?' class="lin-prox"':''}>
     <td>${esc(l.nome)} ${selo(l)}${+l.prox>0?' <span class="tag cicloprox">próxima fatura</span>':''}${naFatura(l)?'':' <span class="tag avista">à vista</span>'}<div style="font-size:11.5px;color:var(--txt-3)">${esc(l.fonte||'Conta')} · <span class="tag ${TIER[l.tier].cl}">${TIER[l.tier].n}</span>${+l.pai>0?` · <b style="color:${corPessoa(l.com)}">${esc(nomePessoa(l.com))}</b>`:''}
+      · <button class="link mini" data-editar="${l.id}">editar</button>
       · <button class="link mini" data-meio="${l.id}">${naFatura(l)?'foi no Pix':'foi no cartão'}</button>${naFatura(l)?`
       · <button class="link mini" data-prox="${l.id}">${+l.prox>0?'trazer pra esta fatura':'jogar pra próxima'}</button>`:''}</div></td>
     <td><span class="pt" style="background:${CATS[l.cat].c}"></span><select data-cat="${l.id}" aria-label="Categoria de ${esc(l.nome)}"
@@ -1655,14 +1656,25 @@ $('#lPagador').onchange=e=>{
    alguém divide. O formulário encolhe e cresce conforme a resposta anterior —
    é o que faz ele caber numa olhada. */
 function ajustarCamposForm(){
-  const parc=$('#lTipo').value==='parc';
+  const tipo=$('#lTipo').value, parc=tipo==='parc';
   const cp=$('#campoParc'); if(cp) cp.hidden=!parc;
   if(!parc) $('#lParc').value='';
+  /* O dia de vencimento só faz sentido para o que volta — e para o que volta
+     ele é ESSENCIAL, porque é dele que sai a posição da conta no calendário.
+     Numa compra única o campo some, e o valor some com ele. */
+  const cv=$('#campoVenc'); if(cv) cv.hidden=(tipo==='unico');
+  if(tipo==='unico') $('#lVenc').value='';
+  const pz=$('#lPrazo');
+  if(pz){
+    const txt=fraseDoPrazo(tipo,+$('#lParc').value||0,+$('#lVenc').value||0);
+    pz.innerHTML=txt; pz.hidden=!txt;
+  }
   const pag=$('#lPagador').value, divide=(pag!=='eu'&&pag!=='+');
   const cpai=$('#campoPai'); if(cpai) cpai.hidden=!divide;
   if(!divide) $('#lPai').value='';
 }
 $('#lTipo').onchange=()=>{ ajustarCamposForm(); if($('#lTipo').value==='parc') $('#lParc').focus(); };
+['#lParc','#lVenc'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('input',ajustarCamposForm); });
 
 /* O palpite pelo NOME, no formulário completo. Enquanto a pessoa não mexer na
    categoria à mão, ela vai sendo preenchida sozinha — e a linha embaixo diz o
@@ -2427,6 +2439,312 @@ function desmarcarPago(id){
   escolhendoPago=null;
   toast(l.nome+' voltou pra lista'); render(); salvar();
 }
+
+
+/* ══════════════════════ EDITAR UM LANÇAMENTO ══════════════════════
+
+   Até aqui a tabela deixava mudar valor, categoria, quem paga e a forma de
+   pagamento — direto na linha, que é o certo para esses. O resto (nome errado,
+   virou parcelado, faltam 8 parcelas e não 10, o dia de vencimento) só tinha um
+   caminho: apagar e lançar de novo, perdendo o histórico que o app usa para
+   aprender com os nomes.
+
+   Esta folha edita TUDO de um lançamento que já existe. Ela é irmã da folha de
+   novo gasto e usa os mesmos rótulos de propósito: quem aprendeu a lançar não
+   precisa aprender a editar. */
+let edId=null, edMeio='cartao';
+function abrirEdicao(id){
+  const l=S.lanc.find(x=>String(x.id)===String(id)); if(!l) return;
+  edId=l.id;
+  $('#eNome').value=l.nome||'';
+  $('#eValor').value=l.valor||'';
+  $('#eFonte').value=l.fonte||'';
+  $('#eCat').innerHTML=opcoesCat(l.cat);
+  $('#eTier').value=String(l.tier||2);
+  $('#eTipo').value=l.tipo==='rec'?'fixo':(l.tipo||'unico');
+  $('#eParc').value=(+l.pRest||0)||'';
+  $('#eVenc').value=(+l.venc||0)||'';
+  $('#eFatura').value=(+l.prox>0)?'1':'0';
+  edMeio=naFatura(l)?'cartao':'avista';
+  $('#ePagador').innerHTML=opcoesPagador(l);
+  $('#ePai').value=(+l.pai||0)||'';
+  pintarMeioEd(); ajustarEdicao();
+  $('#edBg').classList.add('abre');
+  $('#edFolha').classList.add('abre');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>$('#eNome').focus(),240);
+}
+function fecharEdicao(){
+  edId=null;
+  $('#edBg').classList.remove('abre');
+  $('#edFolha').classList.remove('abre');
+  document.body.style.overflow='';
+}
+function pintarMeioEd(){
+  const g=$('#eMeio'); if(!g) return;
+  g.querySelectorAll('[data-emeio]').forEach(b=>{
+    const on=b.dataset.emeio===edMeio;
+    b.classList.toggle('on',on); b.setAttribute('aria-checked',on?'true':'false');
+  });
+  const cf=$('#eCampoFatura'); if(cf) cf.hidden=(edMeio==='avista');
+}
+/* Mesma ideia do formulário de lançar: campo que não vale para a resposta
+   anterior não fica na tela ocupando espaço. E aqui há uma frase a mais — a que
+   diz até quando a coisa vai. */
+function ajustarEdicao(){
+  const tipo=$('#eTipo').value;
+  $('#eCampoParc').hidden=(tipo!=='parc');
+  const pag=$('#ePagador').value, divide=(pag!=='eu'&&pag!=='+');
+  $('#eCampoPai').hidden=!divide;
+  if(!divide) $('#ePai').value='';
+  $('#eAviso').innerHTML=fraseDoPrazo(tipo,+$('#eParc').value||0,+$('#eVenc').value||0);
+}
+/* "Faltam 8 parcelas" é um número; "termina em maio de 2027" é uma resposta.
+   A mesma frase serve para a conta fixa, e ali ela diz o contrário: que não
+   termina — que era a dúvida de quem não sabe quantas mensalidades ainda vêm. */
+function fraseDoPrazo(tipo,faltam,dia){
+  if(tipo==='parc'){
+    if(!(faltam>0)) return 'Diga quantas parcelas ainda faltam, <b>contando a do próximo vencimento</b>.';
+    if(!(dia>0)) return `Faltam <b>${faltam}</b>. Marque <b>Vence todo dia</b> e o app espalha as parcelas pelo calendário, uma por mês.`;
+    const fim=new Date(proximoVenc(dia).getFullYear(),proximoVenc(dia).getMonth()+faltam-1,1);
+    return `Faltam <b>${faltam}</b> parcelas — a última cai em <b>${MES_LONGO[fim.getMonth()]} de ${fim.getFullYear()}</b>. Todas já aparecem no calendário.`;
+  }
+  if(tipo==='fixo'||tipo==='var'){
+    if(!(dia>0)) return 'Marque <b>Vence todo dia</b> para esta conta aparecer no calendário todo mês.';
+    return `Vence <b>todo dia ${Math.min(dia,31)}</b>, <b>sem data de fim</b> — segue mês a mês no calendário até você mudar a repetição ou apagar o gasto.`;
+  }
+  return dia>0?'Compra única: aparece no calendário só neste vencimento.':'';
+}
+function salvarEdicao(){
+  const l=S.lanc.find(x=>String(x.id)===String(edId)); if(!l){ fecharEdicao(); return; }
+  const nome=$('#eNome').value.trim(), valor=+$('#eValor').value;
+  if(!nome||!(valor>0)){ toast('Precisa de nome e valor',true); $('#eNome').focus(); return; }
+  const tipo=$('#eTipo').value;
+  l.nome=nome; l.valor=valor;
+  l.cat=$('#eCat').value; l.tier=+$('#eTier').value;
+  /* Mexeu na categoria à mão é ESCOLHA, e escolha ensina o app: é a mesma
+     marca que o select da tabela grava. */
+  l.catManual=true;
+  l.fonte=$('#eFonte').value.trim()||'Conta';
+  l.tipo=tipo;
+  l.pRest=(tipo==='parc')?Math.max(+$('#eParc').value||0,0):0;
+  l.venc=Math.min(Math.max(+$('#eVenc').value||0,0),31);
+  l.meio=edMeio;
+  l.prox=(edMeio==='cartao'&&+$('#eFatura').value===1)?1:0;
+  const pag=$('#ePagador').value;
+  if(pag==='eu'||pag==='+'){ l.pai=0; l.com=''; }
+  else{
+    const [modo,id]=pag.split(':');
+    l.com=id||'';
+    const informado=+$('#ePai').value||0;
+    l.pai=modo==='t'?valor:Math.min(informado>0?informado:+(valor/2).toFixed(2),valor);
+  }
+  /* Trocou o dia de vencimento? A marca de "já paguei" era sobre a data
+     ANTIGA e deixou de valer — mantê-la esconderia a conta do mês inteiro. */
+  if(l.pagoAte&&(!(l.venc>0)||l.pagoAte!==iso(proximoVenc(l.venc)))){
+    delete l.pagoAte; delete l.pagoCom; delete l.pagoVence;
+  }
+  fecharEdicao(); render(); salvar(); vibrar(12);
+  toast(l.nome+' atualizado');
+}
+
+/* ══════════════════════ CALENDÁRIO DE CONTAS ══════════════════════
+
+   A pergunta que ele responde é "o que vence quando", e ela não cabia em
+   nenhuma tela: *Contas a vencer* mostra só a próxima ocorrência de cada conta,
+   e o gráfico de parcelas mostra o total do mês sem dizer o dia.
+
+   O que o calendário faz que as outras telas não fazem é PROJETAR o futuro a
+   partir do que já está lançado — e cada tipo de gasto se projeta de um jeito:
+
+   * **parcelado** — sabe onde termina. `pRest` diz quantas faltam e o dia de
+     vencimento diz em que dia elas caem; a última ganha o rótulo de última,
+     que é a informação que a pessoa quer ("quando é que essa moto acaba?").
+   * **todo mês (fixo ou variável)** — não termina. Segue mês a mês até alguém
+     mudar o gasto, que é literalmente "até eu dizer que não quero mais".
+   * **compra única** — aparece uma vez, no vencimento dela.
+   * **a fatura do cartão** — todo mês no dia do vencimento, porque é a maior
+     conta do mês e ficaria estranho não estar ali.
+
+   O passado NÃO é reconstituído. O app guarda faturas fechadas, não um diário
+   de pagamentos por dia; desenhar ocorrências passadas a partir das regras de
+   hoje seria inventar um histórico que ninguém viveu. Mês passado mostra o que
+   ele tem: nada, e uma linha dizendo por quê. */
+
+const DIAS_SEM=['dom','seg','ter','qua','qui','sex','sáb'];
+const MES_LONGO=['janeiro','fevereiro','março','abril','maio','junho','julho',
+  'agosto','setembro','outubro','novembro','dezembro'];
+const mesesEntre=(a,b)=>(b.getFullYear()-a.getFullYear())*12+(b.getMonth()-a.getMonth());
+
+/* Um dia do mês pedido, respeitando meses curtos: quem vence dia 31 vence no
+   dia 28 de fevereiro, não some do mês. */
+function diaNoMes(ano,mes,dia){
+  const ultimo=new Date(ano,mes+1,0).getDate();
+  return new Date(ano,mes,Math.min(Math.max(dia,1),ultimo));
+}
+
+function contasDoMes(ano,mes){
+  const porDia={};
+  const põe=(data,item)=>{ const d=data.getDate(); (porDia[d]=porDia[d]||[]).push(item); };
+  const hoje=hojeD(), mesAtual=new Date(hoje.getFullYear(),hoje.getMonth(),1);
+  const esteMes=new Date(ano,mes,1);
+  const passado=esteMes<mesAtual;
+
+  if(!passado) S.lanc.forEach(l=>{
+    const dia=+l.venc||0; if(!(dia>0)) return;
+    const v=meuValor(l); if(!(v>0)) return;
+    const data=diaNoMes(ano,mes,dia);
+    const p0=proximoVenc(dia);                      // a próxima ocorrência real
+    const i=mesesEntre(p0,data);
+    if(i<0) return;                                 // antes da próxima: já passou
+    if(l.tipo==='parc'){
+      const faltam=+l.pRest||0;
+      if(i>=faltam) return;
+      põe(data,{l,valor:v,cat:l.cat,nome:l.nome,
+        selo: i===faltam-1?'última parcela':`parcela · faltam ${faltam-i}`,
+        ultima: i===faltam-1,
+        pago: i===0&&contaPaga(l,data)});
+    }else if(l.tipo==='unico'){
+      if(i>0) return;
+      põe(data,{l,valor:v,cat:l.cat,nome:l.nome,selo:'compra única',pago:contaPaga(l,data)});
+    }else{
+      põe(data,{l,valor:v,cat:l.cat,nome:l.nome,
+        selo: l.tipo==='fixo'?'todo mês':'todo mês, valor muda',
+        semFim:true, pago: i===0&&contaPaga(l,data)});
+    }
+  });
+
+  /* A fatura do cartão. Só a PRÓXIMA tem valor conhecido — as outras ainda vão
+     ser formadas, e escrever um número ali seria chute com cara de dado. */
+  if(!passado&&+S.diaVenc>0){
+    const data=diaNoMes(ano,mes,+S.diaVenc);
+    const aPagar=faturaAPagar();
+    const mesmaData=aPagar&&iso(aPagar.vence)===iso(data);
+    if(data>=new Date(hoje.getFullYear(),hoje.getMonth(),1))
+      põe(data,{fatura:true,cat:'divida',nome:'Fatura do cartão',
+        valor: mesmaData?aPagar.meu:0,
+        selo: mesmaData?'fechada, a pagar':'fecha dia '+(+S.diaFech||5),
+        pago: !!(aPagar&&aPagar.ref&&aPagar.ref.pago&&mesmaData)});
+  }
+  return {porDia,passado};
+}
+
+let calAno=0, calMes=0, calDia=null;
+function abrirCalendario(){
+  const h=hojeD();
+  if(!calAno){ calAno=h.getFullYear(); calMes=h.getMonth(); }
+  calDia=(calAno===h.getFullYear()&&calMes===h.getMonth())?h.getDate():null;
+  $('#cal').hidden=false;
+  document.body.classList.add('cal-aberto');
+  document.body.style.overflow='hidden';
+  desenharCalendario();
+  setTimeout(()=>{ const b=$('#calFechar'); if(b) b.focus(); },40);
+}
+function fecharCalendario(){
+  $('#cal').hidden=true;
+  document.body.classList.remove('cal-aberto');
+  document.body.style.overflow='';
+}
+function andarMes(n){
+  const d=new Date(calAno,calMes+n,1);
+  calAno=d.getFullYear(); calMes=d.getMonth(); calDia=null;
+  desenharCalendario();
+}
+function desenharCalendario(){
+  const cx=$('#cal'); if(!cx||cx.hidden) return;
+  const {porDia,passado}=contasDoMes(calAno,calMes);
+  const h=hojeD();
+  const ehHoje=d=>calAno===h.getFullYear()&&calMes===h.getMonth()&&d===h.getDate();
+  const nomeMes=MES_LONGO[calMes];
+  $('#calTit').textContent=nomeMes.charAt(0).toUpperCase()+nomeMes.slice(1)+' de '+calAno;
+
+  const primeiro=new Date(calAno,calMes,1).getDay();
+  const ultimo=new Date(calAno,calMes+1,0).getDate();
+  let html='<div class="cal-sem">'+DIAS_SEM.map(d=>`<span>${d}</span>`).join('')+'</div><div class="cal-dias">';
+  for(let i=0;i<primeiro;i++) html+='<span class="cal-vazio"></span>';
+  for(let d=1;d<=ultimo;d++){
+    const itens=porDia[d]||[];
+    const total=itens.reduce((s,x)=>s+(x.pago?0:x.valor),0);
+    const cores=[...new Set(itens.map(x=>CATS[x.cat]?CATS[x.cat].c:'var(--cout)'))].slice(0,4);
+    html+=`<button class="cal-d${itens.length?' tem':''}${ehHoje(d)?' hoje':''}${calDia===d?' sel':''}"
+      data-dia="${d}" aria-label="${d} de ${MES_LONGO[calMes]}${itens.length?', '+itens.length+' conta'+(itens.length>1?'s':''):''}">
+      <span class="n">${d}</span>
+      ${itens.length?`<span class="pontos">${cores.map(c=>`<i style="background:${c}"></i>`).join('')}</span>`:''}
+      ${total>0?`<span class="vl">${brlCurto(total)}</span>`:''}</button>`;
+  }
+  html+='</div>';
+  $('#calGrade').innerHTML=html;
+
+  $('#calGrade').querySelectorAll('[data-dia]').forEach(b=>{
+    const d=+b.dataset.dia;
+    /* Passar o mouse já mostra — é o pedido, e no desktop é o gesto natural.
+       No toque não existe "passar por cima", então o clique faz o mesmo. */
+    b.addEventListener('mouseenter',()=>{ calDia=d; pintarLado(porDia,passado); marcarSel(d); });
+    b.addEventListener('focus',()=>{ calDia=d; pintarLado(porDia,passado); marcarSel(d); });
+    b.onclick=()=>{ calDia=d; pintarLado(porDia,passado); marcarSel(d); };
+  });
+  pintarLado(porDia,passado);
+}
+function marcarSel(d){
+  $('#calGrade').querySelectorAll('[data-dia]').forEach(b=>
+    b.classList.toggle('sel',+b.dataset.dia===d));
+}
+/* O painel do lado tem dois estados: o resumo do mês (quando nenhum dia está
+   escolhido) e o dia escolhido. Nunca fica vazio — painel vazio parece defeito. */
+function pintarLado(porDia,passado){
+  const el=$('#calLado'); if(!el) return;
+  const dias=Object.keys(porDia).map(Number).sort((a,b)=>a-b);
+  const totalMes=dias.reduce((s,d)=>s+porDia[d].reduce((t,x)=>t+(x.pago?0:x.valor),0),0);
+
+  if(passado){
+    el.innerHTML=`<div class="cal-vaziolado"><b>Mês já fechado.</b>
+      O app guarda faturas fechadas, não um diário de pagamentos por dia — desenhar
+      aqui as contas de um mês passado a partir das regras de hoje seria inventar um
+      histórico que você não viveu. O que aconteceu está em
+      <button class="link" data-calir="analise:hist">Análises → Faturas</button>.</div>`;
+    ligarIrDoCal(el); return;
+  }
+  const itens=(calDia&&porDia[calDia])||null;
+  if(!itens||!itens.length){
+    el.innerHTML=`<div class="cal-resumo">
+        <div class="rot">Total do mês</div>
+        <div class="cal-total">${brl(totalMes)}</div>
+        <div class="cal-n">${dias.length?dias.length+' dia'+(dias.length>1?'s':'')+' com conta':'nenhuma conta com dia marcado'}</div>
+      </div>
+      ${dias.length?`<div class="cal-lista">${dias.map(d=>{
+        const t=porDia[d].reduce((s,x)=>s+(x.pago?0:x.valor),0);
+        return `<button class="cal-li" data-dia="${d}"><b>${String(d).padStart(2,'0')}</b>
+          <span>${porDia[d].map(x=>esc(x.nome)).join(' · ')}</span>
+          <em>${t>0?brl(t):'pago'}</em></button>`;}).join('')}</div>`
+      :`<p class="cal-vaziolado">Marque <b>Vence todo dia</b> num gasto e ele passa a aparecer aqui —
+         parcela sabe onde termina, conta fixa segue mês a mês.</p>`}`;
+    el.querySelectorAll('[data-dia]').forEach(b=>b.onclick=()=>{
+      calDia=+b.dataset.dia; pintarLado(porDia,passado); marcarSel(calDia);
+      const alvo=$('#calGrade').querySelector('[data-dia="'+calDia+'"]'); if(alvo) alvo.focus();
+    });
+    return;
+  }
+  const soma=itens.reduce((s,x)=>s+(x.pago?0:x.valor),0);
+  el.innerHTML=`<div class="cal-resumo">
+      <div class="rot">${String(calDia).padStart(2,'0')} de ${MES_LONGO[calMes]}</div>
+      <div class="cal-total">${brl(soma)}</div>
+      <div class="cal-n">${itens.length} lançamento${itens.length>1?'s':''} neste dia</div>
+    </div>
+    <div class="cal-itens">${itens.map(x=>`<div class="cal-item${x.pago?' pago':''}">
+      <span class="pt" style="background:${CATS[x.cat]?CATS[x.cat].c:'var(--cout)'}"></span>
+      <div class="cal-tx"><b>${esc(x.nome)}</b>
+        <small>${x.selo}${x.pago?' · <b>pago</b>':''}${x.semFim?' · sem data de fim':''}</small></div>
+      <div class="cal-vl">${x.valor>0?brl(x.valor):'—'}</div>
+      ${x.l?`<button class="link mini" data-caled="${x.l.id}">editar</button>`:''}
+    </div>`).join('')}</div>
+    <button class="btn sec mini" id="calVoltaMes" style="margin-top:12px">Ver o mês inteiro</button>`;
+  const vm=$('#calVoltaMes'); if(vm) vm.onclick=()=>{ calDia=null; pintarLado(porDia,passado); marcarSel(-1); };
+  el.querySelectorAll('[data-caled]').forEach(b=>b.onclick=()=>{ fecharCalendario(); abrirEdicao(b.dataset.caled); });
+}
+function ligarIrDoCal(el){
+  el.querySelectorAll('[data-calir]').forEach(b=>b.onclick=()=>{ fecharCalendario(); irPara(b.dataset.calir); });
+}
+
 function renderVenc(){
   const el=$('#blocoVenc'); const cs=contasAVencer(true);
   if(!cs.length){ el.innerHTML=''; escolhendoPago=null; return; }
@@ -2922,7 +3240,7 @@ function renderUltimos(c){
   el.innerHTML=its.map(l=>`<div class="item">
     <div class="ic" style="background:color-mix(in srgb,${CATS[l.cat].c} 13%,transparent);color:${CATS[l.cat].c}"
       >${icone(ICONE_CAT[l.cat]||'outros')}</div>
-    <div class="tx"><div class="nm">${esc(l.nome)}</div>
+    <div class="tx" data-editar="${l.id}" role="button" tabindex="0" title="Editar ${esc(l.nome)}"><div class="nm">${esc(l.nome)}</div>
       <div class="dt">${CATS[l.cat].n} · ${selo(l)}${l.fonte&&l.fonte!=='Conta'?' · '+esc(l.fonte):''}${+l.prox>0?' · <b style="color:var(--indigo)">próxima fatura</b>':''}</div></div>
     <div class="vl">${brl(l.valor)}${(+l.pai>0)?`<small>meu ${brl(meuValor(l))} · ${esc(nomePessoa(l.com))}</small>`:''}</div>
     <button class="rm" data-del="${l.id}" aria-label="Remover ${esc(l.nome)}">×</button>
@@ -3450,6 +3768,65 @@ function fecharRetro(){ $('#retro').hidden=true; document.body.style.overflow=''
    Eventos da v3
    ========================================================================== */
 $('#fab').onclick=()=>{ abrirFolha(); vibrar(10); };
+
+/* ---------- ligações do calendário e da folha de edição ---------- */
+$('#abrirCal').onclick=()=>{ abrirCalendario(); vibrar(8); };
+$('#calFechar').onclick=fecharCalendario;
+$('#calAnt').onclick=()=>andarMes(-1);
+$('#calProx').onclick=()=>andarMes(1);
+$('#calAnoAnt').onclick=()=>andarMes(-12);
+$('#calAnoProx').onclick=()=>andarMes(12);
+$('#calHoje').onclick=()=>{ const h=hojeD(); calAno=h.getFullYear(); calMes=h.getMonth(); calDia=h.getDate(); desenharCalendario(); };
+/* Esc fecha e as setas andam pelos meses — num calendário que ocupa a tela
+   inteira, mexer só com o mouse é caminho longo. `stopImmediatePropagation`
+   pelo mesmo motivo do menu de perfil: os dois ouvintes de Esc estão no mesmo
+   document, e um Esc aqui não pode fechar a tela de cartas junto. */
+document.addEventListener('keydown',e=>{
+  const cal=$('#cal'); if(!cal||cal.hidden) return;
+  if(e.key==='Escape'){ e.stopImmediatePropagation(); fecharCalendario(); return; }
+  if(e.key==='ArrowLeft'){ e.preventDefault(); andarMes(-1); }
+  if(e.key==='ArrowRight'){ e.preventDefault(); andarMes(1); }
+});
+
+$('#edFechar').onclick=fecharEdicao;
+$('#edBg').onclick=fecharEdicao;
+$('#edSalvar').onclick=salvarEdicao;
+$('#edApagar').onclick=()=>{
+  const l=S.lanc.find(x=>String(x.id)===String(edId)); if(!l) return;
+  const i=S.lanc.indexOf(l), nome=l.nome;
+  S.lanc.splice(i,1); fecharEdicao(); render(); salvar(); vibrar(10);
+  snack(nome+' apagado.','Desfazer',()=>{
+    S.lanc.splice(Math.min(i,S.lanc.length),0,l); render(); salvar(); toast('Restaurado');
+  });
+};
+$('#eTipo').onchange=()=>{ ajustarEdicao(); if($('#eTipo').value==='parc') $('#eParc').focus(); };
+['#eParc','#eVenc'].forEach(id=>{ const el=$(id); if(el) el.oninput=ajustarEdicao; });
+$('#ePagador').onchange=e=>{
+  if(e.target.value==='+'){
+    const p=pedirPessoa();
+    const l=S.lanc.find(x=>String(x.id)===String(edId))||{valor:+$('#eValor').value||0};
+    $('#ePagador').innerHTML=opcoesPagador(l);
+    $('#ePagador').value=p?'d:'+p.id:'eu';
+    if(p){ render(); salvar(); }
+  }
+  const v=+$('#eValor').value||0, escolha=$('#ePagador').value;
+  if(escolha==='eu') $('#ePai').value='';
+  else if(escolha.startsWith('t:')) $('#ePai').value=v||'';
+  else if(v&&!(+$('#ePai').value>0)) $('#ePai').value=(v/2).toFixed(2);
+  const lab=$('#eLabPai'), [,id]=String(escolha).split(':');
+  if(lab) lab.textContent=(escolha==='eu'||escolha==='+')?'Quanto a outra pessoa cobre':'Quanto '+nomePessoa(id)+' cobre';
+  ajustarEdicao();
+};
+document.addEventListener('click',e=>{
+  const b=e.target.closest('#eMeio [data-emeio]'); if(!b) return;
+  edMeio=b.dataset.emeio; pintarMeioEd(); vibrar(8);
+});
+/* Abrir a edição de qualquer lugar que mostre um lançamento. */
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-editar]'); if(!b) return;
+  e.preventDefault(); abrirEdicao(b.dataset.editar);
+});
+
 $('#sheetFechar').onclick=fecharFolha;
 $('#sheetBg').onclick=fecharFolha;
 document.addEventListener('keydown',e=>{

@@ -1753,12 +1753,13 @@ body.fundo-vivo .sheet,
 body.fundo-vivo .snack,
 body.fundo-vivo .toast,
 body.fundo-vivo .retro,
+body.fundo-vivo .cal,
 body.fundo-vivo .atualiza{
   background:#08131F;
   border:1px solid rgba(255,255,255,.13);
 }
 /* Tela cheia não leva moldura: a borda viraria um fio no canto do monitor. */
-body.fundo-vivo .retro{border:none}
+body.fundo-vivo .retro,body.fundo-vivo .cal{border:none}
 body.fundo-vivo .menu-perfil{box-shadow:0 26px 70px -18px rgba(0,0,0,.9)}
 
 @media (prefers-reduced-motion:reduce){
@@ -2882,3 +2883,77 @@ h1, .capa-tit, .portal-tit, .carta-tit, .auth-tit, .etapa h2{
 .viz3d-diz{margin:8px 0 0;font-size:13.5px;line-height:1.55;color:var(--txt-2);min-height:38px}
 .viz3d-diz b{color:var(--txt)}
 @media(max-width:430px){ #viz3dTela{height:260px} }
+
+/* ---------- calendário de contas ----------
+   Ocupa a tela quase inteira de propósito: num quadradinho não se vê o mês, e
+   ver o mês é o motivo de ele existir. Entra na lista das superfícies opacas lá
+   em cima — é uma camada sobre o conteúdo do app, e com a esfera ligada
+   `var(--bg)` é transparente. */
+.cal{position:fixed;inset:0;z-index:140;background:var(--card);color:var(--txt);
+  display:flex;flex-direction:column;padding:14px clamp(12px,3vw,28px) 18px;
+  overflow:hidden;animation:calAbre .22s var(--suave) both}
+@keyframes calAbre{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:none}}
+.cal-cab{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.cal-cab h2{margin:2px 0 0;font-size:clamp(20px,4.5vw,26px);letter-spacing:-.02em}
+.cal-nav{display:flex;align-items:center;gap:6px;margin-left:auto}
+.btn-nav{width:38px;height:38px;border-radius:var(--r-full);border:1px solid var(--sep);
+  background:var(--fill);color:var(--txt);font-size:17px;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;padding:0}
+.btn-nav:hover{background:var(--fill-2)}
+.cal-corpo{flex:1;min-height:0;display:flex;gap:clamp(12px,2vw,22px);margin-top:14px}
+.cal-grade{flex:1;min-width:0;display:flex;flex-direction:column}
+.cal-sem{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px}
+.cal-sem span{text-align:center;font-size:11px;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--txt-3)}
+.cal-dias{flex:1;min-height:0;display:grid;grid-template-columns:repeat(7,1fr);
+  grid-auto-rows:1fr;gap:4px}
+.cal-vazio{border-radius:var(--r-sm)}
+.cal-d{position:relative;border:1px solid transparent;background:var(--fill);
+  border-radius:var(--r-sm);cursor:pointer;padding:5px 4px 4px;min-height:52px;
+  display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--txt-2);
+  font:inherit;transition:background .14s,border-color .14s,transform .1s}
+.cal-d .n{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.cal-d.tem{background:var(--card-2);color:var(--txt)}
+.cal-d.hoje{border-color:var(--azul)}
+.cal-d.hoje .n{color:var(--azul-txt,var(--azul));font-weight:800}
+.cal-d.sel{background:var(--azul);border-color:transparent;transform:translateY(-1px)}
+.cal-d.sel,.cal-d.sel .n,.cal-d.sel .vl{color:var(--sobre-azul)}
+.cal-d .pontos{display:flex;gap:3px}
+.cal-d .pontos i{width:6px;height:6px;border-radius:var(--r-full);display:block}
+.cal-d .vl{font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--txt-3);
+  margin-top:auto;white-space:nowrap}
+.cal-lado{width:min(38%,340px);flex:0 0 auto;overflow:auto;padding-right:2px}
+.cal-resumo{background:var(--fill);border-radius:var(--r-sm);padding:14px;margin-bottom:12px}
+.cal-total{font-size:26px;font-weight:700;letter-spacing:-.025em;font-variant-numeric:tabular-nums}
+.cal-n{font-size:12.5px;color:var(--txt-3);margin-top:2px}
+.cal-lista{display:flex;flex-direction:column}
+.cal-li{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px 2px;
+  background:none;border:none;border-bottom:1px solid var(--sep);cursor:pointer;color:var(--txt-2);font:inherit}
+.cal-li b{font-variant-numeric:tabular-nums;font-size:14px;color:var(--txt)}
+.cal-li span{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-li em{font-style:normal;font-size:13px;font-variant-numeric:tabular-nums;color:var(--txt)}
+.cal-itens{display:flex;flex-direction:column}
+.cal-item{display:flex;align-items:center;gap:9px;padding:10px 0;border-bottom:1px solid var(--sep)}
+.cal-item.pago{opacity:.55}
+.cal-tx{flex:1;min-width:0}
+.cal-tx b{display:block;font-size:14.5px;letter-spacing:-.01em}
+.cal-tx small{font-size:12px;color:var(--txt-3)}
+.cal-vl{font-variant-numeric:tabular-nums;font-weight:600}
+.cal-vaziolado{font-size:13.5px;line-height:1.6;color:var(--txt-2);
+  background:var(--fill);border-radius:var(--r-sm);padding:14px}
+/* Com o calendário aberto, nada flutua por cima dele. O botão de tema da capa
+   vive em z-index 180 e caía justamente sobre as setas de navegação. */
+body.cal-aberto .tema-flutua{display:none}
+.cal-abre{margin:0 0 14px}
+.cal-abre .btn{display:inline-flex;align-items:center;gap:8px}
+.cal-abre .ico{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+
+/* Numa tela estreita o painel do lado vira rodapé: 38% de 390px não é coluna,
+   é uma tira onde nada cabe. */
+@media(max-width:760px){
+  .cal-corpo{flex-direction:column;overflow:auto}
+  .cal-lado{width:auto;flex:0 0 auto}
+  .cal-grade{flex:0 0 auto}
+  .cal-dias{grid-auto-rows:minmax(46px,auto)}
+}

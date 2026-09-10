@@ -754,6 +754,84 @@ acompanha a troca de tema — `aplicarTema()` chama `repintar()`. Por isso
 `aplicarTema()` roda na partida, antes do fim do arquivo, e um `let` lá embaixo
 estaria na zona morta temporal.
 
+## Calendário de contas, e o gasto que se edita (v10.3)
+
+Três buracos que andavam juntos: não dava para **editar** um lançamento (só
+apagar e refazer), não dava para ver **quando** cada conta cai, e "quantas
+parcelas faltam" era um número sem resposta — a pergunta real é *quando isso
+acaba*.
+
+### `contasDoMes(ano, mes)` — o futuro projetado do que já está lançado
+
+Cada tipo de gasto se projeta de um jeito, e é isso que o calendário mostra:
+
+* **parcelado** — sabe onde termina: `pRest` diz quantas faltam, `venc` diz o
+  dia, e a última ganha o rótulo de **última parcela** (a informação que a
+  pessoa quer: "quando é que essa moto acaba?").
+* **todo mês (fixo ou variável)** — não termina. Segue mês a mês, marcado como
+  **sem data de fim** — que é literalmente o "até eu dizer que não quero mais"
+  de quem não sabe quantas mensalidades de faculdade ainda vêm.
+* **compra única** — aparece uma vez, no vencimento dela.
+* **a fatura do cartão** — todo mês no `diaVenc`, porque é a maior conta do mês.
+  **Só a próxima leva valor**: as outras ainda vão ser formadas, e escrever um
+  número ali seria chute com cara de dado.
+
+**O passado não é reconstituído**, e isso é decisão. O app guarda faturas
+fechadas, não um diário de pagamentos por dia; desenhar ocorrências passadas a
+partir das regras de HOJE inventaria um histórico que ninguém viveu. Mês
+anterior mostra uma linha dizendo isso, com o caminho para *Análises → Faturas*.
+
+`diaNoMes()` resolve os meses curtos: quem vence dia 31 vence dia 28 em
+fevereiro, não some do mês.
+
+### A tela
+
+Ocupa a tela quase inteira de propósito — num quadradinho não se vê o mês, e ver
+o mês é o motivo de existir. **Passar o mouse por cima do dia já mostra as
+contas** (`mouseenter` e `focus`); no toque não existe "passar por cima", então
+o clique faz o mesmo, e o `focus` faz o teclado andar. `‹ ›` andam mês a mês,
+`« »` ano a ano, as setas do teclado também, e `Esc` fecha com
+`stopImmediatePropagation` — pelo mesmo motivo do menu de perfil, os dois
+ouvintes de Esc estão no mesmo `document`.
+
+Duas armadilhas de camada, as duas já conhecidas do projeto:
+
+1. **`.cal` entrou na lista das superfícies opacas** de `styles.css`. É uma tela
+   cheia sobre o conteúdo do app; sem isso, com a esfera ligada, repetiria o
+   defeito da `.retro`.
+2. **`body.cal-aberto` esconde a `.tema-flutua`**, que vive em `z-index:180` e
+   caía exatamente sobre as setas de navegação.
+
+O painel do lado nunca fica vazio: sem dia escolhido mostra o resumo do mês e a
+lista de dias; painel vazio parece defeito. Abaixo de 760px ele vira rodapé —
+38% de 390px não é coluna, é uma tira onde nada cabe.
+
+### Editar um lançamento
+
+A tabela já deixava mudar valor, categoria, quem paga e a forma de pagamento
+direto na linha, que é o certo para esses. O resto — nome errado, virou
+parcelado, faltam 8 e não 10, o dia de vencimento — só apagando e lançando de
+novo, o que ainda destruía o histórico que `palpiteDoNome()` usa para aprender.
+
+`abrirEdicao(id)` abre uma folha irmã da de novo gasto, com os mesmos rótulos de
+propósito: quem aprendeu a lançar não precisa aprender a editar. Ela se abre da
+tabela, da lista de *Últimos lançamentos* e de dentro do calendário. Dois
+cuidados que o código guarda:
+
+* **Mexer na categoria à mão grava `catManual`** — é a mesma marca do select da
+  tabela, e é ela que ensina o app.
+* **Trocar o dia de vencimento apaga a marca de "já paguei"**: ela era sobre a
+  data ANTIGA, e mantê-la esconderia a conta pelo mês inteiro.
+
+### "Faltam 8 parcelas" virou "termina em abril de 2027"
+
+`fraseDoPrazo(tipo, faltam, dia)` é a mesma frase nos dois formulários, e ela
+muda de assunto conforme o tipo: no parcelado diz o mês da última; no *todo mês*
+diz o contrário — que **não** termina. **`#lVenc` saiu da gaveta** e passou a
+ficar ao lado das parcelas, aparecendo para tudo que se repete: é o par
+`pRest` + `venc` que o calendário usa para espalhar a conta pelos meses, e com o
+dia escondido a parcela não tinha onde cair.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem
