@@ -4254,10 +4254,20 @@ function fecharMenu(devolverFoco){
 }
 $('#perfilBtn').onclick=()=>{ menuAberto?fecharMenu(true):abrirMenu($('#perfilBtn')); };
 $('#portalPerfil').onclick=()=>{ menuAberto?fecharMenu(true):abrirMenu($('#portalPerfil')); };
+/* "Veio de dentro daqui?" perguntado ao CAMINHO do evento, não ao alvo.
+
+   `composedPath()` é calculado no momento do disparo e não muda depois — então
+   ele responde certo mesmo que algum ouvinte anterior tenha tirado o alvo do
+   documento no meio da propagação, que é exatamente o que acontecia com o ícone
+   do perfil. `closest` fica como reserva para navegador sem composedPath. */
+function cliqueVeioDe(e,sel){
+  const caminho=(typeof e.composedPath==='function')?e.composedPath():null;
+  if(caminho) for(const n of caminho){ if(n&&n.nodeType===1&&n.matches&&n.matches(sel)) return true; }
+  return !!(e.target&&e.target.closest&&e.target.closest(sel));
+}
 document.addEventListener('click',e=>{
   if(!menuAberto) return;
-  if(e.target.closest('#menuPerfil')||e.target.closest('#perfilBtn')||
-     e.target.closest('#portalPerfil')) return;
+  if(cliqueVeioDe(e,'#menuPerfil,#perfilBtn,#portalPerfil')) return;
   fecharMenu(false);
 });
 document.addEventListener('keydown',e=>{
@@ -4770,18 +4780,33 @@ function pintarAvatares(){
   const chave=avatarEscolhido();
   const svg=chave?avatarSVG(chave):'';
   const botao=svg||ICONE_PESSOA;
+  /* `pintarSeMudou` existe por causa de um defeito que custou caro achar: o
+     botão do perfil abria o menu e ele fechava no mesmo clique.
+
+     Trocar o innerHTML DESTRÓI o <svg> de dentro do botão. E `pintarAvatares()`
+     roda dentro de `abrirMenu()` — então o nó que a pessoa acabou de clicar era
+     apagado no meio da propagação do evento. Quando o clique chegava ao ouvinte
+     de "clicou fora, fecha o menu", `e.target.closest('#perfilBtn')` já dava
+     null: o alvo não estava mais no documento. O menu abria e fechava em
+     sequência, e o botão parecia morto.
+
+     Clicar na BORDA do botão funcionava (ali o alvo é o próprio botão, que não
+     é substituído) — foi o que separou este defeito de "o botão não recebe
+     clique". Não reescrever o que já está certo resolve na origem, e ainda
+     evita repintar o cabeçalho a cada render. */
+  const pintarSeMudou=(el,html)=>{ if(el&&el.innerHTML!==html) el.innerHTML=html; };
   const pb=$('#perfilBtn');
-  if(pb){ pb.innerHTML=botao; pb.classList.toggle('com-bicho',!!chave); }
+  if(pb){ pintarSeMudou(pb,botao); pb.classList.toggle('com-bicho',!!chave); }
   const pp=$('#portalPerfil');
   if(pp){
-    pp.innerHTML='<span class="tecla-face">'+botao+'</span>';
+    pintarSeMudou(pp,'<span class="tecla-face">'+botao+'</span>');
     pp.classList.toggle('com-bicho',!!chave);
   }
   const u=(window.Auth&&Auth.usuario())||null;
   const inicial=((Auth&&Auth.primeiroNome())||(u&&u.email)||'?').charAt(0);
   [['#mpAvatar',true],['#contaAvatar',true]].forEach(([id])=>{
     const el=$(id); if(!el) return;
-    el.innerHTML=svg||esc(inicial);
+    pintarSeMudou(el,svg||esc(inicial));
     el.classList.toggle('com-bicho',!!chave);
   });
   document.querySelectorAll('#gradeAvatares [data-av]').forEach(b=>{

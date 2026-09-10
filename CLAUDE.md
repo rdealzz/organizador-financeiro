@@ -665,6 +665,40 @@ a data da última aplicação. Aplicar grava em `S.tetos`, que é o mesmo campo 
 teto travado à mão: não existe um segundo lugar de verdade sobre teto, e
 *Voltar aos tetos sugeridos* continua limpando tudo.
 
+## O botão do perfil abria e fechava no mesmo clique (v10.1)
+
+Clicar no rosto do cabeçalho não abria nada. Não era CSS, não era `z-index`, e o
+botão recebia o clique normalmente — a prova que separou as hipóteses:
+**clicar na borda do botão funcionava, clicar no ícone não.**
+
+A cadeia: `abrirMenu()` chama `pintarMenuPerfil()`, que chama
+`pintarAvatares()`, que fazia `pb.innerHTML = botao`. Trocar o `innerHTML`
+**destrói o `<svg>` de dentro do botão** — e o `<path>` destruído era justamente
+o alvo do clique em curso. Quando o evento subia até o ouvinte de "clicou fora,
+fecha o menu", `e.target.closest('#perfilBtn')` já devolvia `null`: o alvo não
+estava mais no documento. O menu abria e fechava na mesma propagação, e o botão
+parecia morto. Na borda o alvo é o próprio `<button>`, que não é substituído —
+por isso ali funcionava.
+
+Corrigido nos dois níveis, porque cada um resolve uma coisa:
+
+1. **`pintarAvatares()` só escreve quando o desenho muda** (`pintarSeMudou`).
+   Isso mata a causa e ainda evita repintar o cabeçalho a cada render.
+2. **O ouvinte de "clicou fora" pergunta ao CAMINHO do evento**, não ao alvo:
+   `cliqueVeioDe(e, sel)` usa `composedPath()`, que é calculado no disparo e não
+   muda depois — responde certo mesmo que outro ouvinte tire o alvo do documento
+   no meio do caminho. `closest` fica como reserva.
+
+**A lição que vale para o resto do arquivo:** nenhum ouvinte de clique pode
+reescrever o `innerHTML` do elemento que foi clicado enquanto o evento ainda
+está subindo. Se precisar repintar, ou compare antes de escrever, ou deixe para
+o próximo quadro.
+
+Verificado com sessão real (conta de teste criada pelas APIs REST e **apagada
+depois**, como manda a nota acima): clique no ícone abre, segundo clique fecha,
+clique fora fecha, *Editar perfil* leva para a aba da conta, e o mesmo rosto na
+tela de cartas (`#portalPerfil`, que tinha o mesmo defeito) também abre.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem
