@@ -2840,3 +2840,32 @@ h1, .capa-tit, .portal-tit, .carta-tit, .auth-tit, .etapa h2{
 .nova-pessoa{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}
 .nova-pessoa input{flex:1 1 180px;min-width:0}
 .nova-pessoa .btn{flex:0 0 auto}
+
+/* ---------- orçamento adaptativo ----------
+   Um bloco só, dentro do painel de tetos. Nada aqui flutua sobre conteúdo, então
+   não entra na lista das superfícies opacas — mas também não usa var(--bg), que
+   com a esfera ligada é transparente. */
+.orca{margin:16px 0 4px;padding:var(--e4);border-radius:var(--r-sm);
+  background:var(--fill);border:1px solid var(--sep)}
+.orca-cab{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.orca-selo{font-size:12px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;
+  color:var(--sobre-azul);background:var(--azul);padding:3px 9px;border-radius:var(--r-full)}
+.orca-base{font-size:12px;color:var(--txt-3)}
+.orca-perfil{font-size:14.5px;line-height:1.5;color:var(--txt-2);margin-bottom:12px}
+/* Só o NOME do perfil vira linha própria. Sem o `>b:first-child`, qualquer
+   negrito da frase ("33% do seu gasto é carro") quebrava linha no meio da
+   sentença e o texto virava uma escada. */
+.orca-perfil>b:first-child{display:block;color:var(--txt);font-size:16px;letter-spacing:-.01em;margin-bottom:2px}
+.orca-lista{display:flex;flex-direction:column;gap:2px}
+.orca-l,.orca-p1,.orca-sobra{padding:12px 0;border-top:1px solid var(--sep)}
+.orca-t{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:15px;letter-spacing:-.01em}
+.orca-de{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--txt-3);font-size:14px}
+.orca-de i{font-style:normal;padding:0 2px}
+.orca-p{margin:6px 0 0;font-size:13.5px;line-height:1.55;color:var(--txt-2)}
+.orca-acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.orca-fim{margin-top:14px;padding-top:14px;border-top:1px solid var(--sep)}
+.orca-vazio{margin:0;font-size:14px;line-height:1.55;color:var(--txt-2)}
+.orca-prev .orca-p1:first-child{border-top:none}
+.orca-sobra{border-top:1px solid var(--sep);margin-top:4px}
+.btn.mini{padding:7px 12px;font-size:13px}
+@media(max-width:430px){ .orca-de{margin-left:0;width:100%} }

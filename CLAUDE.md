@@ -595,6 +595,76 @@ O que a versão nova conserta sozinha é o FUTURO: como o palpite deixou de herd
 de si mesmo, o próximo "agua" já nasce em Comida — a linha antiga é que precisa
 do toque no select.
 
+## O teto deixou de ser regra genérica (v10)
+
+Até aqui o app dividia o disponível pelos pesos fixos de `CATS` — os mesmos
+para todo mundo. Quem quase não faz mercado mas vive dentro do carro recebia
+R$ 700 de teto de mercado e um teto de transporte que estourava todo mês. A
+distribuição estava certa na média e errada em cada pessoa.
+
+**`orcamentoAdaptativo(c)`** aprende do histórico de faturas fechadas e propõe
+uma distribuição que reflete o gasto real. Três regras governam o motor:
+
+1. **Nunca aplica sozinho.** Toda sugestão aparece com o motivo escrito
+   (`motivoDoTeto`) e um botão. Mexer no teto de alguém sem explicar é o mesmo
+   que errar.
+2. **Aprende de faturas FECHADAS**, nunca do ciclo aberto. O ciclo em formação
+   está pela metade; entrar na média puxaria todo teto para baixo no dia 6 e
+   para cima no dia 28. O ciclo aberto tem outro papel — a previsão.
+3. **Muda devagar.** `mediaPonderada()` cruza quatro janelas — 1, 3, 6 e 12
+   ciclos, com pesos .40/.30/.20/.10. Uma janela que o histórico ainda não cobre
+   inteira vale proporcionalmente menos (`cobertura`), então com três faturas a
+   janela de 12 meses opina pouco em vez de opinar com dados que não existem.
+
+Nada disso fala com serviço nenhum: é estatística do próprio histórico rodando
+no aparelho, como manda a decisão de projeto do `auth.js`.
+
+### As decisões que custaram teste
+
+* **O teto cobre o mês apertado, não a média.** Um teto na média estoura em
+  metade dos meses por definição. `picoTipico()` devolve o **segundo** maior dos
+  últimos seis — o maior é o acidente (a revisão dos 40 mil km), o segundo é o
+  mês apertado que se repete. O teto é `max(média × folga, pico típico)`, e a
+  folga vem da `volatilidade()`: 1,12 para categoria estável, 1,4 para a que
+  oscila.
+* **Arredondar é pra cima, somar não pode ser.** `arredondaTeto()` sobe para o
+  próximo múltiplo (R$ 250, não R$ 247,80) — mas somados, os arredondamentos
+  passavam do disponível, e um painel que distribui mais do que existe não vale
+  nada. O excesso volta tirado **sempre do maior teto**: R$ 25 a menos em
+  R$ 1.050 não muda a vida de ninguém; os mesmos R$ 25 tirados de R$ 80 zeram a
+  categoria.
+* **Categoria sem uso recebe piso, não zero.** Um teto zero faria o primeiro
+  gasto avulso nascer estourado.
+* **Quando o padrão não cabe na renda**, o corte sai primeiro de lazer, comida
+  fora e assinatura — o que a própria pessoa classifica como cortável — e só
+  depois, se ainda faltar, de todo mundo. Cortar proporcionalmente logo de cara
+  tiraria do mercado tanto quanto do rolê.
+* **A sobra tem dono.** O que sobra de categorias ociosas vira um botão que
+  aumenta a meta de guardar (`S.metaVal`), com o número que está na tela.
+  Dinheiro sem dono vira gasto sem querer.
+
+### Perfil, previsão e o estado novo
+
+`perfilFinanceiro()` lê a proporção real dos últimos seis ciclos e a taxa do que
+sobra. A ordem de `PERFIS` importa — a primeira regra que casa ganha, e as
+específicas (viajante, automotivo) vêm antes das genéricas; `equilibrado` é o
+fim de linha que sempre casa. Viajante sai dos NOMES dos itens arquivados
+(`TERMOS_VIAGEM`), não da categoria: viagem mora dentro de lazer.
+
+`previsoes(c)` olha o ritmo do ciclo aberto e diz em quantos dias a categoria
+bate no teto — enquanto ainda dá para decidir. Exige 5 dias corridos de ciclo
+(ritmo de três dias é ruído) e aparece em dois lugares: no painel de tetos, com
+botão de ajuste, e como insight na tela **Hoje**. O aviso de "passou do teto",
+que já existia, é sobre dinheiro que saiu; este é sobre dinheiro que dá para
+segurar, e por isso vem antes na lista.
+
+Dois campos novos no estado, ambos viajando na conta: **`S.orcaOculto`** guarda
+o NÚMERO DE CICLOS em que a pessoa dispensou as sugestões — assim elas voltam
+sozinhas quando a próxima fatura fechar, sem precisar de data; e **`S.orcaEm`**,
+a data da última aplicação. Aplicar grava em `S.tetos`, que é o mesmo campo do
+teto travado à mão: não existe um segundo lugar de verdade sobre teto, e
+*Voltar aos tetos sugeridos* continua limpando tudo.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

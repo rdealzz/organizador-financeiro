@@ -184,6 +184,7 @@ const ALERTAS_PADRAO={
    ÚLTIMO recurso: só vale quando não há escolha nenhuma. */
 let S={versao:2,tema:'auto',avatar:'',salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:12,ultimoFech:null,hist:[],
        tetos:{},lanc:SEED,div:[],obj:[],pessoas:[],meses:6,jaTem:0,
+       orcaOculto:null,orcaEm:null,
        alertas:{teto:true,gasto:true,meta:true,fechamento:true,vencimento:true,contas:true,variavel:true,parcela:false},
        aTetoPct:85,aDiasFech:3,aDiasVenc:2,notifLog:{},_ultimoSalvo:0};
 let prev=[], avisoCiclo='';
@@ -776,6 +777,225 @@ function renderHist(){
   dc.querySelectorAll('[data-recebi]').forEach(b=>b.onclick=()=>alternarRecebido(x,b.dataset.recebi));
 }
 
+/* ══════════════════════ ORÇAMENTO ADAPTATIVO ══════════════════════
+
+   O teto de cada categoria deixou de ser uma regra genérica. Antes o app
+   dividia o disponível pelos pesos fixos de CATS — os mesmos para todo mundo —
+   e quem quase não faz mercado mas vive dentro do carro recebia R$ 700 de teto
+   de mercado e um teto de transporte que estourava todo mês. A distribuição
+   estava certa na média e errada em cada pessoa.
+
+   Agora o app APRENDE do histórico de faturas fechadas e propõe uma
+   distribuição que reflete o gasto real. Três regras governam isto:
+
+   1. **Nunca aplica sozinho.** Toda sugestão aparece com o motivo escrito e um
+      botão. Mexer no teto de alguém sem explicar é o mesmo que errar.
+   2. **Aprende de faturas FECHADAS**, não do ciclo aberto. O ciclo em formação
+      está pela metade; entrar na média puxaria todo teto para baixo no dia 6 e
+      para cima no dia 28. O ciclo aberto tem outro papel — a previsão, lá
+      embaixo.
+   3. **Muda devagar.** A média é ponderada entre quatro janelas (1, 3, 6 e 12
+      ciclos). Um mês fora da curva mexe pouco; um hábito novo que se manteve
+      por três meses mexe de verdade.
+
+   Sem inteligência remota nenhuma: é estatística do próprio histórico, rodando
+   no aparelho. O app não fala com serviço de terceiro — a decisão de projeto
+   do `auth.js` vale aqui também. */
+
+/* Quatro janelas, quatro pesos. O recente pesa mais, mas nunca sozinho: sem as
+   janelas longas, um mês atípico (a viagem de julho, o pneu que estourou)
+   viraria o novo normal do orçamento. */
+const JANELAS=[{n:1,peso:.40},{n:3,peso:.30},{n:6,peso:.20},{n:12,peso:.10}];
+const MIN_CICLOS=2;                 // abaixo disto o app diz que ainda está aprendendo
+
+const mediaDe=(hist,k,n)=>{
+  const usa=hist.slice(0,n); if(!usa.length) return null;
+  return usa.reduce((s,x)=>s+(+x.porCat[k]||0),0)/usa.length;
+};
+/* Uma janela que o histórico ainda não cobre inteira vale proporcionalmente
+   menos — com três faturas na conta, a janela de 12 meses opina pouco em vez de
+   opinar com dados que não existem. */
+function mediaPonderada(hist,k){
+  let soma=0,peso=0;
+  JANELAS.forEach(j=>{
+    const m=mediaDe(hist,k,j.n); if(m===null) return;
+    const cobertura=Math.min(hist.length,j.n)/j.n;
+    soma+=m*j.peso*cobertura; peso+=j.peso*cobertura;
+  });
+  return peso?soma/peso:0;
+}
+/* O "mês ruim típico": o segundo maior dos últimos seis, não o maior. O maior é
+   o acidente (a revisão dos 40 mil km); o segundo maior é o mês apertado que se
+   repete, e é ele que o teto precisa aguentar sem virar alarme falso. */
+function picoTipico(hist,k,n){
+  const vs=hist.slice(0,n).map(x=>+x.porCat[k]||0).sort((a,b)=>b-a);
+  if(!vs.length) return 0;
+  return vs.length>=3?vs[1]:vs[0];
+}
+/* Quanto o gasto pula de um mês para o outro. Categoria estável (assinatura)
+   precisa de pouca folga; categoria que oscila (carro) precisa de mais, senão o
+   teto vive estourando por um mês que era previsível. */
+function volatilidade(hist,k,n){
+  const vs=hist.slice(0,n).map(x=>+x.porCat[k]||0);
+  if(vs.length<2) return .5;
+  const m=vs.reduce((s,v)=>s+v,0)/vs.length; if(m<=0) return 0;
+  const dp=Math.sqrt(vs.reduce((s,v)=>s+(v-m)*(v-m),0)/vs.length);
+  return dp/m;
+}
+const folgaDe=v=> v<.25?1.12 : v<.6?1.25 : 1.4;
+/* Teto com cara de teto: R$ 250, não R$ 247,80. Um número redondo é uma
+   decisão; um número quebrado parece resultado de conta e ninguém confia. */
+const arredondaTeto=v=> v<=0?0 : v<200?Math.ceil(v/10)*10 : v<1000?Math.ceil(v/25)*25 : Math.ceil(v/50)*50;
+
+/* O que o app propõe para cada categoria, com o porquê em texto.
+
+   Devolve `null` enquanto não houver histórico suficiente — e quem chama mostra
+   "ainda estou aprendendo" em vez de inventar um número com uma fatura só. */
+function orcamentoAdaptativo(c){
+  const hist=(S.hist||[]).filter(x=>x&&x.porCat);
+  const n=hist.length;
+  if(n<MIN_CICLOS||!(c.disponivel>0)) return {aprendendo:true,ciclos:n,faltam:Math.max(MIN_CICLOS-n,0)};
+
+  const jan=Math.min(n,6);
+  const cats=Object.keys(CATS).map(k=>{
+    const media=mediaPonderada(hist,k);
+    const pico=picoTipico(hist,k,jan);
+    const vol=volatilidade(hist,k,jan);
+    const bruto=Math.max(media*folgaDe(vol),pico);
+    return {k,nome:CATS[k].n,cor:CATS[k].c,media,pico,vol,bruto,
+            m1:mediaDe(hist,k,1),m3:mediaDe(hist,k,3),m6:mediaDe(hist,k,6),m12:mediaDe(hist,k,12),
+            atual:c.tetos[k]||0, fixado:+S.tetos[k]>0};
+  });
+
+  /* Categoria que a pessoa não usa não recebe teto de enfeite: recebe um piso
+     pequeno, só pra um gasto avulso não nascer estourado. O dinheiro que sobra
+     dali é o ponto inteiro desta tela. */
+  const piso=Math.max(c.disponivel*.02,30);
+  cats.forEach(x=>{ x.bruto=x.media>0?Math.max(x.bruto,piso):Math.min(piso,60); });
+
+  const somaBruta=cats.reduce((s,x)=>s+x.bruto,0);
+  let sobra=c.disponivel-somaBruta, apertado=false;
+  if(sobra<0){
+    /* O padrão de gasto pede mais do que cabe depois de guardar. O corte sai
+       primeiro do que a própria pessoa classifica como cortável — lazer, comida
+       fora, assinatura — e só depois, se ainda faltar, de todo mundo. Cortar
+       proporcionalmente logo de cara tiraria do mercado tanto quanto do rolê. */
+    apertado=true;
+    const cortavel=['lazer','comida','assinatura'];
+    let falta=-sobra;
+    const podeCortar=cats.filter(x=>cortavel.includes(x.k)&&x.bruto>piso);
+    const folgaCortavel=podeCortar.reduce((s,x)=>s+(x.bruto-piso),0);
+    if(folgaCortavel>0){
+      const tira=Math.min(falta,folgaCortavel);
+      podeCortar.forEach(x=>{ x.bruto-=tira*((x.bruto-piso)/folgaCortavel); });
+      falta-=tira;
+    }
+    if(falta>0.5){
+      const total=cats.reduce((s,x)=>s+x.bruto,0)||1;
+      cats.forEach(x=>{ x.bruto=Math.max(x.bruto-falta*(x.bruto/total),0); });
+    }
+    sobra=0;
+  }
+
+  cats.forEach(x=>{ x.sugerido=arredondaTeto(x.bruto); });
+  /* O arredondamento é pra cima — o que é certo num teto e errado numa soma.
+     Somados, os arredondamentos podem passar do disponível, e um painel que
+     distribui mais do que existe não vale nada. Então o excesso volta, tirado
+     sempre do maior teto: R$ 25 a menos em R$ 1.050 não muda a vida de
+     ninguém; os mesmos R$ 25 tirados de R$ 80 zeram a categoria. */
+  const passoDe=v=> v<200?10 : v<1000?25 : 50;
+  let guarda=0;
+  while(cats.reduce((s,x)=>s+x.sugerido,0)>c.disponivel+.5&&guarda++<600){
+    const alvo=cats.slice().sort((a,b)=>b.sugerido-a.sugerido)[0];
+    if(!alvo||alvo.sugerido<=0) break;
+    alvo.sugerido=Math.max(alvo.sugerido-passoDe(alvo.sugerido),0);
+  }
+  cats.forEach(x=>{
+    x.delta=x.sugerido-x.atual;
+    x.usoPct=x.atual>0?x.media/x.atual:null;
+    x.motivo=motivoDoTeto(x,n,jan);
+  });
+  const somaFinal=cats.reduce((s,x)=>s+x.sugerido,0);
+  sobra=Math.max(c.disponivel-somaFinal,0);
+
+  const mudam=cats.filter(x=>Math.abs(x.delta)>=Math.max(c.disponivel*.01,20))
+                  .sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
+  return {aprendendo:false,ciclos:n,cats,mudam,sobra,apertado,
+          perfil:perfilFinanceiro(hist,c),
+          soma:somaFinal};
+}
+
+/* A frase que acompanha cada sugestão. Nenhum teto muda sem ela: a pessoa tem
+   que conseguir discordar, e pra discordar precisa saber do quê. */
+function motivoDoTeto(x,n,jan){
+  const ciclos=Math.min(n,jan);
+  const base=`Média de <b>${brl(x.media)}</b> por mês nas últimas ${ciclos} faturas`;
+  if(x.media<=0)
+    return `Você nunca lançou nada aqui. O teto fica no mínimo, só pra um gasto avulso não nascer estourado.`;
+  if(x.usoPct!==null&&x.usoPct<.5&&x.delta<0)
+    return `${base} — <b>${pct(x.usoPct)}</b> do teto de hoje (${brl(x.atual)}). Sobra ${brl(x.atual-x.sugerido)} pra quem precisa mais.`;
+  if(x.delta>0)
+    return `${base}, e seu mês apertado típico chega a <b>${brl(x.pico)}</b>. O teto de hoje (${brl(x.atual)}) estoura sozinho.`;
+  return `${base}. O teto sugerido cobre seu mês apertado típico (${brl(x.pico)}) com folga.`;
+}
+
+/* ---------- o perfil sai dos números, não de um questionário ----------
+
+   Ninguém se descreve bem: quem gasta 40% em restaurante se considera econômico
+   porque não viaja. As regras abaixo leem a proporção real dos últimos ciclos e
+   a taxa do que sobra. A ordem importa — a primeira que casa ganha, e as mais
+   específicas (viajante, automotivo) vêm antes das genéricas. */
+const PERFIS=[
+  {id:'viajante', nome:'Perfil Viajante', teste:(p,g,e)=>e.viagem>=.12,
+   diz:p=>`Viagem, hotel e passagem aparecem em boa parte do seu lazer — o orçamento respeita isso em vez de tratar como excesso.`},
+  {id:'automotivo',nome:'Perfil Automotivo', teste:p=>p.transporte>=.28,
+   diz:p=>`<b>${pct(p.transporte)}</b> do seu gasto é carro: combustível, manutenção, estacionamento. É a sua maior conta, e o teto acompanha.`},
+  {id:'familia',  nome:'Perfil Família', teste:p=>(p.mercado+p.casa)>=.5,
+   diz:p=>`Mercado e casa somam <b>${pct(p.mercado+p.casa)}</b> do que você gasta — orçamento de quem sustenta uma casa, não de quem só se sustenta.`},
+  {id:'social',   nome:'Perfil Social', teste:p=>(p.comida+p.lazer)>=.33,
+   diz:p=>`Comida fora e lazer somam <b>${pct(p.comida+p.lazer)}</b>. Não é desperdício — é onde seu dinheiro te dá prazer, e o app conta com isso.`},
+  {id:'investidor',nome:'Perfil Investidor', teste:(p,g)=>g.taxa>=.25,
+   diz:(p,g)=>`Você guarda <b>${pct(g.taxa)}</b> do que ganha. O orçamento trabalha pra proteger essa taxa, não pra gastá-la.`},
+  {id:'economico',nome:'Perfil Econômico', teste:(p,g)=>g.usoRenda<=.6,
+   diz:(p,g)=>`Seus gastos ocupam <b>${pct(g.usoRenda)}</b> da renda. Sobra folga real todo mês — a pergunta deixou de ser "cabe?" e passou a ser "pra onde vai?".`},
+  {id:'equilibrado',nome:'Perfil Equilibrado', teste:()=>true,
+   diz:()=>`Nenhuma categoria domina seus gastos. O orçamento aqui é de afinação fina, não de corte.`}
+];
+const TERMOS_VIAGEM=/viagem|hotel|pousada|airbnb|passagem|aereo|milhas|excursao|resort/;
+function perfilFinanceiro(hist,c){
+  const usa=hist.slice(0,6);
+  const tot=usa.reduce((s,x)=>s+(+x.meu||0),0)||1;
+  const p={}; Object.keys(CATS).forEach(k=>{ p[k]=usa.reduce((s,x)=>s+(+x.porCat[k]||0),0)/tot; });
+  const mediaMes=tot/usa.length;
+  const g={taxa:c.renda>0?Math.max(c.renda-mediaMes,0)/c.renda:0, usoRenda:c.renda>0?mediaMes/c.renda:1};
+  const viagem=usa.flatMap(x=>x.itens||[]).filter(l=>TERMOS_VIAGEM.test(semAcento(l.nome||'')))
+                  .reduce((s,l)=>s+Math.max(l.valor-(+l.pai||0),0),0)/(tot||1);
+  const e={viagem};
+  const achado=PERFIS.find(x=>x.teste(p,g,e))||PERFIS[PERFIS.length-1];
+  return {id:achado.id,nome:achado.nome,frase:achado.diz(p,g,e),partes:p,geral:g};
+}
+
+/* ---------- previsão: avisar ANTES de estourar ----------
+
+   O aviso que chega quando o teto já estourou não serve pra nada: o dinheiro
+   saiu. Aqui o app olha o RITMO do ciclo aberto e diz em quantos dias a
+   categoria bate no teto, enquanto ainda dá pra decidir. */
+function previsoes(c){
+  const dias=diasRestantes();
+  const decorridos=Math.max(Math.round((hojeD()-ultimoFechPassado())/86400000),1);
+  if(decorridos<5||dias<=0) return [];      // ritmo de três dias não é ritmo, é ruído
+  return Object.keys(CATS).map(k=>{
+    const g=c.porCat[k]||0, t=c.tetos[k]||0;
+    if(!(t>0)||!(g>0)) return null;
+    const ritmo=g/decorridos, proj=ritmo*(decorridos+dias);
+    if(proj<=t*1.02) return null;
+    const faltam=Math.max(Math.ceil((t-g)/ritmo),0);
+    if(faltam>dias) return null;
+    return {k,nome:CATS[k].n,cor:CATS[k].c,gasto:g,teto:t,proj,faltam,
+            usoPct:g/t,estouro:proj-t};
+  }).filter(Boolean).sort((a,b)=>a.faltam-b.faltam);
+}
+
 function renderTetos(c){
   $('#cardsTeto').innerHTML=`
    <div class="card"><div class="l">Disponível pra gastar</div><div class="v">${brl(c.disponivel)}</div><div class="n">renda menos o que guarda</div></div>
@@ -801,9 +1021,124 @@ function renderTetos(c){
     if(v>0) S.tetos[k]=v; else delete S.tetos[k];
     render(); salvar();
   });
+  renderOrcaIA(c);
   $('#notaTeto').innerHTML = (c.gasto>c.disponivel&&c.renda>0)
     ? `<div class="nota aviso">Seus gastos passam em ${brl(c.gasto-c.disponivel)} do disponível depois de guardar. Ou o corte sai das categorias em vermelho, ou a meta cai — não tem terceira opção.</div>` : '';
 }
+
+/* A tela do orçamento adaptativo. Três blocos, nesta ordem, porque é a ordem em
+   que as perguntas aparecem na cabeça de quem abre: quem eu sou pro app, o que
+   ele quer mudar e por quê, e o que fazer com o que sobrar. */
+function renderOrcaIA(c){
+  const el=$('#orcaIA'); if(!el) return;
+  if(!(c.renda>0)){ el.innerHTML=''; return; }
+  const o=orcamentoAdaptativo(c);
+
+  if(o.aprendendo){
+    el.innerHTML=`<div class="orca">
+      <div class="orca-cab"><span class="orca-selo">Orçamento adaptativo</span></div>
+      <p class="orca-vazio">Ainda estou aprendendo seu padrão de gasto. ${o.ciclos?`Tenho <b>${o.ciclos}</b> fatura fechada`:'Nenhuma fatura fechou ainda'} — com mais <b>${o.faltam}</b> eu passo a propor um teto por categoria com o SEU gasto real, em vez da divisão padrão. Até lá, trave na mão o que você já souber.</p></div>`;
+    return;
+  }
+
+  const p=o.perfil;
+  const oculto=(S.orcaOculto===o.ciclos);
+  const pv=previsoes(c);
+
+  const cabecalho=`<div class="orca-cab">
+      <span class="orca-selo">Orçamento adaptativo</span>
+      <span class="orca-base">aprendido de ${o.ciclos} fatura${o.ciclos===1?'':'s'} fechada${o.ciclos===1?'':'s'}</span></div>
+    <div class="orca-perfil"><b>${esc(p.nome)}</b><span>${p.frase}</span></div>`;
+
+  /* Previsão primeiro quando existe: é o único bloco com prazo. Um teto que vai
+     estourar em 8 dias importa mais do que a distribuição do mês que vem. */
+  const blocoPrev=pv.length?`<div class="orca-prev">
+      ${pv.map(x=>`<div class="orca-p1">
+        <div class="orca-t"><span class="pt" style="background:${x.cor}"></span><b>${esc(x.nome)}</b>
+          <span class="tag ciclov">estoura em ${x.faltam} dia${x.faltam===1?'':'s'}</span></div>
+        <p class="orca-p">Você já usou <b>${pct(x.usoPct)}</b> do teto (${brl(x.gasto)} de ${brl(x.teto)}). No ritmo deste ciclo o mês fecha em <b>${brl(x.proj)}</b> — ${brl(x.estouro)} acima.</p>
+        <div class="orca-acoes">
+          <button class="btn sec mini" data-orca1="${x.k}">Ajustar este teto ao meu padrão</button>
+          <button class="btn sec mini" data-ir="plano:tetos">Manter como está</button>
+        </div></div>`).join('')}
+    </div>`:'';
+
+  let corpo;
+  if(oculto){
+    corpo=`<p class="orca-vazio">Sugestões dispensadas. Elas voltam quando a próxima fatura fechar —
+      ou <button class="link" data-orca-rever="1">rever agora</button>.</p>`;
+  }else if(!o.mudam.length){
+    corpo=`<p class="orca-vazio">Seus tetos já batem com o seu padrão de gasto. Não tenho nada a propor este mês — e isso é uma boa notícia.</p>`;
+  }else{
+    corpo=`<div class="orca-lista">${o.mudam.map(x=>`
+      <div class="orca-l">
+        <div class="orca-t"><span class="pt" style="background:${x.cor}"></span><b>${esc(x.nome)}</b>
+          <span class="orca-de">${brl(x.atual)} <i>→</i> <b style="color:${x.delta>0?'var(--alerta)':'var(--verde)'}">${brl(x.sugerido)}</b></span>
+          ${x.fixado?'<span class="tag ciclo1">travado por você</span>':''}</div>
+        <p class="orca-p">${x.motivo}</p>
+        <div class="orca-acoes"><button class="btn sec mini" data-orca1="${x.k}">Aplicar só este</button></div>
+      </div>`).join('')}</div>
+      <div class="orca-acoes orca-fim">
+        <button class="btn" data-orca-tudo="1">Aplicar o orçamento sugerido</button>
+        <button class="btn sec" data-orca-nao="1">Agora não</button>
+      </div>`;
+  }
+
+  /* A sobra não fica parada. Ela é o resultado inteiro da redistribuição: o
+     dinheiro que estava reservado pra uma categoria que a pessoa não usa. */
+  const blocoSobra=(!oculto&&o.sobra>=20)?`<div class="orca-sobra">
+      <div class="orca-t"><b>Sobram ${brl(o.sobra)} por mês</b></div>
+      <p class="orca-p">É o que estava reservado pra categorias que você não usa. Depois de dar a cada uma o que o seu histórico pede, esse dinheiro fica sem dono — e dinheiro sem dono vira gasto sem querer.</p>
+      <div class="orca-acoes">
+        <button class="btn" data-orca-meta="${o.sobra.toFixed(2)}">Guardar ${brl(o.sobra)} a mais por mês</button>
+        <button class="btn sec" data-ir="plano:objetivos">Pôr num objetivo</button>
+      </div></div>`:'';
+
+  const blocoApertado=o.apertado?`<div class="nota aviso" style="margin:14px 0 0">Seu padrão de gasto pede mais do que cabe depois de guardar ${brl(c.meta)}. Os tetos sugeridos já vêm cortados — o corte saiu de lazer, comida fora e assinaturas primeiro, que é o que você mesmo classifica como cortável. Se não for por aí, a meta é que precisa ceder.</div>`:'';
+
+  el.innerHTML=`<div class="orca">${cabecalho}${blocoPrev}${corpo}${blocoSobra}${blocoApertado}</div>`;
+
+  el.querySelectorAll('[data-orca1]').forEach(b=>b.onclick=()=>{
+    const k=b.dataset.orca1, x=o.cats.find(y=>y.k===k); if(!x) return;
+    S.tetos[k]=x.sugerido;
+    render(); salvar(); vibrar(12);
+    toast(CATS[k].n+': teto agora é '+brl(x.sugerido));
+  });
+  const b1=el.querySelector('[data-orca-tudo]');
+  if(b1) b1.onclick=()=>{
+    /* Aplica TODAS as categorias, não só as que mudam muito: o retrato tem que
+       fechar com o disponível, senão a soma dos tetos passa a não bater com
+       nenhuma conta da tela. */
+    o.cats.forEach(x=>{ S.tetos[x.k]=x.sugerido; });
+    S.orcaEm=iso(hojeD()); S.orcaOculto=null;
+    render(); salvar(); vibrar(18);
+    toast('Orçamento ajustado ao seu padrão');
+    snack('Tetos redistribuídos pelo seu histórico.','Desfazer',()=>{
+      o.cats.forEach(x=>{ if(x.fixado) S.tetos[x.k]=x.atual; else delete S.tetos[x.k]; });
+      S.orcaEm=null; render(); salvar(); toast('Desfeito');
+    });
+  };
+  const b2=el.querySelector('[data-orca-nao]');
+  if(b2) b2.onclick=()=>{ S.orcaOculto=o.ciclos; render(); salvar(); toast('Volto quando a próxima fatura fechar'); };
+  const b3=el.querySelector('[data-orca-rever]');
+  if(b3) b3.onclick=()=>{ S.orcaOculto=null; render(); salvar(); };
+  const b4=el.querySelector('[data-orca-meta]');
+  if(b4) b4.onclick=()=>{
+    /* Guardar mais é mexer na META, e a meta em valor manda sobre a meta em
+       porcentagem — por isso vira valor fixo aqui, com o número que a pessoa
+       leu na tela. */
+    const nova=c.meta+(+b4.dataset.orcaMeta||0);
+    S.metaVal=+nova.toFixed(2);
+    preencherCampos(); render(); salvar(); vibrar(18);
+    toast('Meta de guardar: '+brl(nova)+' por mês');
+    snack('Você passou a guardar '+brl(nova)+' por mês.','Desfazer',()=>{
+      S.metaVal=+(nova-(+b4.dataset.orcaMeta||0)).toFixed(2);
+      if(S.metaVal<=0) S.metaVal=0;
+      preencherCampos(); render(); salvar(); toast('Desfeito');
+    });
+  };
+}
+
 
 /* ---------- quem paga: um select, uma pessoa ----------
 
@@ -1459,7 +1794,7 @@ document.addEventListener('click',e=>{
 });
 $('#zerar').onclick=()=>{ if(confirm('Apagar tudo e recomeçar do zero?')){
   S=Object.assign({},S,{salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:12,
-     ultimoFech:iso(ultimoFechPassado()),hist:[],tetos:{},lanc:[],div:[],obj:[],pessoas:[],meses:6,jaTem:0,notifLog:{},agendaLog:{},retroVista:null});
+     ultimoFech:iso(ultimoFechPassado()),hist:[],tetos:{},lanc:[],div:[],obj:[],pessoas:[],meses:6,jaTem:0,notifLog:{},agendaLog:{},retroVista:null,orcaOculto:null,orcaEm:null});
   ['salario','extra','jaTem','metaVal'].forEach(i=>$('#'+i).value=''); $('#metaPct').value=20; $('#meses').value=6;
   avisoCiclo=''; render(); salvar();
   Auth.apagarEstadoNaNuvem().catch(()=>{});
@@ -2544,6 +2879,14 @@ function montarInsights(c){
     else if(projetado<c.disponivel*0.9)
       out.push({t:'bom',e:'raio',txt:`No ritmo de agora o ciclo fecha em <b>${brl(projetado)}</b> e sobram <b>${brl(c.disponivel-projetado)}</b> além da meta.`});
   }
+  /* Previsão de estouro: o aviso que chega ANTES. O de "passou do teto" já
+     existe e é um recado sobre dinheiro que saiu; este é sobre dinheiro que
+     ainda dá pra segurar, e por isso vem primeiro na lista. */
+  previsoes(c).slice(0,2).forEach(x=>{
+    out.push({t:'atencao',e:'subindo',
+      txt:`Você já usou <b>${pct(x.usoPct)}</b> do teto de <b>${CATS[x.k].n}</b> e, no ritmo de agora, passa dele em <b>${x.faltam} dia${x.faltam===1?'':'s'}</b> — o ciclo fecharia em ${brl(x.proj)}. `
+         +`<button class="link" data-ir="plano:tetos">Remanejar o teto</button>`});
+  });
   // categoria que mais subiu contra a média
   Object.keys(CATS).forEach(k=>{
     const m=mediaHist(k), hoje=c.porCat[k]||0;

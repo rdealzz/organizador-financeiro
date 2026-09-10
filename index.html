@@ -322,8 +322,11 @@ html[data-tema="escuro"] #splash{background:#000}
 
   <section class="bloco" id="t-tetos" hidden>
     <h2>Seu teto de gasto por categoria</h2>
-    <p class="ajuda">Os tetos usam só o que sai do <b>seu</b> bolso. Essencial também tem teto: mercado é essencial, mercado de R$ 900 num salário de R$ 3.000 não é. Trave qualquer teto na mão e o resto se acomoda.</p>
+    <p class="ajuda">Os tetos usam só o que sai do <b>seu</b> bolso, e não são iguais para todo mundo: o app aprende do seu histórico de faturas e propõe a divisão que reflete o seu gasto real — sempre com o motivo escrito, e só depois que você mandar. Essencial também tem teto: mercado é essencial, mercado de R$ 900 num salário de R$ 3.000 não é. Trave qualquer teto na mão e o resto se acomoda.</p>
     <div class="cards" id="cardsTeto"></div>
+    <!-- O orçamento aprendido do histórico. Fica ANTES da lista de tetos de
+         propósito: é ele que explica por que os números abaixo são esses. -->
+    <div id="orcaIA"></div>
     <div id="tetos"></div>
     <div style="margin-top:14px"><button class="btn sec" id="resetTetos">Voltar aos tetos sugeridos</button></div>
     <div id="notaTeto"></div>
