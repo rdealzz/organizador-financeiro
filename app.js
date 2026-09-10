@@ -2641,6 +2641,7 @@ function abrirCalendario(){
   setTimeout(()=>{ const b=$('#calFechar'); if(b) b.focus(); },40);
 }
 function fecharCalendario(){
+  calEdFat=false;
   $('#cal').hidden=true;
   document.body.classList.remove('cal-aberto');
   document.body.style.overflow='';
@@ -2649,6 +2650,9 @@ function andarMes(n){
   const d=new Date(calAno,calMes+n,1);
   calAno=d.getFullYear(); calMes=d.getMonth(); calDia=null;
   desenharCalendario();
+  /* O painel do lado volta ao topo: virar o mês com ele rolado no meio mostra
+     um pedaço de texto sem cabeça e parece que a tela não mudou. */
+  const lado=$('#calLado'); if(lado) lado.scrollTop=0;
 }
 function desenharCalendario(){
   const cx=$('#cal'); if(!cx||cx.hidden) return;
@@ -2660,7 +2664,7 @@ function desenharCalendario(){
 
   const primeiro=new Date(calAno,calMes,1).getDay();
   const ultimo=new Date(calAno,calMes+1,0).getDate();
-  let html='<div class="cal-sem">'+DIAS_SEM.map(d=>`<span>${d}</span>`).join('')+'</div><div class="cal-dias">';
+  let html='<div class="cal-sem">'+DIAS_SEM.map(d=>`<span>${d}</span>`).join('')+'</div><div class="cal-dias troca">';
   for(let i=0;i<primeiro;i++) html+='<span class="cal-vazio"></span>';
   for(let d=1;d<=ultimo;d++){
     const itens=porDia[d]||[];
@@ -2711,13 +2715,16 @@ function pintarLado(porDia,passado){
         <div class="cal-total">${brl(totalMes)}</div>
         <div class="cal-n">${dias.length?dias.length+' dia'+(dias.length>1?'s':'')+' com conta':'nenhuma conta com dia marcado'}</div>
       </div>
+      ${tiraDosMeses()}
       ${dias.length?`<div class="cal-lista">${dias.map(d=>{
         const t=porDia[d].reduce((s,x)=>s+(x.pago?0:x.valor),0);
         return `<button class="cal-li" data-dia="${d}"><b>${String(d).padStart(2,'0')}</b>
           <span>${porDia[d].map(x=>esc(x.nome)).join(' · ')}</span>
           <em>${t>0?brl(t):'pago'}</em></button>`;}).join('')}</div>`
       :`<p class="cal-vaziolado">Marque <b>Vence todo dia</b> num gasto e ele passa a aparecer aqui —
-         parcela sabe onde termina, conta fixa segue mês a mês.</p>`}`;
+         parcela sabe onde termina, conta fixa segue mês a mês.</p>`}
+      ${blocoObs(porDia,calAno,calMes)}`;
+    ligarTira(el);
     el.querySelectorAll('[data-dia]').forEach(b=>b.onclick=()=>{
       calDia=+b.dataset.dia; pintarLado(porDia,passado); marcarSel(calDia);
       const alvo=$('#calGrade').querySelector('[data-dia="'+calDia+'"]'); if(alvo) alvo.focus();
@@ -2736,10 +2743,183 @@ function pintarLado(porDia,passado){
         <small>${x.selo}${x.pago?' · <b>pago</b>':''}${x.semFim?' · sem data de fim':''}</small></div>
       <div class="cal-vl">${x.valor>0?brl(x.valor):'—'}</div>
       ${x.l?`<button class="link mini" data-caled="${x.l.id}">editar</button>`:''}
+      ${x.fatura?`<button class="link mini" data-calfat="1">editar</button>`:''}
     </div>`).join('')}</div>
-    <button class="btn sec mini" id="calVoltaMes" style="margin-top:12px">Ver o mês inteiro</button>`;
-  const vm=$('#calVoltaMes'); if(vm) vm.onclick=()=>{ calDia=null; pintarLado(porDia,passado); marcarSel(-1); };
+    <button class="btn sec mini" id="calVoltaMes" style="margin-top:12px">Ver o mês inteiro</button>
+    ${blocoObs(porDia,calAno,calMes)}`;
+  if(calEdFat) el.insertAdjacentHTML('beforeend',editorDaFatura());
+  const vm=$('#calVoltaMes'); if(vm) vm.onclick=()=>{ calDia=null; calEdFat=false; pintarLado(porDia,passado); marcarSel(-1); };
   el.querySelectorAll('[data-caled]').forEach(b=>b.onclick=()=>{ fecharCalendario(); abrirEdicao(b.dataset.caled); });
+  el.querySelectorAll('[data-calfat]').forEach(b=>b.onclick=()=>{ calEdFat=!calEdFat; pintarLado(porDia,passado); });
+  ligarEditorDaFatura(porDia,passado);
+}
+
+/* ---------- as observações do lado ----------
+
+   Um calendário que só marca dias responde "quando". As frases daqui respondem
+   "e daí" — que é a pergunta seguinte, e a única que muda alguma decisão. Cada
+   uma só aparece quando tem o que dizer: observação genérica em toda tela vira
+   ruído e a pessoa para de ler o painel inteiro.
+
+   Elas são calculadas do mesmo `porDia` que desenhou o mês, e não de uma
+   segunda fonte — se um dia divergir, é porque o desenho e o texto discordam,
+   e aí a culpa é minha, não do dado. */
+function observacoesDoMes(porDia,ano,mes){
+  const out=[], c=calc();
+  const dias=Object.keys(porDia).map(Number).sort((a,b)=>a-b);
+  if(!dias.length) return out;
+  const itens=dias.flatMap(d=>porDia[d].map(x=>Object.assign({dia:d},x)));
+  const aPagar=itens.filter(x=>!x.pago);
+  const total=aPagar.reduce((s,x)=>s+x.valor,0);
+  const hoje=hojeD(), esteMes=(ano===hoje.getFullYear()&&mes===hoje.getMonth());
+
+  // o dia mais pesado
+  let pior=null;
+  dias.forEach(d=>{ const t=porDia[d].reduce((s,x)=>s+(x.pago?0:x.valor),0);
+    if(!pior||t>pior.t) pior={d,t,n:porDia[d].length}; });
+  if(pior&&pior.t>0&&dias.length>1)
+    out.push({e:'atencao',txt:`O dia <b>${pior.d}</b> é o mais pesado do mês: <b>${brl(pior.t)}</b> em ${pior.n} conta${pior.n>1?'s':''}. `
+      +(pior.n>1?'Se der pra empurrar uma delas, é aí que alivia.':'Se der pra empurrar, é aí que alivia.')});
+
+  // quanto disso é parcela — dinheiro comprometido antes do mês começar
+  const parc=aPagar.filter(x=>x.l&&x.l.tipo==='parc');
+  const somaParc=parc.reduce((s,x)=>s+x.valor,0);
+  if(somaParc>0)
+    out.push({e:'calendario',txt:`<b>${brl(somaParc)}</b> ${parc.length>1?'são parcelas':'é parcela'} — dinheiro comprometido antes de o mês começar, e <b>${pct(somaParc/(total||1))}</b> de tudo que vence.`});
+
+  // a parcela que está acabando
+  const ultima=itens.find(x=>x.ultima);
+  if(ultima)
+    out.push({t:'bom',e:'festa',txt:`<b>${esc(ultima.nome)}</b> termina neste mês. A partir do mês que vem sobram <b>${brl(ultima.valor)}</b> por mês que hoje já têm dono.`});
+
+  // o peso na renda
+  if(c.renda>0&&total>0){
+    const p=total/c.renda;
+    out.push({t:p>0.5?'ruim':'',e:p>0.5?'subindo':'nota',
+      txt:`As contas com dia marcado somam <b>${pct(p)}</b> da sua renda${p>0.5?' — mais da metade do mês já sai antes de qualquer escolha.':'.'}`});
+  }
+
+  // a folga: quantos dias corridos sem nada vencendo, a partir de hoje
+  if(esteMes){
+    const proximos=dias.filter(d=>d>=hoje.getDate());
+    if(!proximos.length) out.push({t:'bom',e:'certo',txt:'Nada mais vence neste mês. O que aparecer daqui pra frente é escolha, não obrigação.'});
+    else{
+      const d=proximos[0], falta=d-hoje.getDate();
+      out.push({e:'calendario',txt: falta===0?`Tem conta vencendo <b>hoje</b>: ${porDia[d].map(x=>esc(x.nome)).join(', ')}.`
+        :`Próxima conta em <b>${falta} dia${falta>1?'s':''}</b> (dia ${d}): ${porDia[d].map(x=>esc(x.nome)).join(', ')}.`});
+    }
+  }
+
+  // conta que não termina nunca — o que a pessoa perguntou ao pedir o calendário
+  const semFim=[...new Set(aPagar.filter(x=>x.semFim).map(x=>x.nome))];
+  if(semFim.length)
+    out.push({e:'nota',txt:`${semFim.length===1?'<b>'+esc(semFim[0])+'</b> não tem':'<b>'+semFim.length+' contas</b> não têm'} data de fim — ${semFim.length===1?'ela segue':'elas seguem'} mês a mês até você mudar a repetição do gasto.`});
+
+  return out;
+}
+
+/* A tira dos 12 meses: cada barra é o total daquele mês, e ela é clicável.
+
+   É o que mostra o que nenhum mês sozinho mostra — que as parcelas acabam. A
+   barra cai de degrau em degrau, e é possível ver com o olho em que mês o
+   compromisso encolhe. */
+function tiraDosMeses(){
+  /* A tira começa no mês de HOJE, não no mês que está sendo olhado. Duas razões:
+     o passado não é reconstituído (barras vazias pareceriam meses sem conta), e
+     uma régua que anda junto com a navegação não é régua — a pessoa perde a
+     referência de onde está. Quem navegar para fora da faixa simplesmente não vê
+     nenhuma barra acesa. */
+  const h=hojeD(), base=new Date(h.getFullYear(),h.getMonth(),1);
+  const meses=[];
+  for(let i=0;i<12;i++){
+    const d=new Date(base.getFullYear(),base.getMonth()+i,1);
+    const {porDia}=contasDoMes(d.getFullYear(),d.getMonth());
+    const t=Object.keys(porDia).reduce((s,k)=>s+porDia[k].reduce((a,x)=>a+(x.pago?0:x.valor),0),0);
+    meses.push({ano:d.getFullYear(),mes:d.getMonth(),total:t,
+      atual:d.getFullYear()===calAno&&d.getMonth()===calMes});
+  }
+  const maior=Math.max(...meses.map(m=>m.total),1);
+  return `<div class="rot" style="margin-top:2px">O que vence nos próximos 12 meses</div>
+  <div class="cal-tira" role="group" aria-label="Total de contas por mês">
+    ${meses.map(m=>`<button class="cal-tb${m.atual?' on':''}" data-ir-mes="${m.ano}-${m.mes}"
+       title="${MES_LONGO[m.mes]} de ${m.ano}: ${brl(m.total)}"
+       aria-label="${MES_LONGO[m.mes]} de ${m.ano}, ${brl(m.total)}">
+       <i style="height:${Math.max(Math.round(m.total/maior*100),3)}%"></i>
+       <span>${MES_CURTO[m.mes]}</span></button>`).join('')}
+  </div>`;
+}
+
+/* ---------- editar a fatura pelo calendário ----------
+
+   A fatura é a única linha do calendário que não é um lançamento: ela nasce de
+   `S.diaFech` e `S.diaVenc`, os dois dias do cartão. Editá-la, então, é mexer
+   nesses dias — e não em um gasto. Por isso ela abre este bloco em vez da folha
+   de edição: o que está em jogo é a régua do mês inteiro, não uma linha.
+
+   Os mesmos dois campos existem em *Planejamento → Renda e meta*. Ter os dois
+   lugares é de propósito: quem está olhando o calendário e percebe que a data
+   está errada conserta ali, sem procurar onde fica. A verdade continua sendo
+   uma só — `S.diaFech` e `S.diaVenc`. */
+let calEdFat=false;
+function editorDaFatura(){
+  const fech=+S.diaFech||5, venc=+S.diaVenc||12;
+  const pagar=faturaAPagar();
+  const seteAntes=((venc-7-1+31)%31)+1;
+  return `<div class="cal-fat">
+    <div class="rot">Datas do cartão</div>
+    <div class="cal-fat-campos">
+      <label>Fecha todo dia<input type="number" inputmode="numeric" min="1" max="31" step="1" id="calFech" value="${fech}"></label>
+      <label>Vence todo dia<input type="number" inputmode="numeric" min="1" max="31" step="1" id="calVenc" value="${venc}"></label>
+    </div>
+    <p class="cal-fat-diz">O que você gastar hoje entra na fatura que fecha em
+      <b>${dataBR(iso(faturaAberta().fecha))}</b> e é cobrada em <b>${dataBR(iso(faturaAberta().vence))}</b>.
+      Mudar o dia do fechamento move a régua do ciclo — o app refaz a conta sozinho.</p>
+    ${fech===venc?`<div class="nota aviso" style="margin:10px 0 0">Fechar e vencer no mesmo dia significa "fecha hoje e paga no mesmo dia do mês que vem" — 30 dias de folga que nenhum cartão dá.
+      <div style="margin-top:8px"><button class="btn sec mini" id="calFecha7">Fechar dia ${seteAntes}, sete dias antes</button></div></div>`:''}
+    ${pagar?`<div class="cal-fat-pagar">
+      <div><b>${brl(pagar.bruto)}</b><small>fatura fechada em ${dataBR(iso(pagar.fecha))}, vence ${dataBR(iso(pagar.vence))}</small></div>
+      <button class="btn mini" id="calPagouFat">Já paguei</button></div>`
+     :`<p class="cal-fat-diz">Nenhuma fatura fechada esperando pagamento.</p>`}
+  </div>`;
+}
+function ligarEditorDaFatura(porDia,passado){
+  const f=$('#calFech'), v=$('#calVenc');
+  const aplicar=()=>{
+    const nf=Math.min(Math.max(+f.value||0,1),31), nv=Math.min(Math.max(+v.value||0,1),31);
+    const mudouFech=nf!==(+S.diaFech||5);
+    S.diaFech=nf; S.diaVenc=nv;
+    /* Mudar o dia do fechamento move a régua do ciclo. Sem refazer `ultimoFech`
+       o app acharia que a fatura atual já fechou (ou ainda não) e viraria o
+       ciclo na hora errada — é o mesmo cuidado do campo em Renda e meta. */
+    if(mudouFech) S.ultimoFech=iso(ultimoFechPassado());
+    preencherCampos(); render(); salvar(); vibrar(10);
+    desenharCalendario();
+  };
+  if(f) f.onchange=aplicar;
+  if(v) v.onchange=aplicar;
+  const b7=$('#calFecha7');
+  if(b7) b7.onclick=()=>{ f.value=((+S.diaVenc||12)-7-1+31)%31+1; aplicar(); };
+  const bp=$('#calPagouFat');
+  if(bp) bp.onclick=()=>{
+    const pagar=faturaAPagar(); if(!pagar) return;
+    pagar.ref.pago=iso(hojeD());
+    render(); salvar(); vibrar(14); desenharCalendario();
+    snack('Fatura de '+dataBR(iso(pagar.fecha))+' marcada como paga.','Desfazer',()=>{
+      delete pagar.ref.pago; render(); salvar(); desenharCalendario(); toast('Desfeito');
+    });
+  };
+}
+function ligarTira(el){
+  el.querySelectorAll('[data-ir-mes]').forEach(b=>b.onclick=()=>{
+    const [a,m]=b.dataset.irMes.split('-').map(Number);
+    calAno=a; calMes=m; calDia=null; desenharCalendario();
+  });
+}
+function blocoObs(porDia,ano,mes){
+  const obs=observacoesDoMes(porDia,ano,mes);
+  if(!obs.length) return '';
+  return `<div class="cal-obs">${obs.map(o=>`<div class="insight ${o.t||''}">
+    <div class="ie">${icone(o.e,17)}</div><div class="it2">${o.txt}</div></div>`).join('')}</div>`;
 }
 function ligarIrDoCal(el){
   el.querySelectorAll('[data-calir]').forEach(b=>b.onclick=()=>{ fecharCalendario(); irPara(b.dataset.calir); });
@@ -3784,8 +3964,29 @@ $('#calHoje').onclick=()=>{ const h=hojeD(); calAno=h.getFullYear(); calMes=h.ge
 document.addEventListener('keydown',e=>{
   const cal=$('#cal'); if(!cal||cal.hidden) return;
   if(e.key==='Escape'){ e.stopImmediatePropagation(); fecharCalendario(); return; }
-  if(e.key==='ArrowLeft'){ e.preventDefault(); andarMes(-1); }
-  if(e.key==='ArrowRight'){ e.preventDefault(); andarMes(1); }
+  if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight'&&e.key!=='ArrowUp'&&e.key!=='ArrowDown') return;
+  /* Com um dia em foco as setas andam pelo MÊS, dia a dia (e ±7 na vertical,
+     que é a semana). Fora da grade elas andam pelos meses. Duas coisas
+     diferentes na mesma tecla, decididas pelo lugar onde a pessoa está — que é
+     o que ela espera de um calendário. */
+  const cel=document.activeElement&&document.activeElement.closest&&document.activeElement.closest('.cal-d');
+  if(!cel){
+    if(e.key==='ArrowLeft'){ e.preventDefault(); andarMes(-1); }
+    if(e.key==='ArrowRight'){ e.preventDefault(); andarMes(1); }
+    return;
+  }
+  e.preventDefault();
+  const passo=e.key==='ArrowLeft'?-1:e.key==='ArrowRight'?1:e.key==='ArrowUp'?-7:7;
+  const alvo=+cel.dataset.dia+passo;
+  const b=$('#calGrade').querySelector('[data-dia="'+alvo+'"]');
+  if(b){ b.focus(); return; }
+  /* Saiu do mês: vira a página e para na borda do mês vizinho. Tentar acertar
+     "o dia correspondente" atravessando meses de tamanhos diferentes gera mais
+     surpresa que ajuda — a borda é previsível. */
+  andarMes(passo<0?-1:1);
+  const ultimo=new Date(calAno,calMes+1,0).getDate();
+  const vizinho=$('#calGrade').querySelector('[data-dia="'+(passo<0?ultimo:1)+'"]');
+  if(vizinho) vizinho.focus();
 });
 
 $('#edFechar').onclick=fecharEdicao;

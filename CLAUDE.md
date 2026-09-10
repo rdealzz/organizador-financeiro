@@ -832,6 +832,47 @@ ficar ao lado das parcelas, aparecendo para tudo que se repete: é o par
 `pRest` + `venc` que o calendário usa para espalhar a conta pelos meses, e com o
 dia escondido a parcela não tinha onde cair.
 
+## O calendário ficou vivo (v10.4)
+
+Três acréscimos, e os três respondem à mesma crítica: um calendário que só marca
+dias diz *quando*, e "e daí?" é a pergunta seguinte.
+
+**Editar a fatura pelo próprio calendário.** A fatura é a única linha do
+calendário que não é um lançamento: ela nasce de `S.diaFech` e `S.diaVenc`. Por
+isso o *editar* dela abre um bloco de datas do cartão em vez da folha de edição —
+o que está em jogo é a régua do mês inteiro, não uma linha. Os mesmos dois campos
+seguem existindo em *Renda e meta*, e ter os dois lugares é de propósito: quem
+percebe a data errada olhando o calendário conserta ali. **Mudar o dia do
+fechamento refaz `S.ultimoFech`**, como manda a nota da v9.4 — sem isso o app
+viraria o ciclo na hora errada. O bloco também traz o *Já paguei* da fatura
+fechada e o aviso de fechar-e-vencer no mesmo dia, com o botão que corrige.
+
+**`observacoesDoMes()` — o lado que fala.** Frases tiradas do MESMO `porDia` que
+desenhou o mês (não de uma segunda fonte, senão texto e desenho podem
+discordar): o dia mais pesado, quanto do mês é parcela, a parcela que termina
+neste mês e o que sobra depois dela, o peso das contas na renda, quando cai a
+próxima, e quais contas não têm fim. **Cada uma só aparece quando tem o que
+dizer** — observação genérica em toda tela vira ruído e a pessoa para de ler o
+painel inteiro.
+
+**A tira dos 12 meses.** Uma barra por mês, clicável, mostrando o total que
+vence. É o que nenhum mês sozinho mostra: as parcelas acabando em degraus. Ela
+**começa no mês de hoje, não no mês que está sendo olhado** — o passado não é
+reconstituído (barras vazias pareceriam meses sem conta), e uma régua que anda
+junto com a navegação deixa de ser régua.
+
+Detalhes que custaram medição:
+
+* **A tira é grade, não flex-column.** Em flex o rótulo comia a altura e a barra
+  de 100% chegava a 47px de 64 — a mais alta do mês nunca encostava no teto.
+  Com `grid-template-rows:1fr auto` a barra fica com a linha de cima inteira.
+* **As setas do teclado fazem duas coisas**, decididas pelo lugar: com um dia em
+  foco andam pelo mês (±1, e ±7 na vertical, que é a semana); fora da grade andam
+  pelos meses. Ao sair do mês, param na borda do vizinho — tentar acertar "o dia
+  correspondente" entre meses de tamanhos diferentes gera mais surpresa que ajuda.
+* **O painel volta ao topo ao virar o mês**: rolado no meio, a troca mostra um
+  pedaço de texto sem cabeça e parece que nada mudou.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

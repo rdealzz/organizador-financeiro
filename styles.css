@@ -2914,6 +2914,8 @@ h1, .capa-tit, .portal-tit, .carta-tit, .auth-tit, .etapa h2{
   font:inherit;transition:background .14s,border-color .14s,transform .1s}
 .cal-d .n{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
 .cal-d.tem{background:var(--card-2);color:var(--txt)}
+.cal-d:hover{background:var(--fill-2);transform:translateY(-1px)}
+.cal-d:focus-visible{outline:2px solid var(--azul);outline-offset:1px}
 .cal-d.hoje{border-color:var(--azul)}
 .cal-d.hoje .n{color:var(--azul-txt,var(--azul));font-weight:800}
 .cal-d.sel{background:var(--azul);border-color:transparent;transform:translateY(-1px)}
@@ -2957,3 +2959,35 @@ body.cal-aberto .tema-flutua{display:none}
   .cal-grade{flex:0 0 auto}
   .cal-dias{grid-auto-rows:minmax(46px,auto)}
 }
+
+/* ---------- o lado vivo do calendário ----------
+   Tira dos meses, observações e o editor da fatura. */
+.cal-tira{display:flex;align-items:flex-end;gap:3px;height:64px;margin:12px 0 14px}
+/* Grade em vez de flex: a barra ganha a linha de cima inteira e o rótulo a de
+   baixo. Em flex-column o rótulo comia a altura, e a barra de 100% chegava a
+   47px de 64 — a mais alta do mês nunca encostava no teto da tira. */
+.cal-tb{flex:1;min-width:0;display:grid;grid-template-rows:1fr auto;gap:3px;height:100%;
+  background:none;border:none;padding:0;cursor:pointer;color:var(--txt-3);font:inherit}
+.cal-tb i{display:block;width:100%;align-self:end;border-radius:3px;background:var(--fill-2);
+  transition:height .22s var(--suave),background .16s}
+.cal-tb span{font-size:9.5px;letter-spacing:.02em}
+.cal-tb:hover i{background:var(--azul);opacity:.55}
+.cal-tb.on i{background:var(--azul)}
+.cal-tb.on span{color:var(--txt);font-weight:700}
+.cal-obs{margin-top:14px;display:flex;flex-direction:column;gap:6px}
+.cal-obs .insight{margin:0;font-size:13px}
+.cal-fat{margin-top:14px;background:var(--fill);border-radius:var(--r-sm);padding:14px}
+.cal-fat-campos{display:flex;gap:10px;margin-top:8px}
+.cal-fat-campos label{flex:1;min-width:0;display:block;font-size:11px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.02em;color:var(--txt-3)}
+.cal-fat-campos input{width:100%;margin-top:4px}
+.cal-fat-diz{margin:10px 0 0;font-size:12.5px;line-height:1.55;color:var(--txt-2)}
+.cal-fat-pagar{display:flex;align-items:center;gap:10px;margin-top:12px;
+  padding-top:12px;border-top:1px solid var(--sep)}
+.cal-fat-pagar div{flex:1;min-width:0;display:flex;flex-direction:column}
+.cal-fat-pagar small{font-size:11.5px;color:var(--txt-3)}
+/* O mês trocando: um respiro curto, o bastante para o olho perceber que a grade
+   é outra e não achar que nada aconteceu. */
+.cal-dias.troca{animation:calTroca .2s var(--suave) both}
+@keyframes calTroca{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){ .cal-dias.troca{animation:none} .cal{animation:none} }
