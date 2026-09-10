@@ -11,6 +11,7 @@ const CATS={
   outros:{n:'Outros',c:'var(--cout)',peso:5,dica:'o que não se encaixa'}
 };
 const TIER={1:{n:'Essencial',cl:'t1'},2:{n:'Vale a pena',cl:'t2'},3:{n:'Pode cortar',cl:'t3'}};
+const opcoesCat=sel=>Object.entries(CATS).map(([k,v])=>`<option value="${k}"${k===sel?' selected':''}>${v.n}</option>`).join('');
 
 /* ---------- pessoas com quem se divide o gasto ----------
 
@@ -953,7 +954,8 @@ function renderLanc(c){
     <td>${esc(l.nome)} ${selo(l)}${+l.prox>0?' <span class="tag cicloprox">próxima fatura</span>':''}${naFatura(l)?'':' <span class="tag avista">à vista</span>'}<div style="font-size:11.5px;color:var(--txt-3)">${esc(l.fonte||'Conta')} · <span class="tag ${TIER[l.tier].cl}">${TIER[l.tier].n}</span>${+l.pai>0?` · <b style="color:${corPessoa(l.com)}">${esc(nomePessoa(l.com))}</b>`:''}
       · <button class="link mini" data-meio="${l.id}">${naFatura(l)?'foi no Pix':'foi no cartão'}</button>${naFatura(l)?`
       · <button class="link mini" data-prox="${l.id}">${+l.prox>0?'trazer pra esta fatura':'jogar pra próxima'}</button>`:''}</div></td>
-    <td><span class="pt" style="background:${CATS[l.cat].c}"></span>${CATS[l.cat].n}</td>
+    <td><span class="pt" style="background:${CATS[l.cat].c}"></span><select data-cat="${l.id}" aria-label="Categoria de ${esc(l.nome)}"
+        style="padding:5px 6px;font-size:12.5px;min-width:104px">${opcoesCat(l.cat)}</select></td>
     <td><select data-pag="${l.id}" style="padding:5px 6px;font-size:12.5px;min-width:102px">${opcoesPagador(l,true)}</select></td>
     <td class="v"><input type="number" min="0" step="0.01" data-val="${l.id}" value="${l.valor||''}" placeholder="0,00"
         style="width:100px;padding:5px 7px;text-align:right;font-size:13px">
@@ -1003,6 +1005,22 @@ function renderLanc(c){
     l.prox=+l.prox>0?0:1;
     render(); salvar(); vibrar(10);
     toast(+l.prox>0?'Só entra na próxima fatura':'Voltou pra fatura aberta');
+  });
+  /* Trocar a CATEGORIA na própria linha.
+
+     Até aqui o palpite do nome era a única forma de categorizar: se ele errasse
+     — "agua" caindo em Casa e contas quando era uma garrafa de água — o único
+     jeito de arrumar era apagar o gasto e lançar de novo. E o erro se repetia,
+     porque palpiteDoNome() aprende com o histórico: um nome já usado herda a
+     categoria do lançamento anterior, errada inclusive.
+
+     Por isso a correção vale para o futuro também: mudar aqui é o que ensina o
+     app. O select é irmão do de "quem paga", que já morava nesta linha. */
+  tb.querySelectorAll('[data-cat]').forEach(sl=>sl.onchange=e=>{
+    const l=S.lanc.find(x=>String(x.id)===e.target.dataset.cat); if(!l) return;
+    l.cat=e.target.value;
+    render(); salvar(); vibrar(10);
+    toast(l.nome+' agora é '+CATS[l.cat].n);
   });
   tb.querySelectorAll('[data-val]').forEach(i=>i.onchange=e=>{
     const l=S.lanc.find(x=>String(x.id)===e.target.dataset.val);
@@ -1146,7 +1164,7 @@ document.querySelectorAll('.subnav .sub').forEach(b=>b.onclick=()=>{
 document.addEventListener('click',e=>{
   const l=e.target.closest('[data-ir]'); if(l) irPara(l.dataset.ir);
 });
-$('#lCat').innerHTML=Object.entries(CATS).map(([k,v])=>`<option value="${k}">${v.n}</option>`).join('');
+$('#lCat').innerHTML=opcoesCat();
 let tDeb=null;
 function agendarRender(){ clearTimeout(tDeb); tDeb=setTimeout(()=>{ render(); salvar(); },220); }
 ['salario','extra','meses','jaTem','metaPct','metaVal','diaFech','diaVenc'].forEach(id=>$('#'+id).addEventListener('input',e=>{
