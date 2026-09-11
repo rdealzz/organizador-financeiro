@@ -1056,9 +1056,12 @@ espaço passa a ser layout, e layout não desaparece na dobra:
 * **`.lin-meta`** — conta, peso e quem divide. Quando são várias pessoas elas se
   juntam por um `<i>+</i>` visível, não por um ponto: "+" continua legível
   sozinho no começo de uma linha nova; "·" no começo da linha lê-se como sujeira.
-* **`.lin-acoes`** — botões de verdade (`.acao-mini`), não links dentro de frase.
-  *editar* é o único **preenchido** (`.forte`), porque é a ação principal da
-  linha; "foi no Pix/cartão" e "jogar pra próxima" ficam contornados.
+* **`.lin-acoes`** — **um botão só: `✎ editar`**. A primeira versão desta
+  correção pôs três chips ali (editar, "foi no Pix", "jogar pra próxima"), e
+  três chips lado a lado em 208px viram um amontoado — resolvia a colagem e
+  criava ruído. As outras duas ações não sumiram: *Como pagou* e *Entra na
+  fatura* já são campos da folha de edição, que é onde se muda um gasto. A
+  linha oferece **o caminho**, não o painel de controle.
 
 `#tbLanc td:first-child` ganhou `min-width:208px`. Sem isso a coluna encolhia até
 caber uma palavra por linha e os chips viravam uma escada.

@@ -1342,15 +1342,15 @@ function renderLanc(c){
     :l.tipo==='var'?'<span class="tag ciclov">variável</span>'
     :l.tipo==='parc'?`<span class="tag ciclop">faltam ${l.pRest||0}x</span>`:'<span class="tag ciclo1">única</span>';
   /* Uma linha só, usada nas duas listas: a fatura aberta e a fila da seguinte.
-     O botão do fim da segunda linha é o que move o gasto entre elas. */
+     A linha tem UM botão: editar. Como pagou e em qual fatura entra moram na
+     folha de edição — três chips lado a lado numa tela de 430px viravam um
+     amontoado, e o que a pessoa procura na linha é o caminho pra mudar o gasto. */
   const linha=l=>`<tr${+l.prox>0?' class="lin-prox"':''}>
     <td>
       <div class="lin-nome">${esc(l.nome)} ${selo(l)}${+l.prox>0?'<span class="tag cicloprox">próxima fatura</span>':''}${naFatura(l)?'':'<span class="tag avista">à vista</span>'}</div>
       <div class="lin-meta">${esc(l.fonte||'Conta')}<span class="tag ${TIER[l.tier].cl}">${TIER[l.tier].n}</span>${+l.pai>0?divisoes(l).map(d=>`<b style="color:${corPessoa(d.id)}">${esc(nomePessoa(d.id))}</b>`).join('<i>+</i>'):''}</div>
       <div class="lin-acoes">
         <button class="acao-mini forte" data-editar="${l.id}">✎ editar</button>
-        <button class="acao-mini" data-meio="${l.id}">${naFatura(l)?'foi no Pix':'foi no cartão'}</button>${naFatura(l)?`
-        <button class="acao-mini" data-prox="${l.id}">${+l.prox>0?'trazer pra esta':'jogar pra próxima'}</button>`:''}
       </div></td>
     <td><span class="pt" style="background:${CATS[l.cat].c}"></span><select data-cat="${l.id}" aria-label="Categoria de ${esc(l.nome)}"
         style="padding:5px 6px;font-size:12.5px;min-width:104px">${opcoesCat(l.cat)}</select></td>
@@ -1390,27 +1390,6 @@ function renderLanc(c){
       +prox.sort((a,b)=>b.valor-a.valor).map(linha).join('')
       +`<tr class="total"><td colspan="3">Total da próxima</td><td class="v">${brl(c.proxBruto)}</td>
         <td class="v" style="color:var(--pai)">${brl(c.proxBruto-c.proxMeu)}</td><td class="v">${brl(c.proxMeu)}</td><td></td></tr>`:'');
-  /* Trocar o meio de pagamento na própria lista: quem lançou no automático e
-     só depois lembrou que pagou no Pix resolve aqui, sem reabrir formulário. */
-  tb.querySelectorAll('[data-meio]').forEach(b=>b.onclick=e=>{
-    const l=S.lanc.find(x=>String(x.id)===e.currentTarget.dataset.meio); if(!l) return;
-    if(naFatura(l)){
-      l.meio='avista'; l.prox=0;                       // fora da fatura não tem "próxima fatura"
-      if(!l.fonte||l.fonte==='Conta') l.fonte='Pix';
-      toast(l.nome+' saiu da fatura — continua no seu gasto');
-    }else{
-      l.meio='cartao';
-      if(l.fonte==='Pix') l.fonte='Conta';
-      toast(l.nome+' voltou pra fatura do cartão');
-    }
-    render(); salvar(); vibrar(10);
-  });
-  tb.querySelectorAll('[data-prox]').forEach(b=>b.onclick=e=>{
-    const l=S.lanc.find(x=>String(x.id)===e.currentTarget.dataset.prox); if(!l) return;
-    l.prox=+l.prox>0?0:1;
-    render(); salvar(); vibrar(10);
-    toast(+l.prox>0?'Só entra na próxima fatura':'Voltou pra fatura aberta');
-  });
   /* Trocar a CATEGORIA na própria linha.
 
      Até aqui o palpite do nome era a única forma de categorizar: se ele errasse
