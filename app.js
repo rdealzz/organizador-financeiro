@@ -43,10 +43,61 @@ function criarPessoa(nome){
 }
 /* Quanto cada pessoa cobriu numa lista de lançamentos, do maior pro menor.
    Serve tanto pro ciclo aberto quanto pra fatura que está sendo arquivada. */
+
+/* ══════════ UM GASTO DIVIDIDO ENTRE VÁRIAS PESSOAS (v10.8) ══════════
+
+   Até aqui um gasto se dividia com UMA pessoa: `l.com` guardava o id e `l.pai`
+   o valor que ela cobre. Dá conta de "faculdade com o pai" e "assinatura com o
+   Gui" — gastos diferentes, pessoas diferentes —, mas não de rachar a MESMA
+   conta em três: o jantar de aniversário, o presente coletivo, o aluguel com
+   dois colegas.
+
+   Agora existe **`l.divs`**, uma lista `[{id, valor}]`.
+
+   **`l.pai` continua sendo a SOMA do que terceiros cobrem, e continua com esse
+   nome.** Ele está gravado nas faturas arquivadas, nos backups em arquivo e no
+   CSV que as pessoas já baixaram — como manda a nota da v9.2. `divs` é o
+   DETALHE; `pai` é o total, sempre sincronizado. `meuValor()` não mudou uma
+   linha, e por isso o orçamento, os tetos e a sobra do mês continuam certos sem
+   saber que este campo existe.
+
+   `l.com` também fica: aponta para a MAIOR fatia. Quem lê um lançamento sem
+   conhecer `divs` — uma versão antiga do app em outro aparelho, o CSV velho —
+   continua vendo uma pessoa e um valor que somam certo. */
+function divisoes(l){
+  const val=+l.valor||0;
+  if(Array.isArray(l.divs)&&l.divs.length){
+    /* O teto é o valor do gasto: editar o valor para menos não pode deixar as
+       fatias somando mais do que a conta inteira. O corte é na ordem da lista. */
+    let resto=val; const out=[];
+    l.divs.forEach(d=>{
+      const v=Math.min(Math.max(+d.valor||0,0),Math.max(resto,0));
+      resto-=v;
+      if(v>0) out.push({id:d.id||'',valor:+v.toFixed(2)});
+    });
+    return out;
+  }
+  const v=Math.min(+l.pai||0,val);
+  return v>0?[{id:l.com||'',valor:+v.toFixed(2)}]:[];
+}
+/* `divs` manda; `pai` e `com` seguem. Chamar isto é obrigatório depois de
+   qualquer escrita em `divs` — são eles que o resto do app lê. */
+function sincronizarDivs(l){
+  if(!Array.isArray(l.divs)) return;
+  const ds=divisoes(l);
+  if(!ds.length){ delete l.divs; l.pai=0; l.com=''; return; }
+  l.divs=ds;
+  l.pai=+ds.reduce((s,d)=>s+d.valor,0).toFixed(2);
+  l.com=ds.slice().sort((a,b)=>b.valor-a.valor)[0].id||'';
+  /* Uma pessoa só não precisa da lista: o par `com`+`pai` já diz tudo, e sem a
+     lista o lançamento continua legível por qualquer versão do app. */
+  if(ds.length===1) delete l.divs;
+}
+const nDivisoes=l=>divisoes(l).length;
+
 function fatiasPessoa(itens){
   const m={};
-  (itens||[]).forEach(l=>{ const v=Math.min(+l.pai||0,+l.valor||0);
-    if(v>0){ const k=l.com||''; m[k]=(m[k]||0)+v; } });
+  (itens||[]).forEach(l=>divisoes(l).forEach(d=>{ m[d.id]=(m[d.id]||0)+d.valor; }));
   return Object.entries(m).map(([id,valor])=>({id,nome:nomePessoa(id),cor:corPessoa(id),valor}))
     .sort((a,b)=>b.valor-a.valor);
 }
@@ -64,13 +115,11 @@ function fatiasPessoa(itens){
    "Mãe" em dezembro continua vendo de quem era a cobrança de setembro. */
 function cobrancas(itens,congeladas){
   const m={};
-  (itens||[]).forEach(l=>{
-    const v=Math.min(+l.pai||0,+l.valor||0); if(!(v>0)) return;
-    const k=l.com||'';
-    if(!m[k]) m[k]={id:k,itens:[],total:0};
-    m[k].itens.push({nome:l.nome,cat:l.cat,valor:v,cheio:+l.valor||0});
-    m[k].total+=v;
-  });
+  (itens||[]).forEach(l=>divisoes(l).forEach(d=>{
+    if(!m[d.id]) m[d.id]={id:d.id,itens:[],total:0};
+    m[d.id].itens.push({nome:l.nome,cat:l.cat,valor:d.valor,cheio:+l.valor||0});
+    m[d.id].total+=d.valor;
+  }));
   return Object.values(m).map(g=>{
     const cong=(congeladas||[]).find(f=>String(f.id)===String(g.id));
     g.nome=(cong&&cong.nome)||nomePessoa(g.id);
@@ -282,7 +331,8 @@ function fecharCiclo(dataStr){
     meu+=m; pai+=Math.min(+l.pai||0,l.valor);
     porCat[l.cat]=(porCat[l.cat]||0)+m; });
   const itens=daFatura.map(l=>({nome:l.nome,cat:l.cat,tier:l.tier,valor:l.valor,pai:+l.pai||0,
-    com:l.com||'',tipo:l.tipo,fonte:l.fonte,pRest:+l.pRest||0,venc:+l.venc||0,meio:l.meio||'cartao'}));
+    com:l.com||'',divs:Array.isArray(l.divs)?l.divs.map(d=>({id:d.id,valor:d.valor})):undefined,
+    tipo:l.tipo,fonte:l.fonte,pRest:+l.pRest||0,venc:+l.venc||0,meio:l.meio||'cartao'}));
   /* O nome e a cor da pessoa vão CONGELADOS na fatura arquivada, não por
      referência: quem apagar "Mãe" daqui a três meses continua vendo de quem
      era aquela metade do mercado de setembro.
@@ -1193,12 +1243,15 @@ function renomearPessoa(id){
 }
 function removerPessoa(id){
   const p=achaPessoa(id); if(!p) return;
-  const n=S.lanc.filter(l=>l.com===id&&+l.pai>0).length;
+  const n=S.lanc.filter(l=>divisoes(l).some(d=>d.id===id)).length;
   if(!confirm('Remover '+p.nome+'?\n\n'+(n
       ? n+(n===1?' gasto deste ciclo volta a ser só seu.':' gastos deste ciclo voltam a ser só seus.')
       : 'Nenhum gasto deste ciclo está dividido com essa pessoa.')
     +'\nAs faturas já arquivadas continuam mostrando o nome.')) return;
-  S.lanc.forEach(l=>{ if(l.com===id){ l.com=''; l.pai=0; } });
+  S.lanc.forEach(l=>{
+    if(Array.isArray(l.divs)){ l.divs=l.divs.filter(d=>d.id!==id); sincronizarDivs(l); }
+    if(l.com===id&&!Array.isArray(l.divs)){ l.com=''; l.pai=0; }
+  });
   S.pessoas=pessoas().filter(x=>x.id!==id);
   render(); salvar(); toast(p.nome+' saiu da lista');
 }
@@ -1223,7 +1276,7 @@ function renderPessoas(c){
   if(sec.hidden){ el.innerHTML=''; return; }
   const linhas=reg.map(p=>({id:p.id,nome:p.nome,cor:p.cor||'var(--pai)'})).concat(soltas)
     .map(p=>{
-      const itens=doCiclo().filter(l=>(l.com||'')===p.id&&+l.pai>0);
+      const itens=doCiclo().filter(l=>divisoes(l).some(d=>d.id===p.id));
       const dela=itens.reduce((t,l)=>t+Math.min(+l.pai||0,l.valor),0);
       const minha=itens.reduce((t,l)=>t+meuValor(l),0);
       const n=itens.length;
@@ -1291,19 +1344,26 @@ function renderLanc(c){
   /* Uma linha só, usada nas duas listas: a fatura aberta e a fila da seguinte.
      O botão do fim da segunda linha é o que move o gasto entre elas. */
   const linha=l=>`<tr${+l.prox>0?' class="lin-prox"':''}>
-    <td>${esc(l.nome)} ${selo(l)}${+l.prox>0?' <span class="tag cicloprox">próxima fatura</span>':''}${naFatura(l)?'':' <span class="tag avista">à vista</span>'}<div style="font-size:11.5px;color:var(--txt-3)">${esc(l.fonte||'Conta')} · <span class="tag ${TIER[l.tier].cl}">${TIER[l.tier].n}</span>${+l.pai>0?` · <b style="color:${corPessoa(l.com)}">${esc(nomePessoa(l.com))}</b>`:''}
+    <td>${esc(l.nome)} ${selo(l)}${+l.prox>0?' <span class="tag cicloprox">próxima fatura</span>':''}${naFatura(l)?'':' <span class="tag avista">à vista</span>'}<div style="font-size:11.5px;color:var(--txt-3)">${esc(l.fonte||'Conta')} · <span class="tag ${TIER[l.tier].cl}">${TIER[l.tier].n}</span>${+l.pai>0?` · ${divisoes(l).map(d=>`<b style="color:${corPessoa(d.id)}">${esc(nomePessoa(d.id))}</b>`).join(' + ')}`:''}
       · <button class="link mini" data-editar="${l.id}">editar</button>
       · <button class="link mini" data-meio="${l.id}">${naFatura(l)?'foi no Pix':'foi no cartão'}</button>${naFatura(l)?`
       · <button class="link mini" data-prox="${l.id}">${+l.prox>0?'trazer pra esta fatura':'jogar pra próxima'}</button>`:''}</div></td>
     <td><span class="pt" style="background:${CATS[l.cat].c}"></span><select data-cat="${l.id}" aria-label="Categoria de ${esc(l.nome)}"
         style="padding:5px 6px;font-size:12.5px;min-width:104px">${opcoesCat(l.cat)}</select></td>
-    <td><select data-pag="${l.id}" style="padding:5px 6px;font-size:12.5px;min-width:102px">${opcoesPagador(l,true)}</select></td>
+    <td>${nDivisoes(l)>1
+      ? /* O select representa UMA pessoa. Com a conta rachada entre várias, usá-lo
+           colapsaria a divisão em silêncio — então ali vira um botão que leva pra
+           folha de edição, onde a lista inteira cabe. */
+        `<button class="link mini" data-editar="${l.id}">${nDivisoes(l)} pessoas · editar</button>`
+      : `<select data-pag="${l.id}" style="padding:5px 6px;font-size:12.5px;min-width:102px">${opcoesPagador(l,true)}</select>`}</td>
     <td class="v"><input type="number" min="0" step="0.01" data-val="${l.id}" value="${l.valor||''}" placeholder="0,00"
         style="width:100px;padding:5px 7px;text-align:right;font-size:13px">
         ${(!l.valor&&l.ref)?`<div style="font-size:11px;color:var(--txt-3)">mês passado ${brl(l.ref)}</div>`:''}</td>
-    <td class="v"><input type="number" min="0" step="0.01" data-pai="${l.id}" value="${l.pai||''}" placeholder="0,00"
+    <td class="v">${nDivisoes(l)>1
+      ? `<span title="${esc(divisoes(l).map(d=>nomePessoa(d.id)+' '+brl(d.valor)).join(' · '))}">${brl(+l.pai||0)}</span>`
+      : `<input type="number" min="0" step="0.01" data-pai="${l.id}" value="${l.pai||''}" placeholder="0,00"
         style="width:96px;padding:5px 7px;text-align:right;font-size:13px"
-        aria-label="Quanto ${+l.pai>0?esc(nomePessoa(l.com)):'a outra pessoa'} cobre em ${esc(l.nome)}"></td>
+        aria-label="Quanto ${+l.pai>0?esc(nomePessoa(l.com)):'a outra pessoa'} cobre em ${esc(l.nome)}">`}</td>
     <td class="v" style="font-weight:700;color:${meuValor(l)===0?'var(--pai)':'inherit'}">${brl(meuValor(l))}</td>
     <td style="text-align:right"><button class="btn-x" data-del="${l.id}" aria-label="Remover">×</button></td></tr>`;
   const prox=daProxima(), fab=faturaAberta();
@@ -2463,6 +2523,75 @@ function desmarcarPago(id){
    novo gasto e usa os mesmos rótulos de propósito: quem aprendeu a lançar não
    precisa aprender a editar. */
 let edId=null, edMeio='cartao';
+
+/* ---------- a lista de quem divide, na folha de edição ----------
+
+   `edDivs` é a cópia de trabalho: a lista só volta para o lançamento quando a
+   pessoa salva. Editar direto no `l` faria "cancelar" deixar de cancelar. */
+let edDivs=[];
+function linhasDivisao(){
+  const el=$('#eDivLista'); if(!el) return;
+  const val=+$('#eValor').value||0;
+  const lista=pessoas();
+  if(!edDivs.length){
+    el.innerHTML=`<p class="div-vazio">Este gasto é todo seu. Toque em <b>+ pessoa</b> para dividir.</p>`;
+  }else{
+    el.innerHTML=edDivs.map((d,i)=>`<div class="div-linha">
+      <select data-divp="${i}" aria-label="Quem divide">
+        ${lista.map(p=>`<option value="${esc(p.id)}"${p.id===d.id?' selected':''}>${esc(p.nome)}</option>`).join('')}
+        ${achaPessoa(d.id)?'':`<option value="${esc(d.id)}" selected>${esc(nomePessoa(d.id))}</option>`}
+        <option value="+">+ Nova pessoa…</option>
+      </select>
+      <input type="number" inputmode="decimal" min="0" step="0.01" data-divv="${i}"
+        value="${d.valor||''}" placeholder="0,00" aria-label="Quanto ${esc(nomePessoa(d.id))} cobre">
+      <button type="button" class="btn-x" data-divx="${i}" aria-label="Tirar ${esc(nomePessoa(d.id))}">×</button>
+    </div>`).join('');
+  }
+  const soma=edDivs.reduce((s,d)=>s+Math.max(+d.valor||0,0),0);
+  const meu=Math.max(val-soma,0);
+  const diz=$('#eDivDiz');
+  if(diz) diz.innerHTML = !val ? 'Escreva o valor do gasto para dividir.'
+    : soma>val ? `<b style="color:var(--vermelho)">As partes somam ${brl(soma)}, mais que o gasto (${brl(val)}).</b> O excesso é cortado ao salvar.`
+    : `<b>Sua parte: ${brl(meu)}</b> — é só ela que entra no seu orçamento.${soma>0?' Os outros '+brl(soma)+' são de '+edDivs.map(d=>esc(nomePessoa(d.id))).join(', ')+'.':''}`;
+  el.querySelectorAll('[data-divp]').forEach(sel=>sel.onchange=e=>{
+    const i=+e.target.dataset.divp;
+    if(e.target.value==='+'){ const p=pedirPessoa(); if(p){ edDivs[i].id=p.id; render(); salvar(); } }
+    else edDivs[i].id=e.target.value;
+    linhasDivisao();
+  });
+  el.querySelectorAll('[data-divv]').forEach(inp=>inp.oninput=e=>{
+    edDivs[+e.target.dataset.divv].valor=+e.target.value||0;
+    /* Só a frase é refeita: redesenhar a lista inteira a cada tecla tiraria o
+       foco do campo que está sendo digitado. */
+    const val=+$('#eValor').value||0;
+    const soma=edDivs.reduce((s,d)=>s+Math.max(+d.valor||0,0),0);
+    const diz=$('#eDivDiz');
+    if(diz) diz.innerHTML = soma>val
+      ? `<b style="color:var(--vermelho)">As partes somam ${brl(soma)}, mais que o gasto (${brl(val)}).</b> O excesso é cortado ao salvar.`
+      : `<b>Sua parte: ${brl(Math.max(val-soma,0))}</b> — é só ela que entra no seu orçamento.`;
+  });
+  el.querySelectorAll('[data-divx]').forEach(b=>b.onclick=()=>{
+    edDivs.splice(+b.dataset.divx,1); linhasDivisao();
+  });
+}
+function addDivisao(){
+  const livres=pessoas().filter(p=>!edDivs.some(d=>d.id===p.id));
+  if(!livres.length&&!pessoas().length){ const p=pedirPessoa(); if(!p) return; render(); salvar(); edDivs.push({id:p.id,valor:0}); }
+  else edDivs.push({id:(livres[0]||pessoas()[0]).id,valor:0});
+  dividirIgual();      // uma pessoa nova entra já com uma fatia; zero não ajuda ninguém
+}
+/* Igualmente entre MIM e as pessoas da lista: com duas pessoas somos três, e
+   cada um fica com um terço. O meu não é escrito em lugar nenhum — é o que
+   sobra, e é assim que a conta fecha mesmo com centavos. */
+function dividirIgual(){
+  const val=+$('#eValor').value||0;
+  if(!edDivs.length||!(val>0)){ linhasDivisao(); return; }
+  const partes=edDivs.length+1;
+  const cada=Math.floor(val/partes*100)/100;
+  edDivs.forEach(d=>{ d.valor=cada; });
+  linhasDivisao();
+}
+
 function abrirEdicao(id){
   const l=S.lanc.find(x=>String(x.id)===String(id)); if(!l) return;
   edId=l.id;
@@ -2476,8 +2605,7 @@ function abrirEdicao(id){
   $('#eVenc').value=(+l.venc||0)||'';
   $('#eFatura').value=(+l.prox>0)?'1':'0';
   edMeio=naFatura(l)?'cartao':'avista';
-  $('#ePagador').innerHTML=opcoesPagador(l);
-  $('#ePai').value=(+l.pai||0)||'';
+  edDivs=divisoes(l).map(d=>({id:d.id,valor:d.valor}));
   pintarMeioEd(); ajustarEdicao();
   $('#edBg').classList.add('abre');
   $('#edFolha').classList.add('abre');
@@ -2504,10 +2632,7 @@ function pintarMeioEd(){
 function ajustarEdicao(){
   const tipo=$('#eTipo').value;
   $('#eCampoParc').hidden=(tipo!=='parc');
-  const pag=$('#ePagador').value, divide=(pag!=='eu'&&pag!=='+');
-  $('#eCampoPai').hidden=!divide;
-  if(!divide) $('#ePai').value='';
-  if(divide) pintarDivisao('e');
+  linhasDivisao();
   $('#eAviso').innerHTML=fraseDoPrazo(tipo,+$('#eParc').value||0,+$('#eVenc').value||0);
 }
 /* "Faltam 8 parcelas" é um número; "termina em maio de 2027" é uma resposta.
@@ -2542,14 +2667,12 @@ function salvarEdicao(){
   l.venc=Math.min(Math.max(+$('#eVenc').value||0,0),31);
   l.meio=edMeio;
   l.prox=(edMeio==='cartao'&&+$('#eFatura').value===1)?1:0;
-  const pag=$('#ePagador').value;
-  if(pag==='eu'||pag==='+'){ l.pai=0; l.com=''; }
-  else{
-    const [modo,id]=pag.split(':');
-    l.com=id||'';
-    const informado=+$('#ePai').value||0;
-    l.pai=modo==='t'?valor:Math.min(informado>0?informado:+(valor/2).toFixed(2),valor);
-  }
+  /* A lista é a verdade; `pai` e `com` são derivados dela em sincronizarDivs.
+     Guardar `divs` com uma pessoa só seria peso morto — a própria função
+     desfaz isso e deixa o par antigo, que qualquer versão do app entende. */
+  const partes=edDivs.map(d=>({id:d.id,valor:Math.max(+d.valor||0,0)})).filter(d=>d.valor>0);
+  if(!partes.length){ l.pai=0; l.com=''; delete l.divs; }
+  else{ l.divs=partes; sincronizarDivs(l); }
   /* Trocou o dia de vencimento? A marca de "já paguei" era sobre a data
      ANTIGA e deixou de valer — mantê-la esconderia a conta do mês inteiro. */
   if(l.pagoAte&&(!(l.venc>0)||l.pagoAte!==iso(proximoVenc(l.venc)))){
@@ -2984,7 +3107,7 @@ function exportarCSV(){
   const cab=['descricao','categoria','peso','tipo','valor_fatura','dividido_com','pago_por_outro','meu_valor','fonte','parcelas_restantes','vence_dia','entra_na_fatura','pago_como'];
   const fab=faturaAberta();
   const lin=S.lanc.map(l=>[l.nome,CATS[l.cat]?CATS[l.cat].n:l.cat,TIER[l.tier].n,l.tipo,
-    l.valor,+l.pai>0?nomePessoa(l.com):'',+l.pai||0,meuValor(l),l.fonte||'Conta',+l.pRest||0,+l.venc||0,
+    l.valor,divisoes(l).map(d=>nomePessoa(d.id)).join(' + '),+l.pai||0,meuValor(l),l.fonte||'Conta',+l.pRest||0,+l.venc||0,
     +l.prox>0?'próxima':'aberta ('+dataBR(iso(fab.fecha))+')',
     naFatura(l)?'cartão':'à vista']);
   const hist=S.hist.flatMap(x=>{
@@ -2993,7 +3116,7 @@ function exportarCSV(){
     const nomes={}; fatiasDoHist(x).forEach(f=>{ nomes[f.id]=f.nome; });
     return (x.itens||[]).map(l=>['[fatura '+dataBR(x.data)+'] '+l.nome,
       CATS[l.cat]?CATS[l.cat].n:l.cat,TIER[l.tier]?TIER[l.tier].n:l.tier,l.tipo,l.valor,
-      +l.pai>0?(nomes[l.com||'']||nomePessoa(l.com)):'',+l.pai||0,
+      divisoes(l).map(d=>nomes[d.id||'']||nomePessoa(d.id)).join(' + '),+l.pai||0,
       Math.max(l.valor-(+l.pai||0),0),l.fonte||'Conta',+l.pRest||0,+l.venc||0,
       'fechada em '+dataBR(x.data), (l.meio==='avista'?'à vista':'cartão')]);});
   const cel=v=>typeof v==='number'?String(v).replace('.',','):'"'+String(v).replace(/"/g,'""')+'"';
@@ -4094,23 +4217,13 @@ $('#edApagar').onclick=()=>{
   });
 };
 $('#eTipo').onchange=()=>{ ajustarEdicao(); if($('#eTipo').value==='parc') $('#eParc').focus(); };
+$('#eDivAdd').onclick=()=>{ addDivisao(); vibrar(8); };
+$('#eDivIgual').onclick=()=>{ dividirIgual(); vibrar(8); };
+$('#eDivNada').onclick=()=>{ edDivs=[]; linhasDivisao(); vibrar(8); };
+$('#eValor').addEventListener('input',linhasDivisao);
 ['#eParc','#eVenc'].forEach(id=>{ const el=$(id); if(el) el.oninput=ajustarEdicao; });
-$('#ePagador').onchange=e=>{
-  if(e.target.value==='+'){
-    const p=pedirPessoa();
-    const l=S.lanc.find(x=>String(x.id)===String(edId))||{valor:+$('#eValor').value||0};
-    $('#ePagador').innerHTML=opcoesPagador(l);
-    $('#ePagador').value=p?'d:'+p.id:'eu';
-    if(p){ render(); salvar(); }
-  }
-  const v=+$('#eValor').value||0, escolha=$('#ePagador').value;
-  if(escolha==='eu') $('#ePai').value='';
-  else if(escolha.startsWith('t:')) $('#ePai').value=v||'';
-  else if(v&&!(+$('#ePai').value>0)) $('#ePai').value=(v/2).toFixed(2);
-  const lab=$('#eLabPai'), [,id]=String(escolha).split(':');
-  if(lab) lab.textContent=(escolha==='eu'||escolha==='+')?'Quanto a outra pessoa cobre':'Quanto '+nomePessoa(id)+' cobre';
-  ajustarEdicao();
-};
+/* O select de pagador saiu da folha de edição: quem divide agora é a lista.
+   O da folha de LANÇAR continua, para o caso de uma pessoa só. */
 document.addEventListener('click',e=>{
   const b=e.target.closest('#eMeio [data-emeio]'); if(!b) return;
   edMeio=b.dataset.emeio; pintarMeioEd(); vibrar(8);
@@ -4118,10 +4231,10 @@ document.addEventListener('click',e=>{
 /* Os atalhos de divisão, nos dois formulários. */
 document.addEventListener('click',e=>{
   const b=e.target.closest('[data-div]'); if(b){ e.preventDefault(); aplicarDivisao('l',+b.dataset.div); vibrar(8); return; }
-  const c=e.target.closest('[data-ediv]'); if(c){ e.preventDefault(); aplicarDivisao('e',+c.dataset.ediv); vibrar(8); }
+
 });
 ['#lValor','#lPai'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('input',()=>pintarDivisao('l')); });
-['#eValor','#ePai'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('input',()=>pintarDivisao('e')); });
+
 /* Abrir a edição de qualquer lugar que mostre um lançamento. */
 document.addEventListener('click',e=>{
   const b=e.target.closest('[data-editar]'); if(!b) return;

@@ -972,6 +972,59 @@ cobre. Os mesmos três atalhos estão na folha de lançar e na de editar,
 pessoas diferentes já funcionam (faculdade com o pai, assinatura com o Gui);
 rachar a mesma conta em três, não.
 
+## Um gasto dividido entre VÁRIAS pessoas (v10.8)
+
+Até aqui um gasto se dividia com uma pessoa só: `l.com` guardava o id e `l.pai`
+o valor que ela cobre. Isso dá conta de "faculdade com o pai" e "assinatura com
+o Gui" — gastos diferentes, pessoas diferentes —, mas não de rachar a MESMA
+conta em três: o jantar, o presente coletivo, o aluguel com dois colegas.
+
+Agora existe **`l.divs`**, uma lista `[{id, valor}]`.
+
+**`l.pai` continua sendo a SOMA do que terceiros cobrem, e continua com esse
+nome**, pela mesma razão da v9.2: ele está gravado nas faturas arquivadas, nos
+backups em arquivo e no CSV que as pessoas já baixaram. `divs` é o DETALHE,
+`pai` é o total, e **`sincronizarDivs(l)` mantém os dois de acordo** — chamá-la
+depois de escrever em `divs` é obrigatório. `l.com` também fica, apontando para
+a MAIOR fatia: quem ler o lançamento sem conhecer `divs` (uma versão antiga do
+app noutro aparelho, o CSV velho) continua vendo uma pessoa e um total que
+fecham.
+
+**`meuValor()` não mudou uma linha.** É por isso que o orçamento, os tetos, a
+sobra do mês e o *quanto posso gastar* continuaram certos sem saber que o campo
+novo existe — eles leem `valor - pai`, e `pai` continua sendo a verdade sobre
+"quanto não é meu".
+
+**`divisoes(l)` é o único lugar que lê a divisão**: devolve a lista quando ela
+existe e monta uma de um item a partir de `com`+`pai` quando não. `fatiasPessoa`,
+`cobrancas`, o CSV, a linha da tabela e o painel de pessoas passaram todos por
+ela. Duas proteções moram ali: as fatias nunca somam mais que o valor do gasto
+(baixar o valor corta o excesso, na ordem da lista), e **uma pessoa só não
+guarda `divs`** — `sincronizarDivs` desfaz a lista e deixa o par antigo, que
+qualquer versão do app entende.
+
+### A interface
+
+A lista mora **na folha de edição**, não na de lançar: dividir em três é caso de
+edição, e a folha de lançar continua com quatro campos, como manda a v9.7. Lá o
+select "quem paga" foi substituído por uma LISTA — select não sabe dizer duas
+pessoas — com três botões: **+ pessoa**, **Dividir igualmente** e **Só meu**.
+
+*Dividir igualmente* reparte entre MIM e as pessoas da lista: com duas pessoas
+somos três, e cada um fica com um terço. **A minha parte não é escrita em lugar
+nenhum** — é o que sobra do valor, e é assim que a conta fecha mesmo com
+centavos que não dividem redondo.
+
+Na TABELA, quando são várias pessoas, o select vira um botão *"N pessoas ·
+editar"* e o campo de valor vira texto: usar um select de uma pessoa ali
+colapsaria a divisão em silêncio, que é o pior defeito possível num campo de
+dinheiro.
+
+Conferido: jantar de R$ 300 entre mim, Gui e Ana dá R$ 100 para cada, o
+orçamento conta R$ 100, a fatura arquivada leva a lista junto e as cobranças
+saem itemizadas por pessoa. Apagar uma pessoa devolve a fatia dela para mim —
+alguém tem que pagar.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

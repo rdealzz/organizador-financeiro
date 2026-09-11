@@ -729,16 +729,17 @@ html[data-tema="escuro"] #splash{background:#000}
       <div><label for="eVenc">Vence todo dia</label><input type="number" inputmode="numeric" id="eVenc" min="1" max="31" step="1" placeholder="—"></div>
       <div class="full" id="eCampoParc" hidden><label for="eParc">Parcelas que ainda faltam</label>
         <input type="number" inputmode="numeric" id="eParc" min="0" step="1" placeholder="Ex.: 8"></div>
-      <div class="full"><label for="ePagador">Quem paga</label><select id="ePagador"><option value="eu">Eu, sozinho</option></select></div>
-      <div class="full" id="eCampoPai" hidden>
-        <label for="ePai" id="eLabPai">Quanto a outra pessoa cobre</label>
-        <div class="divisao">
-          <div class="div-chips" id="eDivChips" role="group" aria-label="Como dividir">
-            <button type="button" data-ediv="50">Metade</button>
-            <button type="button" data-ediv="100">Ela paga tudo</button>
-            <button type="button" data-ediv="0">Só meu</button>
-          </div>
-          <input type="number" inputmode="decimal" id="ePai" min="0" step="0.01" placeholder="0,00">
+      <!-- Quem divide: uma LISTA, não um select.
+           O select só sabe dizer uma pessoa, e há contas rachadas em três. A
+           lista aceita quantas forem, e a folha de lançar continua simples com
+           uma só — dividir em três é caso de edição, não de digitação rápida. -->
+      <div class="full" id="eCampoPai">
+        <span class="rot-seg">Quem divide este gasto</span>
+        <div id="eDivLista"></div>
+        <div class="div-chips" style="margin-top:8px">
+          <button type="button" id="eDivAdd">+ pessoa</button>
+          <button type="button" id="eDivIgual">Dividir igualmente</button>
+          <button type="button" id="eDivNada">Só meu</button>
         </div>
         <p class="div-diz" id="eDivDiz"></p>
       </div>

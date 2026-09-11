@@ -3033,3 +3033,10 @@ body.cal-aberto .tema-flutua{display:none}
 .div-diz{margin:6px 0 0;font-size:12.5px;line-height:1.5;color:var(--txt-2)}
 .div-diz b{color:var(--txt)}
 .divisao-bloco .cards{margin-top:2px}
+
+/* ---------- a lista de quem divide ---------- */
+.div-linha{display:flex;align-items:center;gap:8px;margin-top:8px}
+.div-linha select{flex:1;min-width:0}
+.div-linha input{width:110px;flex:0 0 110px;text-align:right}
+.div-linha .btn-x{flex:0 0 32px}
+.div-vazio{margin:8px 0 0;font-size:13px;color:var(--txt-3)}
