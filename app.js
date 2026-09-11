@@ -11,6 +11,19 @@ const CATS={
   outros:{n:'Outros',c:'var(--cout)',peso:5,dica:'o que não se encaixa'}
 };
 const TIER={1:{n:'Essencial',cl:'t1'},2:{n:'Vale a pena',cl:'t2'},3:{n:'Pode cortar',cl:'t3'}};
+/* Toda leitura de categoria e de peso passa por AQUI, nunca por CATS[k] cru.
+
+   O estado é um JSON só, que viaja entre aparelhos e entre versões do app: um
+   gasto gravado por uma versão que conheça uma categoria a mais chega neste
+   aparelho com uma chave que ele não tem, e `catDe(k).c` derrubava a TELA
+   INTEIRA — tela branca, sem como apagar o gasto que a causou. O mesmo vale
+   para um peso perdido num backup editado à mão.
+
+   Cair em "Outros" mostra o gasto em vez de esconder o app. E nada é
+   reescrito: o campo original continua no estado e volta a aparecer certo no
+   aparelho que conhece a categoria. */
+const catDe=k=>CATS[k]||CATS.outros;
+const tierDe=t=>TIER[t]||TIER[2];
 const opcoesCat=sel=>Object.entries(CATS).map(([k,v])=>`<option value="${k}"${k===sel?' selected':''}>${v.n}</option>`).join('');
 
 /* ---------- pessoas com quem se divide o gasto ----------
@@ -760,7 +773,7 @@ function blocoCobrancas(x){
         <div class="cb-v" style="color:${pago?'var(--txt-3)':g.cor}">${brl(g.total)}</div>
       </div>
       <div class="cb-itens">${g.itens.map(i=>`<div class="cb-i">
-        <span class="pt" style="background:${CATS[i.cat]?CATS[i.cat].c:'var(--cout)'}"></span>
+        <span class="pt" style="background:${catDe(i.cat).c}"></span>
         <span class="cb-in">${esc(i.nome)}</span>
         <span class="cb-iv">${brl(i.valor)}${i.cheio>i.valor+0.005?`<small>de ${brl(i.cheio)}</small>`:''}</span>
       </div>`).join('')}</div>
@@ -815,14 +828,14 @@ function renderHist(){
       const antV=ant&&ant.porCat?(ant.porCat[k]||0):null;
       const d=antV===null?null:v-antV;
       return `<div class="teto" style="padding:10px 0">
-        <div class="teto-l"><span class="teto-nome" style="font-size:15px"><span class="pt" style="background:${CATS[k]?CATS[k].c:'var(--cout)'}"></span>${CATS[k]?CATS[k].n:k}</span>
+        <div class="teto-l"><span class="teto-nome" style="font-size:15px"><span class="pt" style="background:${catDe(k).c}"></span>${catDe(k).n}</span>
         <span class="teto-n">${brl(v)}${d===null?'':' <b style="color:'+(d>0?'var(--vermelho)':'var(--verde)')+'">'+(d>0?'+':'−')+brl(Math.abs(d))+'</b>'}</span></div>
-        <div class="trilho"><i style="--p:${x.meu>0?Math.min(v/x.meu,1).toFixed(4):0};background:${CATS[k]?CATS[k].c:'var(--cout)'}"></i></div>
+        <div class="trilho"><i style="--p:${x.meu>0?Math.min(v/x.meu,1).toFixed(4):0};background:${catDe(k).c}"></i></div>
       </div>`;}).join(''):''}
    ${itens.length?`<h3>${itens.length} lançamentos</h3>
      <table><thead><tr><th>Descrição</th><th>Categoria</th><th style="text-align:right">Fatura</th><th style="text-align:right">Meu</th></tr></thead><tbody>`+
      itens.map(l=>`<tr><td>${esc(l.nome)} ${selo(l)}<div style="font-size:12px;color:var(--txt-3)">${esc(l.fonte||'Conta')}</div></td>
-      <td>${CATS[l.cat]?CATS[l.cat].n:l.cat}</td><td class="v">${brl(l.valor)}</td>
+      <td>${catDe(l.cat).n}</td><td class="v">${brl(l.valor)}</td>
       <td class="v" style="font-weight:600">${brl(Math.max(l.valor-(l.pai||0),0))}</td></tr>`).join('')+
      `</tbody></table>`:''}`;
   const gs=cobrancas(x.itens,fatiasDoHist(x));
@@ -917,7 +930,7 @@ function orcamentoAdaptativo(c){
     const pico=picoTipico(hist,k,jan);
     const vol=volatilidade(hist,k,jan);
     const bruto=Math.max(media*folgaDe(vol),pico);
-    return {k,nome:CATS[k].n,cor:CATS[k].c,media,pico,vol,bruto,
+    return {k,nome:catDe(k).n,cor:catDe(k).c,media,pico,vol,bruto,
             m1:mediaDe(hist,k,1),m3:mediaDe(hist,k,3),m6:mediaDe(hist,k,6),m12:mediaDe(hist,k,12),
             atual:c.tetos[k]||0, fixado:+S.tetos[k]>0};
   });
@@ -1046,7 +1059,7 @@ function previsoes(c){
     if(proj<=t*1.02) return null;
     const faltam=Math.max(Math.ceil((t-g)/ritmo),0);
     if(faltam>dias) return null;
-    return {k,nome:CATS[k].n,cor:CATS[k].c,gasto:g,teto:t,proj,faltam,
+    return {k,nome:catDe(k).n,cor:catDe(k).c,gasto:g,teto:t,proj,faltam,
             usoPct:g/t,estouro:proj-t};
   }).filter(Boolean).sort((a,b)=>a.faltam-b.faltam);
 }
@@ -1157,7 +1170,7 @@ function renderOrcaIA(c){
     const k=b.dataset.orca1, x=o.cats.find(y=>y.k===k); if(!x) return;
     S.tetos[k]=x.sugerido;
     render(); salvar(); vibrar(12);
-    toast(CATS[k].n+': teto agora é '+brl(x.sugerido));
+    toast(catDe(k).n+': teto agora é '+brl(x.sugerido));
   });
   const b1=el.querySelector('[data-orca-tudo]');
   if(b1) b1.onclick=()=>{
@@ -1297,7 +1310,7 @@ function renderPessoas(c){
     ${achaPessoa(p.id)?`<button class="rm" data-rmp="${esc(p.id)}" aria-label="Remover ${esc(p.nome)}">×</button>`:''}
   </div>`+(prev[p.id]?`<details class="previa"><summary>${prev[p.id].itens.length===1?'ver o gasto':'ver os '+prev[p.id].itens.length+' gastos'} de ${esc(p.nome)}</summary>
     <div class="cb-itens">${prev[p.id].itens.map(i=>`<div class="cb-i">
-      <span class="pt" style="background:${CATS[i.cat]?CATS[i.cat].c:'var(--cout)'}"></span>
+      <span class="pt" style="background:${catDe(i.cat).c}"></span>
       <span class="cb-in">${esc(i.nome)}</span>
       <span class="cb-iv">${brl(i.valor)}${i.cheio>i.valor+0.005?`<small>de ${brl(i.cheio)}</small>`:''}</span></div>`).join('')}</div>
     <button class="btn sec" data-prev="${esc(p.id)}" style="margin-top:10px">${navigator.share?'Enviar':'Copiar'} prévia</button>
@@ -1348,11 +1361,11 @@ function renderLanc(c){
   const linha=l=>`<tr${+l.prox>0?' class="lin-prox"':''}>
     <td>
       <div class="lin-nome">${esc(l.nome)} ${selo(l)}${+l.prox>0?'<span class="tag cicloprox">próxima fatura</span>':''}${naFatura(l)?'':'<span class="tag avista">à vista</span>'}</div>
-      <div class="lin-meta">${esc(l.fonte||'Conta')}<span class="tag ${TIER[l.tier].cl}">${TIER[l.tier].n}</span>${+l.pai>0?divisoes(l).map(d=>`<b style="color:${corPessoa(d.id)}">${esc(nomePessoa(d.id))}</b>`).join('<i>+</i>'):''}</div>
+      <div class="lin-meta">${esc(l.fonte||'Conta')}<span class="tag ${tierDe(l.tier).cl}">${tierDe(l.tier).n}</span>${+l.pai>0?divisoes(l).map(d=>`<b style="color:${corPessoa(d.id)}">${esc(nomePessoa(d.id))}</b>`).join('<i>+</i>'):''}</div>
       <div class="lin-acoes">
         <button class="acao-mini forte" data-editar="${l.id}">✎ editar</button>
       </div></td>
-    <td><span class="pt" style="background:${CATS[l.cat].c}"></span><select data-cat="${l.id}" aria-label="Categoria de ${esc(l.nome)}"
+    <td><span class="pt" style="background:${catDe(l.cat).c}"></span><select data-cat="${l.id}" aria-label="Categoria de ${esc(l.nome)}"
         style="padding:5px 6px;font-size:12.5px;min-width:104px">${opcoesCat(l.cat)}</select></td>
     <td>${nDivisoes(l)>1
       ? /* O select representa UMA pessoa. Com a conta rachada entre várias, usá-lo
@@ -1404,7 +1417,7 @@ function renderLanc(c){
     const l=S.lanc.find(x=>String(x.id)===e.target.dataset.cat); if(!l) return;
     l.cat=e.target.value; l.catManual=true;   // escolha da pessoa: é ela que ensina o app
     render(); salvar(); vibrar(10);
-    toast(l.nome+' agora é '+CATS[l.cat].n);
+    toast(l.nome+' agora é '+catDe(l.cat).n);
   });
   tb.querySelectorAll('[data-val]').forEach(i=>i.onchange=e=>{
     const l=S.lanc.find(x=>String(x.id)===e.target.dataset.val);
@@ -1449,7 +1462,7 @@ function barras3D(){
   ordem.forEach(k=>{
     [1,2,3].forEach(t=>{
       const v=itens.filter(l=>l.cat===k&&l.tier===t).reduce((s,l)=>s+meuValor(l),0);
-      if(v>0.5) barras.push({cat:k,nome:CATS[k].n,cor:CATS[k].c,tier:t,valor:v,total:totalCat[k]});
+      if(v>0.5) barras.push({cat:k,nome:catDe(k).n,cor:catDe(k).c,tier:t,valor:v,total:totalCat[k]});
     });
   });
   return barras;
@@ -1462,8 +1475,8 @@ function frase3D(b){
     return;
   }
   const ano=b.valor*12;
-  el.innerHTML=`<span class="pt" style="background:${CATS[b.cat].c}"></span>`
-    +`<b>${esc(b.nome)}</b> · ${TIER[b.tier].n} · <b>${brl(b.valor)}</b> neste ciclo`
+  el.innerHTML=`<span class="pt" style="background:${catDe(b.cat).c}"></span>`
+    +`<b>${esc(b.nome)}</b> · ${tierDe(b.tier).n} · <b>${brl(b.valor)}</b> neste ciclo`
     +(b.tier===3?` — zerar isso devolve <b>${brl(ano)}</b> no ano.`
       :b.tier===2?' — dá pra reduzir sem doer muito.'
       :' — essencial: aqui não se corta, se negocia (plano, fornecedor, prazo).');
@@ -1488,7 +1501,7 @@ function renderViz3D(){
   frase3D(null);
   const vistas=[]; barras.forEach(b=>{ if(!vistas.includes(b.cat)) vistas.push(b.cat); });
   $('#viz3dLeg').innerHTML=vistas.map(k=>
-    `<span class="viz3d-c"><span class="pt" style="background:${CATS[k].c}"></span>${esc(CATS[k].n)}</span>`).join('');
+    `<span class="viz3d-c"><span class="pt" style="background:${catDe(k).c}"></span>${esc(catDe(k).n)}</span>`).join('');
 }
 
 function renderCortes(c){
@@ -1496,11 +1509,11 @@ function renderCortes(c){
   const lista=[];
   Object.entries(c.excesso).forEach(([k,v])=>{
     const itens=doCiclo().filter(l=>l.cat===k&&meuValor(l)>0).sort((a,b)=>meuValor(b)-meuValor(a));
-    lista.push({tipo:'teto',nome:CATS[k].n,valor:v,alvo:c.tetos[k],hoje:c.porCat[k],
+    lista.push({tipo:'teto',nome:catDe(k).n,valor:v,alvo:c.tetos[k],hoje:c.porCat[k],
       itens:itens.slice(0,3).map(l=>l.nome+' ('+brl(meuValor(l))+')')});
   });
   doCiclo().filter(l=>l.tier===3&&!c.excesso[l.cat]&&meuValor(l)>0).forEach(l=>{
-    lista.push({tipo:'zerar',nome:l.nome,valor:meuValor(l),alvo:0,hoje:meuValor(l),itens:[CATS[l.cat].n]});
+    lista.push({tipo:'zerar',nome:l.nome,valor:meuValor(l),alvo:0,hoje:meuValor(l),itens:[catDe(l.cat).n]});
   });
   lista.sort((a,b)=>b.valor-a.valor);
   const total=lista.reduce((s,x)=>s+x.valor,0), nova=c.sobra+total;
@@ -2068,7 +2081,7 @@ function renderPrev(){
    <table><thead><tr><th>Descrição</th><th>Categoria</th><th>Peso</th><th style="text-align:right">Valor</th><th></th></tr></thead><tbody>`+
    prev.map(p=>`<tr><td>${esc(p.nome)}${p.pRest?'<div style="font-size:11.5px;color:var(--txt-3)">faltam '+p.pRest+'x</div>':''}</td>
     <td><select data-pc="${p.k}">${Object.entries(CATS).map(([k,v])=>`<option value="${k}"${k===p.cat?' selected':''}>${v.n}</option>`).join('')}</select></td>
-    <td><select data-pt="${p.k}">${[1,2,3].map(t=>`<option value="${t}"${t===p.tier?' selected':''}>${TIER[t].n}</option>`).join('')}</select></td>
+    <td><select data-pt="${p.k}">${[1,2,3].map(t=>`<option value="${t}"${t===p.tier?' selected':''}>${tierDe(t).n}</option>`).join('')}</select></td>
     <td class="v">${brl(p.valor)}</td>
     <td style="text-align:right"><button class="btn-x" data-pd="${p.k}" aria-label="Descartar">×</button></td></tr>`).join('')+
    `</tbody></table><div style="margin-top:12px"><button class="btn" id="confirmPrev">Adicionar aos meus gastos</button></div>`;
@@ -2154,7 +2167,7 @@ function grafDonut(c){
   const cabeca=`<figcaption><div class="viz-tit">Para onde foi o seu dinheiro</div>
     <div class="viz-sub">Ciclo atual, só a sua parte. As sete maiores aparecem separadas; o resto vira “Outras”.</div></figcaption>`;
   if(!itens.length){ fig.innerHTML=cabeca+'<div class="viz-vazio">Sem gastos lançados neste ciclo ainda.</div>'; return; }
-  let dados=itens.slice(0,7).map(([k,v],i)=>({nome:CATS[k]?CATS[k].n:k,v,cor:SERIES[i]}));
+  let dados=itens.slice(0,7).map(([k,v],i)=>({nome:catDe(k).n,v,cor:SERIES[i]}));
   const resto=itens.slice(7).reduce((s,[,v])=>s+v,0);
   if(resto>0) dados.push({nome:'Outras',v:resto,cor:SERIES[7]});
   const total=dados.reduce((s,d)=>s+d.v,0);
@@ -2359,7 +2372,7 @@ function renderResumoAnalise(c){
   let alerta = '';
   if(estouros.length){
     const [k,v] = estouros[0];
-    const nome = CATS[k] ? CATS[k].n : k;
+    const nome = catDe(k).n;
     alerta = estouros.length===1
       ? `<b>${esc(nome)}</b> passou do teto em ${brl(v)}.`
       : `<b>${estouros.length} categorias</b> passaram do teto. A maior é
@@ -2786,7 +2799,7 @@ function desenharCalendario(){
   for(let d=1;d<=ultimo;d++){
     const itens=porDia[d]||[];
     const total=itens.reduce((s,x)=>s+(x.pago?0:x.valor),0);
-    const cores=[...new Set(itens.map(x=>CATS[x.cat]?CATS[x.cat].c:'var(--cout)'))].slice(0,4);
+    const cores=[...new Set(itens.map(x=>catDe(x.cat).c))].slice(0,4);
     html+=`<button class="cal-d${itens.length?' tem':''}${ehHoje(d)?' hoje':''}${calDia===d?' sel':''}"
       data-dia="${d}" aria-label="${d} de ${MES_LONGO[calMes]}${itens.length?', '+itens.length+' conta'+(itens.length>1?'s':''):''}">
       <span class="n">${d}</span>
@@ -2859,7 +2872,7 @@ function pintarLado(porDia,passado){
       <div class="cal-n">${itens.length} lançamento${itens.length>1?'s':''} neste dia</div>
     </div>
     <div class="cal-itens">${itens.map(x=>`<div class="cal-item${x.pago?' pago':''}">
-      <span class="pt" style="background:${CATS[x.cat]?CATS[x.cat].c:'var(--cout)'}"></span>
+      <span class="pt" style="background:${catDe(x.cat).c}"></span>
       <div class="cal-tx"><b>${esc(x.nome)}</b>
         <small>${x.selo}${x.pago?' · <b>pago</b>':''}${x.semFim?' · sem data de fim':''}</small></div>
       <div class="cal-vl">${x.valor>0?brl(x.valor):'—'}</div>
@@ -3089,7 +3102,7 @@ function renderVenc(){
 function exportarCSV(){
   const cab=['descricao','categoria','peso','tipo','valor_fatura','dividido_com','pago_por_outro','meu_valor','fonte','parcelas_restantes','vence_dia','entra_na_fatura','pago_como'];
   const fab=faturaAberta();
-  const lin=S.lanc.map(l=>[l.nome,CATS[l.cat]?CATS[l.cat].n:l.cat,TIER[l.tier].n,l.tipo,
+  const lin=S.lanc.map(l=>[l.nome,catDe(l.cat).n,tierDe(l.tier).n,l.tipo,
     l.valor,divisoes(l).map(d=>nomePessoa(d.id)).join(' + '),+l.pai||0,meuValor(l),l.fonte||'Conta',+l.pRest||0,+l.venc||0,
     +l.prox>0?'próxima':'aberta ('+dataBR(iso(fab.fecha))+')',
     naFatura(l)?'cartão':'à vista']);
@@ -3098,7 +3111,7 @@ function exportarCSV(){
     // continua nomeada na linha do mês em que ela dividiu o gasto.
     const nomes={}; fatiasDoHist(x).forEach(f=>{ nomes[f.id]=f.nome; });
     return (x.itens||[]).map(l=>['[fatura '+dataBR(x.data)+'] '+l.nome,
-      CATS[l.cat]?CATS[l.cat].n:l.cat,TIER[l.tier]?TIER[l.tier].n:l.tier,l.tipo,l.valor,
+      catDe(l.cat).n,tierDe(l.tier).n,l.tipo,l.valor,
       divisoes(l).map(d=>nomes[d.id||'']||nomePessoa(d.id)).join(' + '),+l.pai||0,
       Math.max(l.valor-(+l.pai||0),0),l.fonte||'Conta',+l.pRest||0,+l.venc||0,
       'fechada em '+dataBR(x.data), (l.meio==='avista'?'à vista':'cartão')]);});
@@ -3578,10 +3591,10 @@ function renderTopCats(c){
     return `<div style="padding:9px 0">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
         <span style="font-size:14.5px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-          <span class="pt" style="background:${CATS[k].c}"></span>${CATS[k].n}</span>
+          <span class="pt" style="background:${catDe(k).c}"></span>${catDe(k).n}</span>
         <span class="num" style="font-size:13px;color:${passou?'var(--vermelho)':'var(--txt-2)'};font-weight:600;white-space:nowrap">
           ${brl(v)}${t>0?' <span style="color:var(--txt-3);font-weight:500">/ '+brl(t)+'</span>':''}</span></div>
-      <div class="trilho" style="margin-top:7px"><i style="--p:${(p/100).toFixed(4)};background:${passou?'var(--vermelho)':CATS[k].c}"></i></div>
+      <div class="trilho" style="margin-top:7px"><i style="--p:${(p/100).toFixed(4)};background:${passou?'var(--vermelho)':catDe(k).c}"></i></div>
     </div>`;}).join('')+'</div>';
 }
 
@@ -3612,10 +3625,10 @@ function renderUltimos(c){
   const its=[...S.lanc].sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0)||b.valor-a.valor).slice(0,6);
   const selo=l=>(l.tipo==='fixo')?'todo mês':l.tipo==='var'?'todo mês, valor muda':l.tipo==='parc'?`faltam ${l.pRest||0}x`:'compra única';
   el.innerHTML=its.map(l=>`<div class="item">
-    <div class="ic" style="background:color-mix(in srgb,${CATS[l.cat].c} 13%,transparent);color:${CATS[l.cat].c}"
+    <div class="ic" style="background:color-mix(in srgb,${catDe(l.cat).c} 13%,transparent);color:${catDe(l.cat).c}"
       >${icone(ICONE_CAT[l.cat]||'outros')}</div>
     <div class="tx" data-editar="${l.id}" role="button" tabindex="0" title="Editar ${esc(l.nome)}"><div class="nm">${esc(l.nome)}</div>
-      <div class="dt">${CATS[l.cat].n} · ${selo(l)}${l.fonte&&l.fonte!=='Conta'?' · '+esc(l.fonte):''}${+l.prox>0?' · <b style="color:var(--indigo)">próxima fatura</b>':''}</div></div>
+      <div class="dt">${catDe(l.cat).n} · ${selo(l)}${l.fonte&&l.fonte!=='Conta'?' · '+esc(l.fonte):''}${+l.prox>0?' · <b style="color:var(--indigo)">próxima fatura</b>':''}</div></div>
     <div class="vl">${brl(l.valor)}${(+l.pai>0)?`<small>meu ${brl(meuValor(l))} · ${esc(nomePessoa(l.com))}</small>`:''}</div>
     <button class="rm" data-del="${l.id}" aria-label="Remover ${esc(l.nome)}">×</button>
   </div>`).join('');
@@ -3649,16 +3662,16 @@ function montarInsights(c){
      ainda dá pra segurar, e por isso vem primeiro na lista. */
   previsoes(c).slice(0,2).forEach(x=>{
     out.push({t:'atencao',e:'subindo',
-      txt:`Você já usou <b>${pct(x.usoPct)}</b> do teto de <b>${CATS[x.k].n}</b> e, no ritmo de agora, passa dele em <b>${x.faltam} dia${x.faltam===1?'':'s'}</b> — o ciclo fecharia em ${brl(x.proj)}. `
+      txt:`Você já usou <b>${pct(x.usoPct)}</b> do teto de <b>${catDe(x.k).n}</b> e, no ritmo de agora, passa dele em <b>${x.faltam} dia${x.faltam===1?'':'s'}</b> — o ciclo fecharia em ${brl(x.proj)}. `
          +`<button class="link" data-ir="plano:tetos">Remanejar o teto</button>`});
   });
   // categoria que mais subiu contra a média
   Object.keys(CATS).forEach(k=>{
     const m=mediaHist(k), hoje=c.porCat[k]||0;
     if(m&&m>50&&hoje>m*1.18)
-      out.push({t:'atencao',e:'atencao',txt:`<b>${CATS[k].n}</b> está ${pct(hoje/m-1)} acima da sua média dos últimos meses — ${brl(hoje)} contra ${brl(m)}.`});
+      out.push({t:'atencao',e:'atencao',txt:`<b>${catDe(k).n}</b> está ${pct(hoje/m-1)} acima da sua média dos últimos meses — ${brl(hoje)} contra ${brl(m)}.`});
     if(m&&m>50&&hoje<m*0.8&&hoje>0)
-      out.push({t:'bom',e:'descendo',txt:`<b>${CATS[k].n}</b> caiu ${pct(1-hoje/m)} em relação à sua média: ${brl(m-hoje)} a menos este mês.`});
+      out.push({t:'bom',e:'descendo',txt:`<b>${catDe(k).n}</b> caiu ${pct(1-hoje/m)} em relação à sua média: ${brl(m-hoje)} a menos este mês.`});
   });
   // o maior cortável
   const corta=doCiclo().filter(l=>l.tier===3&&meuValor(l)>0).sort((a,b)=>meuValor(b)-meuValor(a))[0];
@@ -3761,8 +3774,8 @@ function renderEco(){
   linhaFaturaDaFolha((p&&!p.incompleto)?p.meio==='avista':meioForm==='avista');
   if(!p){ el.innerHTML='<span class="aviso">Escreva o gasto e o valor — <b>qualquer</b> palavra serve, o app acha a categoria. Ex.: <b>'+esc(exemploRapido)+'</b></span>'; return; }
   if(p.incompleto){ el.innerHTML='<span class="aviso">Falta o valor no fim. Ex.: <b>'+esc(p.nome)+' 45</b></span>'; return; }
-  el.innerHTML=`<span class="pt" style="background:${CATS[p.cat].c}"></span>
-    <span><b>${esc(p.nome)}</b> · ${brl(p.valor)} · ${CATS[p.cat].n} · ${TIER[p.tier].n}${p.meio==='avista'?' · <b>à vista, fora da fatura</b>':''}</span>
+  el.innerHTML=`<span class="pt" style="background:${catDe(p.cat).c}"></span>
+    <span><b>${esc(p.nome)}</b> · ${brl(p.valor)} · ${catDe(p.cat).n} · ${tierDe(p.tier).n}${p.meio==='avista'?' · <b>à vista, fora da fatura</b>':''}</span>
     ${p.herdado?'<span class="aviso">(como da última vez)</span>':''}`;
 }
 function salvarRapido(){
@@ -3891,7 +3904,7 @@ function renderChips(){
     const inp=$('#rapido'); if(inp) inp.placeholder=exemploRapido;
   }
   el.innerHTML=its.map(x=>`<button type="button" class="chip-s" data-chip="${esc(x.nome)}">
-    <i style="background:${CATS[x.cat]?CATS[x.cat].c:'var(--cout)'}"></i>${esc(x.nome)}</button>`).join('');
+    <i style="background:${catDe(x.cat).c}"></i>${esc(x.nome)}</button>`).join('');
   el.querySelectorAll('[data-chip]').forEach(b=>b.onclick=()=>{
     const inp=$('#rapido');
     inp.value=b.dataset.chip+' ';
@@ -3969,14 +3982,14 @@ function mensagemDoMomento(tipo,c){
     if(porDia<=0) return {titulo:'🌅 Hoje é dia de segurar',
       corpo:`O que cabia neste ciclo já acabou — está ${brl(-folga)} além. Um dia sem gasto novo já melhora o fim do mês.`,aba:'hoje'};
     if(estourou) return {titulo:`☀️ Bom dia — ${brl(porDia)} pra hoje`,
-      corpo:`${CATS[estourou[0]].n} passou ${brl(estourou[1])} do teto. Se der pra evitar essa categoria hoje, o mês fecha no azul.`,aba:'hoje'};
+      corpo:`${catDe(estourou[0]).n} passou ${brl(estourou[1])} do teto. Se der pra evitar essa categoria hoje, o mês fecha no azul.`,aba:'hoje'};
     return {titulo:`☀️ Bom dia — ${brl(porDia)} pra hoje`,
       corpo:`É o que dá pra gastar sem mexer nos ${brl(c.meta)} que você quer guardar. Sobram ${brl(folga)} pros ${dias} dias que faltam.`,aba:'hoje'};
   }
 
   if(tipo==='meio'){
     if(estourou) return {titulo:`🍽️ Antes de decidir o almoço`,
-      corpo:`${CATS[estourou[0]].n} já está ${brl(estourou[1])} acima do teto este mês. Comer em casa hoje devolve esse valor pro seu bolso.`,aba:'analise:cortes'};
+      corpo:`${catDe(estourou[0]).n} já está ${brl(estourou[1])} acima do teto este mês. Comer em casa hoje devolve esse valor pro seu bolso.`,aba:'analise:cortes'};
     if(cortavel) return {titulo:`🍽️ ${brl(porDia)} ainda cabem hoje`,
       corpo:`Pra referência: ${cortavel.nome} custa ${brl(meuValor(cortavel))} por mês, ${brl(meuValor(cortavel)*12)} no ano.`,aba:'hoje'};
     return {titulo:`🍽️ ${brl(porDia)} ainda cabem hoje`,
@@ -4110,8 +4123,8 @@ function mostrarRetro(x){
     <div class="re-card" style="animation-delay:.15s">
       <div class="l">Para onde foi</div>
       ${variacoes.map(v=>`<div class="re-linha">
-        <span class="pt" style="background:${CATS[v.k]?CATS[v.k].c:'var(--cout)'}"></span>
-        <span class="rn">${CATS[v.k]?CATS[v.k].n:v.k}</span>
+        <span class="pt" style="background:${catDe(v.k).c}"></span>
+        <span class="rn">${catDe(v.k).n}</span>
         <span class="rv">${brl(v.v)}</span>
         <span class="rd" style="color:${v.d===null||Math.abs(v.d)<0.005?'var(--txt-3)':(v.d>0?'var(--vermelho)':'var(--verde)')}">
           ${v.d===null?'—':Math.abs(v.d)<0.005?'igual':(v.d>0?'+':'−')+Math.abs(Math.round(v.d*100))+'%'}</span></div>`).join('')}

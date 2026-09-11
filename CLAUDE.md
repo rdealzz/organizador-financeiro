@@ -1069,3 +1069,53 @@ caber uma palavra por linha e os chips viravam uma escada.
 **A regra que fica:** separador desenhado com pontuação só funciona enquanto a
 linha não dobra — e no celular ela sempre dobra. Se dois pedaços precisam ficar
 separados, o espaço entre eles é `gap`, nunca um caractere.
+
+## Categoria desconhecida derrubava o app inteiro (v10.10)
+
+Encontrado numa passagem de validação, não por queixa: **um lançamento com uma
+categoria que este aparelho não conhece apagava a tela toda.** `CATS[l.cat].c`
+com uma chave que não existe estoura em `render()`, e render é o caminho de tudo
+— o resultado é tela branca, sem nem como apagar o gasto que a causou.
+
+Não é hipótese de laboratório. O estado é **um JSON só, viajando entre aparelhos
+e entre versões**: basta o celular rodar uma versão que conheça uma categoria a
+mais (o `sw.js` segura a versão antiga até a próxima abertura) e o tablet recebe
+pela nuvem uma chave que não tem. Backup editado à mão e `l.cat` perdido dão no
+mesmo.
+
+Metade das leituras já se defendia com `CATS[x]?CATS[x].c:'var(--cout)'`,
+espalhado e desigual — e a defesa faltava justamente em `renderTopCats`,
+`renderLanc`, `renderUltimos` e nos insights. Agora existe **um lugar só**:
+
+```js
+const catDe=k=>CATS[k]||CATS.outros;
+const tierDe=t=>TIER[t]||TIER[2];
+```
+
+**Nenhuma leitura de `CATS[...]` ou `TIER[...]` por dado do usuário passa fora
+deles** — os ternários espalhados viraram chamadas, e as leituras cruas também.
+`CATS[k]` cru só continua válido onde `k` vem de `Object.keys(CATS)`.
+
+Duas decisões dentro disso:
+
+1. **Cair em "Outros", não esconder o gasto.** Sumir com a linha faria o total
+   da tela não fechar com a fatura — pior que mostrá-la no lugar aproximado.
+2. **Nada é reescrito no estado.** A categoria original continua gravada e volta
+   a aparecer certa no aparelho que a conhece; normalizar o dado ao ler
+   destruiria, no aparelho atrasado, a classificação feita no outro.
+
+### O que a validação cobriu
+
+Três suítes, além das que já existiam: **motor** (51 asserções — as identidades
+contábeis `bruto+avista = total`, `total = minha parte + terceiros`,
+`gasto = soma dos pesos = soma das categorias`, as duas faturas, parcelas no
+calendário, fechamento de ciclo, CSV), **interface** (76 — as quatro áreas e
+todas as sub-abas, cada botão e select da tabela, a folha de edição, a divisão
+entre várias pessoas, o calendário pelas três portas, menu de perfil, tema, 3D,
+e as camadas com a esfera ligada nos dois temas) e **bordas** (11 — ida e volta
+do backup, estado estranho vindo de fora, as frases de erro do `auth.js` e o
+teto de 512 KB recusando de verdade).
+
+**A regra que fica:** dado que veio do estado nunca indexa uma tabela do código
+direto. Entre os dois vai uma função com padrão — senão a primeira chave
+inesperada apaga o app.
