@@ -3021,3 +3021,15 @@ body.cal-aberto .tema-flutua{display:none}
 .cal-dias.troca{animation:calTroca .2s var(--suave) both}
 @keyframes calTroca{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){ .cal-dias.troca{animation:none} .cal{animation:none} }
+
+/* ---------- divisão do gasto: atalhos e a frase ---------- */
+.divisao{display:flex;flex-direction:column;gap:8px}
+.div-chips{display:flex;gap:6px;flex-wrap:wrap}
+.div-chips button{flex:1;min-width:88px;padding:8px 10px;font:inherit;font-size:13px;font-weight:600;
+  border-radius:var(--r-sm);border:1px solid var(--sep);background:var(--fill);color:var(--txt-2);cursor:pointer;
+  transition:background .14s,color .14s,border-color .14s}
+.div-chips button:hover{background:var(--fill-2);color:var(--txt)}
+.div-chips button[aria-pressed="true"]{background:var(--azul);border-color:transparent;color:var(--sobre-azul)}
+.div-diz{margin:6px 0 0;font-size:12.5px;line-height:1.5;color:var(--txt-2)}
+.div-diz b{color:var(--txt)}
+.divisao-bloco .cards{margin-top:2px}

@@ -936,6 +936,42 @@ cima de qualquer uma delas. A barra é `space-between`, então a tecla nova ganh
 `margin-left:auto` — sem isso ela boiava sozinha no centro da tela, sem formar
 grupo com o tema.
 
+## "O orçamento está contando o dinheiro dos outros" (v10.7)
+
+A queixa era essa, e a medição diz o contrário: **o motor sempre contou só a
+parte de quem usa o app**. `meuValor(l)` é `valor - pai`, e é ele que soma em
+`calc()`, nos tetos, na sobra do mês e no *quanto posso gastar*. Medido com
+fatura de R$ 2.400 e R$ 1.100 de terceiros: gasto R$ 1.300, e cada categoria
+entra só com a fatia própria (estudo 500 de 1000, assinatura 100 de 200).
+
+O defeito era de LEITURA, e ele é real: o resumo dizia "Gastou R$ 1.698" sem
+contar que aquilo já era só a parte dela, a fatura cheia aparecia em outra tela,
+e quem lia as duas concluía — com razão — que o app estava comendo o orçamento
+com dinheiro dos outros. Número certo que a pessoa não consegue conferir vale
+tão pouco quanto número errado.
+
+**`resumoDivisao(c)`** põe os três lado a lado em Hoje, e eles fecham em conta:
+*total lançado = minha parte + terceiros*. Nenhum é novidade no motor — o bloco
+só os mostra juntos, com a lista de quem paga o quê. Ele **só aparece quando há
+gasto dividido**: sem divisão os três seriam o mesmo valor repetido, e um bloco
+que não informa nada ensina a pular o que vem depois dele. A frase do resumo de
+Análises ganhou a mesma distinção, também só quando `c.pai > 0`.
+
+### Dividir deixou de exigir conta de cabeça
+
+O campo perguntava "quanto a outra pessoa cobre", e quem pensa "eu pago metade"
+tinha que calcular o complemento. Agora há três atalhos — **Metade**, **Ela paga
+tudo**, **Só meu** — e, embaixo, a frase em reais: *"Pai cobre R$ 500 · sua
+parte: R$ 300 — e é só ela que entra no seu orçamento"*. O campo continua para a
+divisão torta (R$ 300 eu, R$ 500 ela), que é justamente o caso que atalho nenhum
+cobre. Os mesmos três atalhos estão na folha de lançar e na de editar,
+`pintarDivisao(pre)` serve as duas pelo prefixo do id.
+
+**O que continua não existindo:** dividir UM gasto entre três ou mais pessoas.
+`l.com` aponta para uma pessoa e `l.pai` guarda um valor. Gastos diferentes com
+pessoas diferentes já funcionam (faculdade com o pai, assinatura com o Gui);
+rachar a mesma conta em três, não.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

@@ -223,6 +223,10 @@ html[data-tema="escuro"] #splash{background:#000}
     </div>
   </section>
 
+  <!-- O resumo de três números. Só aparece quando existe gasto dividido: sem
+       divisão ele repetiria o mesmo valor três vezes. -->
+  <div id="blocoDivisao"></div>
+
   <div id="pedirNome" hidden></div>
   <div id="cAviso"></div>
   <div id="insights"></div>
@@ -726,8 +730,18 @@ html[data-tema="escuro"] #splash{background:#000}
       <div class="full" id="eCampoParc" hidden><label for="eParc">Parcelas que ainda faltam</label>
         <input type="number" inputmode="numeric" id="eParc" min="0" step="1" placeholder="Ex.: 8"></div>
       <div class="full"><label for="ePagador">Quem paga</label><select id="ePagador"><option value="eu">Eu, sozinho</option></select></div>
-      <div class="full" id="eCampoPai" hidden><label for="ePai" id="eLabPai">Quanto a outra pessoa cobre</label>
-        <input type="number" inputmode="decimal" id="ePai" min="0" step="0.01" placeholder="0,00"></div>
+      <div class="full" id="eCampoPai" hidden>
+        <label for="ePai" id="eLabPai">Quanto a outra pessoa cobre</label>
+        <div class="divisao">
+          <div class="div-chips" id="eDivChips" role="group" aria-label="Como dividir">
+            <button type="button" data-ediv="50">Metade</button>
+            <button type="button" data-ediv="100">Ela paga tudo</button>
+            <button type="button" data-ediv="0">Só meu</button>
+          </div>
+          <input type="number" inputmode="decimal" id="ePai" min="0" step="0.01" placeholder="0,00">
+        </div>
+        <p class="div-diz" id="eDivDiz"></p>
+      </div>
       <div><label for="eCat">Categoria</label><select id="eCat"></select></div>
       <div><label for="eTier">Peso</label><select id="eTier">
         <option value="1">Essencial</option><option value="2">Vale a pena</option><option value="3">Pode cortar</option></select></div>
@@ -825,8 +839,18 @@ html[data-tema="escuro"] #splash{background:#000}
              pintarPagadorForm(), no app.js. -->
         <div class="full"><label for="lPagador">Quem paga</label><select id="lPagador">
           <option value="eu">Eu, sozinho</option></select></div>
-        <div class="full" id="campoPai" hidden><label for="lPai" id="labPai">Quanto a outra pessoa cobre</label>
-          <input type="number" inputmode="decimal" id="lPai" min="0" step="0.01" placeholder="0,00"></div>
+        <div class="full" id="campoPai" hidden>
+          <label for="lPai" id="labPai">Quanto a outra pessoa cobre</label>
+          <div class="divisao">
+            <div class="div-chips" id="lDivChips" role="group" aria-label="Como dividir">
+              <button type="button" data-div="50">Metade</button>
+              <button type="button" data-div="100">Ela paga tudo</button>
+              <button type="button" data-div="0">Só meu</button>
+            </div>
+            <input type="number" inputmode="decimal" id="lPai" min="0" step="0.01" placeholder="0,00">
+          </div>
+          <p class="div-diz" id="lDivDiz"></p>
+        </div>
       </div>
 
       <p class="palpite" id="lPalpite" hidden></p>

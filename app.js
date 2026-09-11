@@ -534,6 +534,7 @@ function calc(){
 function render(){
   const c=calc();
   renderHero(c);
+  resumoDivisao(c);
   renderInsights(c);
   $('#cAviso').innerHTML=avisoCiclo;
 
@@ -1650,6 +1651,7 @@ $('#lPagador').onchange=e=>{
   else if(v) $('#lPai').value=(v/2).toFixed(2);
   rotularPai();
   ajustarCamposForm();   // escolheu alguém: o campo do quanto aparece agora
+  pintarDivisao('l');
 };
 /* Campo desabilitado é campo que ocupa espaço sem servir pra nada. Parcelas só
    existe quando o gasto é parcelado; "quanto a outra pessoa cobre" só quando
@@ -1672,6 +1674,7 @@ function ajustarCamposForm(){
   const pag=$('#lPagador').value, divide=(pag!=='eu'&&pag!=='+');
   const cpai=$('#campoPai'); if(cpai) cpai.hidden=!divide;
   if(!divide) $('#lPai').value='';
+  if(divide) pintarDivisao('l');
 }
 $('#lTipo').onchange=()=>{ ajustarCamposForm(); if($('#lTipo').value==='parc') $('#lParc').focus(); };
 ['#lParc','#lVenc'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('input',ajustarCamposForm); });
@@ -2300,8 +2303,15 @@ function renderResumoAnalise(c){
   const veredito = bem
     ? `Sobram <b>${brl(folga)}</b> para gastar neste ciclo`
     : `Você passou <b>${brl(-folga)}</b> do que dava para gastar`;
-  const conta = `Gastou ${brl(c.gasto)} de ${brl(c.disponivel)} — o que sobra da renda
-     depois de guardar ${brl(c.meta)}.`;
+  /* Com gasto dividido, "gastou X" sem dizer de quem é o X faz a pessoa comparar
+     esse número com a fatura e concluir que o app está somando o dinheiro dos
+     outros. A frase passa a separar as duas coisas. */
+  const conta = c.pai>0
+    ? `Gastou ${brl(c.gasto)} de ${brl(c.disponivel)} — <b>a sua parte</b>, o que sobra da renda
+       depois de guardar ${brl(c.meta)}. Foram lançados ${brl(c.bruto+c.avista)} no ciclo, mas
+       ${brl(c.pai)} são de outras pessoas e não entram na sua conta.`
+    : `Gastou ${brl(c.gasto)} de ${brl(c.disponivel)} — o que sobra da renda
+       depois de guardar ${brl(c.meta)}.`;
 
   let alerta = '';
   if(estouros.length){
@@ -2497,6 +2507,7 @@ function ajustarEdicao(){
   const pag=$('#ePagador').value, divide=(pag!=='eu'&&pag!=='+');
   $('#eCampoPai').hidden=!divide;
   if(!divide) $('#ePai').value='';
+  if(divide) pintarDivisao('e');
   $('#eAviso').innerHTML=fraseDoPrazo(tipo,+$('#eParc').value||0,+$('#eVenc').value||0);
 }
 /* "Faltam 8 parcelas" é um número; "termina em maio de 2027" é uma resposta.
@@ -3379,6 +3390,79 @@ function renderHero(c){
   $('#hoje-dias').textContent=dias+(dias===1?' dia':' dias');
 }
 
+
+/* ══════════════════ O QUE É MEU, O QUE É DE TERCEIROS ══════════════════
+
+   O cálculo do orçamento SEMPRE usou só a parte que sai do bolso de quem usa:
+   `meuValor(l)` é `valor - pai`, e é ele que soma em `calc()`, nos tetos, na
+   sobra do mês e no "quanto posso gastar". Medido: fatura de R$ 2.400 com
+   R$ 1.100 de terceiros dá gasto de R$ 1.300, e cada categoria entra só com a
+   minha fatia.
+
+   O que faltava era **dizer isso na tela**. O resumo mostrava "Gastou
+   R$ 1.698" sem contar que aquilo já era só a minha parte, e a fatura cheia
+   aparecia em outro lugar — quem lia as duas concluía, com razão, que o app
+   estava comendo o orçamento com dinheiro dos outros.
+
+   Três números resolvem, e eles fecham em conta: **total lançado = minha parte
+   + terceiros**. Nenhum é novidade no motor; o bloco só os põe lado a lado. */
+function resumoDivisao(c){
+  const el=$('#blocoDivisao'); if(!el) return;
+  /* Sem divisão os três números seriam o mesmo valor repetido — e um bloco que
+     não informa nada ensina a pessoa a pular o que vem depois dele. */
+  if(!(c.pai>0)||!S.lanc.length){ el.innerHTML=''; return; }
+  const total=c.bruto+c.avista;
+  const fatias=c.fatias||[];
+  el.innerHTML=`<section class="bloco divisao-bloco">
+    <div class="bloco-topo"><h2>Quanto é seu, de verdade</h2>
+      <button class="link" data-ir="analise:lanc">ver por pessoa</button></div>
+    <div class="cards">
+      <div class="card"><div class="l">Total lançado</div><div class="v">${brl(total)}</div>
+        <div class="n">tudo que passou no ciclo${c.avista>0?', no cartão e fora dele':''}</div></div>
+      <div class="card" style="border-color:var(--verde)"><div class="l">Minha parte</div>
+        <div class="v" style="color:var(--verde)">${brl(c.gasto)}</div>
+        <div class="n">é só ela que entra no orçamento</div></div>
+      <div class="card" style="border-color:var(--pai)"><div class="l">Terceiros pagam</div>
+        <div class="v" style="color:var(--pai)">${brl(c.pai)}</div>
+        <div class="n">${fatias.length?fatias.map(f=>esc(f.nome)+' '+brl(f.valor)).join(' · '):'de outras pessoas'}</div></div>
+    </div>
+    <p class="ajuda" style="margin:12px 0 0">Os <b>${brl(c.pai)}</b> de outras pessoas não consomem nada do seu
+      orçamento: o <i>quanto posso gastar</i>, os tetos e a sobra do mês contam apenas os
+      <b>${brl(c.gasto)}</b> que saem do seu bolso. A fatura inteira continua em
+      <button class="link" data-ir="analise:lanc">Lançamentos</button>, que é o registro do cartão.</p>
+  </section>`;
+}
+
+/* ---------- os atalhos de divisão ----------
+
+   O campo perguntava "quanto a outra pessoa cobre", e quem pensa "eu pago
+   metade" tinha que fazer a conta de cabeça para escrever o complemento. Os
+   três atalhos cobrem o que acontece na vida — metade, ela paga tudo, é só meu
+   — e a frase embaixo diz, em reais, o que sobra para você. O campo continua
+   ali para a divisão torta (300 eu, 500 ela). */
+function pintarDivisao(pre){
+  const val=+$('#'+pre+'Valor').value||0;
+  const pago=Math.min(+$('#'+pre+'Pai').value||0,val);
+  const meu=Math.max(val-pago,0);
+  const sel=$('#'+pre+'Pagador').value, [,id]=String(sel).split(':');
+  const nome=(sel==='eu'||sel==='+')?'a outra pessoa':nomePessoa(id);
+  const chips=$(pre==='l'?'#lDivChips':'#eDivChips');
+  if(chips) chips.querySelectorAll('[data-div],[data-ediv]').forEach(b=>{
+    const pct=+(b.dataset.div||b.dataset.ediv);
+    const alvo=val*pct/100;
+    b.setAttribute('aria-pressed', val>0&&Math.abs(alvo-pago)<0.01 ? 'true':'false');
+  });
+  const diz=$(pre==='l'?'#lDivDiz':'#eDivDiz');
+  if(diz) diz.innerHTML= val>0
+    ? `<b>${esc(nome)}</b> cobre ${brl(pago)} · <b>sua parte: ${brl(meu)}</b> — e é só ela que entra no seu orçamento.`
+    : 'Escreva o valor do gasto para dividir.';
+}
+function aplicarDivisao(pre,pct){
+  const val=+$('#'+pre+'Valor').value||0;
+  $('#'+pre+'Pai').value = pct===0 ? '' : (val*pct/100).toFixed(2);
+  pintarDivisao(pre);
+}
+
 /* ---------- barra por categoria no topo de Hoje ---------- */
 function renderTopCats(c){
   const its=Object.entries(c.porCat).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,4);
@@ -4031,6 +4115,13 @@ document.addEventListener('click',e=>{
   const b=e.target.closest('#eMeio [data-emeio]'); if(!b) return;
   edMeio=b.dataset.emeio; pintarMeioEd(); vibrar(8);
 });
+/* Os atalhos de divisão, nos dois formulários. */
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-div]'); if(b){ e.preventDefault(); aplicarDivisao('l',+b.dataset.div); vibrar(8); return; }
+  const c=e.target.closest('[data-ediv]'); if(c){ e.preventDefault(); aplicarDivisao('e',+c.dataset.ediv); vibrar(8); }
+});
+['#lValor','#lPai'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('input',()=>pintarDivisao('l')); });
+['#eValor','#ePai'].forEach(id=>{ const el=$(id); if(el) el.addEventListener('input',()=>pintarDivisao('e')); });
 /* Abrir a edição de qualquer lugar que mostre um lançamento. */
 document.addEventListener('click',e=>{
   const b=e.target.closest('[data-editar]'); if(!b) return;
