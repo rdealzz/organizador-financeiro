@@ -1038,3 +1038,31 @@ alguém tem que pagar.
 - `vercel.json` tem uma CSP restritiva: se algum domínio novo do Firebase for
   chamado, precisa entrar no `connect-src` ou a chamada falha em silêncio
   (aparece como "sem rede" para o usuário).
+
+## "editarfoi no Pix" — separador de texto não sobrevive à dobra (v10.9)
+
+A primeira coluna da tabela de lançamentos era **um parágrafo só**: nome, conta,
+peso, quem divide e as ações, tudo costurado com `·` entre os pedaços. Num
+celular de 430px a linha dobrava no meio, e onde a linha dobra **o separador
+some junto com o espaço** — o resultado na tela era `editarfoi no Pix` grudado,
+com o *editar* perdido no meio de um texto corrido. A função de editar existia e
+funcionava; o que não existia era um jeito de ver que ela estava ali.
+
+A correção não foi encurtar o texto, foi **parar de usar texto como espaçamento**.
+A célula virou três faixas empilhadas, cada uma com `display:flex` e `gap` — o
+espaço passa a ser layout, e layout não desaparece na dobra:
+
+* **`.lin-nome`** — o nome do gasto e os selos (única, parcela, à vista).
+* **`.lin-meta`** — conta, peso e quem divide. Quando são várias pessoas elas se
+  juntam por um `<i>+</i>` visível, não por um ponto: "+" continua legível
+  sozinho no começo de uma linha nova; "·" no começo da linha lê-se como sujeira.
+* **`.lin-acoes`** — botões de verdade (`.acao-mini`), não links dentro de frase.
+  *editar* é o único **preenchido** (`.forte`), porque é a ação principal da
+  linha; "foi no Pix/cartão" e "jogar pra próxima" ficam contornados.
+
+`#tbLanc td:first-child` ganhou `min-width:208px`. Sem isso a coluna encolhia até
+caber uma palavra por linha e os chips viravam uma escada.
+
+**A regra que fica:** separador desenhado com pontuação só funciona enquanto a
+linha não dobra — e no celular ela sempre dobra. Se dois pedaços precisam ficar
+separados, o espaço entre eles é `gap`, nunca um caractere.

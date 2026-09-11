@@ -1344,10 +1344,14 @@ function renderLanc(c){
   /* Uma linha só, usada nas duas listas: a fatura aberta e a fila da seguinte.
      O botão do fim da segunda linha é o que move o gasto entre elas. */
   const linha=l=>`<tr${+l.prox>0?' class="lin-prox"':''}>
-    <td>${esc(l.nome)} ${selo(l)}${+l.prox>0?' <span class="tag cicloprox">próxima fatura</span>':''}${naFatura(l)?'':' <span class="tag avista">à vista</span>'}<div style="font-size:11.5px;color:var(--txt-3)">${esc(l.fonte||'Conta')} · <span class="tag ${TIER[l.tier].cl}">${TIER[l.tier].n}</span>${+l.pai>0?` · ${divisoes(l).map(d=>`<b style="color:${corPessoa(d.id)}">${esc(nomePessoa(d.id))}</b>`).join(' + ')}`:''}
-      · <button class="link mini" data-editar="${l.id}">editar</button>
-      · <button class="link mini" data-meio="${l.id}">${naFatura(l)?'foi no Pix':'foi no cartão'}</button>${naFatura(l)?`
-      · <button class="link mini" data-prox="${l.id}">${+l.prox>0?'trazer pra esta fatura':'jogar pra próxima'}</button>`:''}</div></td>
+    <td>
+      <div class="lin-nome">${esc(l.nome)} ${selo(l)}${+l.prox>0?'<span class="tag cicloprox">próxima fatura</span>':''}${naFatura(l)?'':'<span class="tag avista">à vista</span>'}</div>
+      <div class="lin-meta">${esc(l.fonte||'Conta')}<span class="tag ${TIER[l.tier].cl}">${TIER[l.tier].n}</span>${+l.pai>0?divisoes(l).map(d=>`<b style="color:${corPessoa(d.id)}">${esc(nomePessoa(d.id))}</b>`).join('<i>+</i>'):''}</div>
+      <div class="lin-acoes">
+        <button class="acao-mini forte" data-editar="${l.id}">✎ editar</button>
+        <button class="acao-mini" data-meio="${l.id}">${naFatura(l)?'foi no Pix':'foi no cartão'}</button>${naFatura(l)?`
+        <button class="acao-mini" data-prox="${l.id}">${+l.prox>0?'trazer pra esta':'jogar pra próxima'}</button>`:''}
+      </div></td>
     <td><span class="pt" style="background:${CATS[l.cat].c}"></span><select data-cat="${l.id}" aria-label="Categoria de ${esc(l.nome)}"
         style="padding:5px 6px;font-size:12.5px;min-width:104px">${opcoesCat(l.cat)}</select></td>
     <td>${nDivisoes(l)>1

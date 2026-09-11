@@ -3040,3 +3040,30 @@ body.cal-aberto .tema-flutua{display:none}
 .div-linha input{width:110px;flex:0 0 110px;text-align:right}
 .div-linha .btn-x{flex:0 0 32px}
 .div-vazio{margin:8px 0 0;font-size:13px;color:var(--txt-3)}
+
+/* ---------- a linha da tabela de lançamentos ----------
+
+   Antes era um parágrafo só, com tudo separado por " · " — conta, peso, quem
+   divide e três links de ação. Numa coluna estreita a linha quebrava no meio dos
+   separadores e os pontos sumiam nas dobras: "editarfoi no Pix" grudado, e o
+   *editar* perdido no meio de um texto corrido.
+
+   Agora são três faixas empilhadas, e **nenhuma usa separador de texto**: quem
+   separa é o `gap` do flex, que não some quando a linha quebra. As ações viraram
+   botõezinhos de verdade — o *editar* é o mais forte porque é o que abre tudo o
+   que a linha não cabe. */
+.lin-nome{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:14.5px;letter-spacing:-.01em}
+.lin-meta{display:flex;align-items:center;gap:4px 7px;flex-wrap:wrap;
+  margin-top:3px;font-size:11.5px;color:var(--txt-3)}
+.lin-meta i{font-style:normal;opacity:.5}
+.lin-acoes{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.acao-mini{font:inherit;font-size:11.5px;font-weight:600;line-height:1;padding:6px 9px;
+  border-radius:var(--r-full);border:1px solid var(--sep);background:transparent;
+  color:var(--txt-2);cursor:pointer;white-space:nowrap;
+  transition:background .14s,color .14s,border-color .14s}
+.acao-mini:hover{background:var(--fill);color:var(--txt)}
+.acao-mini.forte{border-color:transparent;background:var(--azul);color:var(--sobre-azul)}
+.acao-mini.forte:hover{filter:brightness(1.06);background:var(--azul);color:var(--sobre-azul)}
+/* A primeira coluna precisa de largura pra que nome, selos e ações não virem uma
+   escada de uma palavra por linha. A tabela já rola no eixo x. */
+#tbLanc td:first-child{min-width:208px}
