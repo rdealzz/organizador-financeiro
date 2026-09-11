@@ -612,6 +612,17 @@ html[data-tema="escuro"] #splash{background:#000}
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.4" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>
       </span>
     </button>
+    <!-- O calendário também aqui: a tela de cartas é a primeira coisa que
+         aparece, e sem ele a única porta para o calendário era entrar numa área
+         primeiro. Fica na barra de teclas, junto do perfil e do tema, e não como
+         uma quinta CARTA: as cartas são áreas do app, e o calendário é uma
+         camada que abre por cima de qualquer uma delas. -->
+    <button class="tecla tecla-ic" id="portalCal" type="button"
+            aria-label="Abrir o calendário de contas" title="Calendário de contas">
+      <span class="tecla-face">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.4"/><path d="M3.5 9.6h17M8.2 3.5v3M15.8 3.5v3"/><circle cx="8.6" cy="13.4" r="1.05"/><circle cx="12" cy="13.4" r="1.05"/><circle cx="15.4" cy="13.4" r="1.05"/></svg>
+      </span>
+    </button>
     <button class="tecla tecla-ic" id="portalTema" type="button" aria-label="Alternar tema">
       <span class="tecla-face"></span>
     </button>

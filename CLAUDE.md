@@ -890,6 +890,52 @@ ainda não sabe que existe calendário; o ícone é o atalho de quem já sabe. E
 espaço do canto direito do cabeçalho, e um botão novo sem esse ajuste faria
 "Controle financeiro pessoal" passar por baixo dos ícones.
 
+## O calendário quebrado com a esfera ligada (v10.6)
+
+Com a esfera de fundo ligada e o app no tema **claro**, o calendário abria
+ilegível: título azul-escuro sobre quase-preto, setas invisíveis, células
+brancas soltas no meio do escuro.
+
+A causa foi a correção anterior mal aplicada. A nota da `--bg: transparent` manda
+toda camada nova entrar na lista das **superfícies opacas**, e eu pus a `.cal`
+lá dentro — só que aquela lista não diz "seja opaca": ela pinta **`#08131F`
+fixo**. Isso funciona para as superfícies pequenas que flutuam sobre a esfera
+(menu, folha, snack), mas o calendário é uma TELA INTEIRA cujo conteúdo usa as
+variáveis do tema. No claro o resultado foi texto escuro sobre fundo escuro, com
+`--fill` e `--card-2` ainda claros nas células.
+
+A regra da lista continua valendo — **opaco, sempre** —, mas para tela cheia a
+cor tem que vir do tema:
+
+```css
+[data-tema="claro"]  body.fundo-vivo .cal{background:#FFFFFF}
+[data-tema="escuro"] body.fundo-vivo .cal{background:#08131F}
+```
+
+**A lição, que vale para a próxima camada:** entrar na lista não é o objetivo; o
+objetivo é ser opaca *no tema em que se está*. Camada pequena aceita o escuro
+fixo porque o conteúdo dela é curto e escrito para esse fundo; tela cheia, não.
+Ao criar uma, teste com a esfera LIGADA **nos dois temas** — foi só assim que
+isto apareceu.
+
+Junto: na lista de dias do mês, valor zero deixou de virar "pago". A fatura dos
+meses à frente entra sem valor porque ainda vai ser formada, e o dia aparecia
+como quitado. Agora só diz "pago" quando TODOS os itens do dia estão marcados;
+os outros mostram um traço.
+
+### O ícone também na tela de cartas
+
+O calendário passou a abrir de três lugares: o botão grande em *Hoje*, o ícone do
+cabeçalho e agora o ícone da **tela de cartas** (`#portalCal`), que é a primeira
+coisa que aparece na abertura. Nenhum deles é "a" porta — cada um cobre um lugar
+onde a pessoa está quando lembra do calendário.
+
+Ele entrou na `.portal-barra`, junto do perfil e do tema, e **não como uma quinta
+carta**: as cartas são áreas do app, e o calendário é uma camada que abre por
+cima de qualquer uma delas. A barra é `space-between`, então a tecla nova ganhou
+`margin-left:auto` — sem isso ela boiava sozinha no centro da tela, sem formar
+grupo com o tema.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

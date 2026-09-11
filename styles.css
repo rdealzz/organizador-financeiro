@@ -1753,13 +1753,23 @@ body.fundo-vivo .sheet,
 body.fundo-vivo .snack,
 body.fundo-vivo .toast,
 body.fundo-vivo .retro,
-body.fundo-vivo .cal,
 body.fundo-vivo .atualiza{
   background:#08131F;
   border:1px solid rgba(255,255,255,.13);
 }
 /* Tela cheia não leva moldura: a borda viraria um fio no canto do monitor. */
 body.fundo-vivo .retro,body.fundo-vivo .cal{border:none}
+
+/* O calendário é opaco POR TEMA, e não com o #08131F da lista acima.
+
+   A lista existe para superfícies pequenas que flutuam sobre a esfera, e o
+   escuro fixo funciona nelas. O calendário é uma TELA INTEIRA e usa as
+   variáveis do tema no conteúdo: com o app no claro, o fundo escuro fixo deixava
+   texto azul-escuro sobre quase-preto e células brancas no meio — foi assim que
+   ele apareceu quebrado. A regra é a mesma da lista (opaco, sempre), com a cor
+   que o tema pede. */
+[data-tema="claro"] body.fundo-vivo .cal{background:#FFFFFF}
+[data-tema="escuro"] body.fundo-vivo .cal{background:#08131F}
 body.fundo-vivo .menu-perfil{box-shadow:0 26px 70px -18px rgba(0,0,0,.9)}
 
 @media (prefers-reduced-motion:reduce){
@@ -2517,6 +2527,11 @@ body.com-portal:not(.fundo-vivo) .holo i{opacity:.5}
   width:100%; max-width:960px; margin:0 auto var(--e5);
   display:flex; align-items:center; justify-content:space-between; gap:var(--e2);
 }
+/* A barra é `space-between` com o perfil à esquerda. Com uma tecla nova no
+   meio ela ficava boiando no centro da tela, sem grupo: o calendário empurra o
+   próprio começo para a direita e forma par com o tema, que é onde vive o que é
+   ferramenta, e não identidade. */
+#portalCal{margin-left:auto}
 .portal-barra .tecla{--b3d-cor:rgba(255,255,255,.10);--b3d-txt:#fff}
 :root:not([data-tema="escuro"]) body:not(.fundo-vivo) .portal-barra .tecla{
   --b3d-cor:#FFFFFF; --b3d-txt:var(--txt);
@@ -2958,6 +2973,9 @@ body.cal-aberto .tema-flutua{display:none}
 .cal-btn svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;
   stroke-linecap:round;stroke-linejoin:round}
 .cal-btn svg circle{fill:currentColor;stroke:none}
+/* Mesma regra dentro da tela de cartas: sem isto os três pontinhos do
+   calendário viram três anéis vazados e o ícone fica sujo no tamanho pequeno. */
+#portalCal svg circle{fill:currentColor;stroke:none}
 .cal-abre{margin:0 0 14px}
 .cal-abre .btn{display:inline-flex;align-items:center;gap:8px}
 .cal-abre .ico{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;

@@ -2718,9 +2718,13 @@ function pintarLado(porDia,passado){
       ${tiraDosMeses()}
       ${dias.length?`<div class="cal-lista">${dias.map(d=>{
         const t=porDia[d].reduce((s,x)=>s+(x.pago?0:x.valor),0);
+        /* Zero não quer dizer "pago": a fatura dos meses à frente ainda vai ser
+           formada e entra sem valor. Só é "pago" quando TODO item do dia está
+           marcado como pago — senão o dia mostra um traço. */
+        const todosPagos=porDia[d].every(x=>x.pago);
         return `<button class="cal-li" data-dia="${d}"><b>${String(d).padStart(2,'0')}</b>
           <span>${porDia[d].map(x=>esc(x.nome)).join(' · ')}</span>
-          <em>${t>0?brl(t):'pago'}</em></button>`;}).join('')}</div>`
+          <em>${t>0?brl(t):(todosPagos?'pago':'—')}</em></button>`;}).join('')}</div>`
       :`<p class="cal-vaziolado">Marque <b>Vence todo dia</b> num gasto e ele passa a aparecer aqui —
          parcela sabe onde termina, conta fixa segue mês a mês.</p>`}
       ${blocoObs(porDia,calAno,calMes)}`;
@@ -3950,7 +3954,10 @@ function fecharRetro(){ $('#retro').hidden=true; document.body.style.overflow=''
 $('#fab').onclick=()=>{ abrirFolha(); vibrar(10); };
 
 /* ---------- ligações do calendário e da folha de edição ---------- */
-['#abrirCal','#btnCalTopo'].forEach(id=>{
+/* Três portas para a mesma camada: o botão grande em Hoje, o ícone do cabeçalho
+   e o ícone da tela de cartas. Nenhuma delas é "a" porta — cada uma cobre um
+   lugar onde a pessoa está quando lembra do calendário. */
+['#abrirCal','#btnCalTopo','#portalCal'].forEach(id=>{
   const b=$(id); if(b) b.onclick=()=>{ abrirCalendario(); vibrar(8); };
 });
 $('#calFechar').onclick=fecharCalendario;
