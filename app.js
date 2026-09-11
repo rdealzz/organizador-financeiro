@@ -266,20 +266,49 @@ const pct=v=>(v*100).toFixed(0)+'%';
 const ESCAPES={'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;','`':'&#96;','=':'&#61;'};
 const esc=s=>String(s).replace(/[<>&"'`=]/g,c=>ESCAPES[c]);
 const meuValor=l=>Math.max(l.valor-(+l.pai||0),0);
-const iso=d=>d.toISOString().slice(0,10);
+/* A data em ISO vem dos campos LOCAIS, não do `toISOString()`.
+
+   `toISOString` converte para UTC antes de cortar os dez primeiros caracteres.
+   No Brasil (UTC-3) a meia-noite local é 03:00Z e o dia sai certo por sorte;
+   a leste de Greenwich a meia-noite local é ainda a véspera em UTC, e TODA
+   data escrita pelo app saía um dia atrás. Medido: em Berlim, Tóquio e
+   Auckland, `iso(hojeD())` devolvia 11/09 com o celular marcando 12/09 — a
+   fatura arquivada com a data errada, `pagoAte` apontando para a véspera, o
+   nome do arquivo de backup de ontem.
+
+   Não é caso exótico: é qualquer pessoa usando o app numa viagem. */
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const hojeD=()=>{const d=new Date(); d.setHours(0,0,0,0); return d;};
 const dataBR=s=>{const [y,m,d]=s.split('-'); return d+'/'+m+'/'+y;};
 const dataDeISO=s=>{const [y,m,d]=String(s).split('-').map(Number); return new Date(y,(m||1)-1,d||1);};
 const diaDoMes=n=>Math.min(Math.max(Math.round(+n)||1,1),28);
+/* Os dois dias do cartão saem SÓ daqui.
+
+   `diaDoMes` limita a 1–28 de propósito: é o maior dia que existe em todo mês,
+   e com ele o ciclo nunca precisa adivinhar o que fazer em fevereiro. Só que
+   metade do app lia `+S.diaFech||5` cru, e aí um 31 guardado no estado (o
+   editor do calendário aceitava até 31, e o estado viaja entre aparelhos)
+   virava `new Date(ano, mes, 31)` — que o JavaScript transborda para o mês
+   seguinte. Medido: com fechamento no dia 31, a régua do ciclo andava
+   31/01 → 03/03 → 01/05 → 01/07, PULANDO abril inteiro; um mês não era
+   arquivado e dois ciclos viravam uma fatura só. E o `vencDaFatura`, que já
+   limitava a 28, dizia dia 28 enquanto o calendário desenhava a mesma fatura
+   no dia 30 — duas datas para a mesma cobrança, que é o defeito da v9.3 de
+   volta por outra porta.
+
+   Quem tiver um valor maior guardado passa a ser lido como 28 — o ciclo volta
+   ao lugar sozinho, sem tocar no estado de ninguém. */
+const fechDia=()=>diaDoMes(S.diaFech||5);
+const vencDia=()=>diaDoMes(S.diaVenc||S.diaFech||12);
 const ddmm=d=>String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0');
 
 /* ---------- ciclo da fatura ---------- */
 function ultimoFechPassado(){
-  const h=hojeD(), dia=+S.diaFech||5;
+  const h=hojeD(), dia=fechDia();
   return h.getDate()>=dia ? new Date(h.getFullYear(),h.getMonth(),dia) : new Date(h.getFullYear(),h.getMonth()-1,dia);
 }
 function proximoFech(){
-  const h=hojeD(), dia=+S.diaFech||5;
+  const h=hojeD(), dia=fechDia();
   return h.getDate()<dia ? new Date(h.getFullYear(),h.getMonth(),dia) : new Date(h.getFullYear(),h.getMonth()+1,dia);
 }
 /* ---------- fechar ≠ vencer: o gasto de hoje é da PRÓXIMA cobrança ----------
@@ -296,7 +325,7 @@ function proximoFech(){
    quem só sabe a data do pagamento) caem naturalmente no mês seguinte, que é
    exatamente o comportamento do cartão. */
 function vencDaFatura(fech){
-  const dv=diaDoMes(S.diaVenc||S.diaFech||5);
+  const dv=vencDia();
   const d=new Date(fech.getFullYear(),fech.getMonth(),dv);
   if(d<=fech) d.setMonth(d.getMonth()+1);
   return d;
@@ -360,7 +389,19 @@ function fecharCiclo(dataStr){
   S.hist=S.hist.slice(0,24);
   let sumiram=0, andaram=0;
   const ficam=daFatura.filter(l=>{
-    if(l.tipo==='var'){ l.ref=l.valor; l.valor=0; l.pai=0; return true; }   // `com` fica: a divisão do mercado costuma ser a mesma no mês seguinte
+    if(l.tipo==='var'){
+      l.ref=l.valor; l.valor=0; l.pai=0;
+      /* `divs` zera JUNTO com `pai`. Deixá-lo com os valores do mês passado
+         enquanto `pai` vai a zero põe dois números a discordar sobre o mesmo
+         gasto: no mês seguinte a pessoa escreve R$ 500 no mercado, a tabela
+         continua dizendo que a Ana cobre R$ 300 e o orçamento conta os R$ 500
+         inteiros como dela. Quanto cada um cobre no mês NOVO ninguém sabe
+         ainda — é o mesmo motivo de `pai` zerar.
+         `com` fica, como já ficava: quem divide o mercado costuma dividir de
+         novo, e o select já abre na pessoa certa. */
+      if(Array.isArray(l.divs)) delete l.divs;
+      return true;
+    }
     if(l.tipo==='rec'||l.tipo==='fixo') return true;
     if(l.tipo==='parc'){ l.pRest=Math.max((+l.pRest||0)-1,0); if(l.pRest<=0){ sumiram++; return false; } andaram++; return true; }
     sumiram++; return false;
@@ -374,7 +415,7 @@ function rodarCiclos(){
   const h=hojeD(); let n=0, sumiram=0, andaram=0, entraram=0, guarda=0;
   while(guarda++<36){
     const [y,m,d]=S.ultimoFech.split('-').map(Number);
-    const prox=new Date(y,m-1+1,+S.diaFech||d);
+    const prox=new Date(y,m-1+1,fechDia()||d);
     if(prox>h) break;
     const r=fecharCiclo(iso(prox)); sumiram+=r.sumiram; andaram+=r.andaram; entraram+=r.entraram; n++;
     S.ultimoFech=iso(prox);
@@ -671,8 +712,8 @@ function renderFatura(c){
      dia pôr é empurrar o problema de volta. O botão faz a correção mais comum
      — a fatura fecha SETE dias antes de vencer — já com o dia calculado no
      rótulo, e o campo continua ali para quem sabe o dia exato do seu cartão. */
-  const dv=diaDoMes(S.diaVenc||S.diaFech||5);
-  const mesmoDia=diaDoMes(S.diaFech||5)===dv;
+  const dv=vencDia();
+  const mesmoDia=fechDia()===dv;
   const seteAntes=((dv-7-1+28)%28)+1;
   if(nf){
     nf.innerHTML=`<div class="nota">Um gasto no cartão feito <b>hoje</b> entra na fatura que fecha em
@@ -2746,14 +2787,14 @@ function contasDoMes(ano,mes){
 
   /* A fatura do cartão. Só a PRÓXIMA tem valor conhecido — as outras ainda vão
      ser formadas, e escrever um número ali seria chute com cara de dado. */
-  if(!passado&&+S.diaVenc>0){
-    const data=diaNoMes(ano,mes,+S.diaVenc);
+  if(!passado&&vencDia()>0){
+    const data=diaNoMes(ano,mes,vencDia());
     const aPagar=faturaAPagar();
     const mesmaData=aPagar&&iso(aPagar.vence)===iso(data);
     if(data>=new Date(hoje.getFullYear(),hoje.getMonth(),1))
       põe(data,{fatura:true,cat:'divida',nome:'Fatura do cartão',
         valor: mesmaData?aPagar.meu:0,
-        selo: mesmaData?'fechada, a pagar':'fecha dia '+(+S.diaFech||5),
+        selo: mesmaData?'fechada, a pagar':'fecha dia '+fechDia(),
         pago: !!(aPagar&&aPagar.ref&&aPagar.ref.pago&&mesmaData)});
   }
   return {porDia,passado};
@@ -2996,14 +3037,14 @@ function tiraDosMeses(){
    uma só — `S.diaFech` e `S.diaVenc`. */
 let calEdFat=false;
 function editorDaFatura(){
-  const fech=+S.diaFech||5, venc=+S.diaVenc||12;
+  const fech=fechDia(), venc=vencDia();
   const pagar=faturaAPagar();
   const seteAntes=((venc-7-1+31)%31)+1;
   return `<div class="cal-fat">
     <div class="rot">Datas do cartão</div>
     <div class="cal-fat-campos">
-      <label>Fecha todo dia<input type="number" inputmode="numeric" min="1" max="31" step="1" id="calFech" value="${fech}"></label>
-      <label>Vence todo dia<input type="number" inputmode="numeric" min="1" max="31" step="1" id="calVenc" value="${venc}"></label>
+      <label>Fecha todo dia<input type="number" inputmode="numeric" min="1" max="28" step="1" id="calFech" value="${fech}"></label>
+      <label>Vence todo dia<input type="number" inputmode="numeric" min="1" max="28" step="1" id="calVenc" value="${venc}"></label>
     </div>
     <p class="cal-fat-diz">O que você gastar hoje entra na fatura que fecha em
       <b>${dataBR(iso(faturaAberta().fecha))}</b> e é cobrada em <b>${dataBR(iso(faturaAberta().vence))}</b>.
@@ -3019,8 +3060,8 @@ function editorDaFatura(){
 function ligarEditorDaFatura(porDia,passado){
   const f=$('#calFech'), v=$('#calVenc');
   const aplicar=()=>{
-    const nf=Math.min(Math.max(+f.value||0,1),31), nv=Math.min(Math.max(+v.value||0,1),31);
-    const mudouFech=nf!==(+S.diaFech||5);
+    const nf=diaDoMes(f.value), nv=diaDoMes(v.value);
+    const mudouFech=nf!==fechDia();
     S.diaFech=nf; S.diaVenc=nv;
     /* Mudar o dia do fechamento move a régua do ciclo. Sem refazer `ultimoFech`
        o app acharia que a fatura atual já fechou (ou ainda não) e viraria o
@@ -3032,7 +3073,7 @@ function ligarEditorDaFatura(porDia,passado){
   if(f) f.onchange=aplicar;
   if(v) v.onchange=aplicar;
   const b7=$('#calFecha7');
-  if(b7) b7.onclick=()=>{ f.value=((+S.diaVenc||12)-7-1+31)%31+1; aplicar(); };
+  if(b7) b7.onclick=()=>{ f.value=((vencDia()-7-1+28)%28)+1; aplicar(); };   // 28, como em Renda e meta: é o teto do dia do cartão
   const bp=$('#calPagouFat');
   if(bp) bp.onclick=()=>{
     const pagar=faturaAPagar(); if(!pagar) return;
@@ -3397,8 +3438,9 @@ $('#btnChecarAgora').onclick=async()=>{
 }));
 $('#btnCSV').onclick=exportarCSV;
 
-/* checagem periódica com o app aberto + ao voltar pra ele */
-setInterval(()=>checarAlertas(false),30*60*1000);
+/* Ao VOLTAR pro app. A checagem periódica mora num lugar só, mais abaixo,
+   junto da agenda — havia duas iguais de 30 em 30 minutos, e a daqui ainda
+   rodava com ninguém logado. */
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState!=='visible'||!Auth.logado()) return;
   rodarCiclos(); render(); checarAlertas(false); checarAgenda(false); puxarDaNuvem();

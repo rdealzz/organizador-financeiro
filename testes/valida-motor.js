@@ -31,6 +31,7 @@ const eh=(nome,v)=>{(v?ok:bad).push(nome+(v?'':'  →  falso'));};
   ];
   S.lanc.forEach(l=>{ if(l.divs) sincronizarDivs(l); });
 
+  const guardaLanc=S.lanc.slice();
   const c=calc(); R.c={renda:c.renda,gasto:c.gasto,bruto:c.bruto,avista:c.avista,pai:c.pai,
     futuro:c.futuro,proxBruto:c.proxBruto,proxMeu:c.proxMeu,proxN:c.proxN,sobra:c.sobra,meta:c.meta,disponivel:c.disponivel};
 
@@ -62,6 +63,25 @@ const eh=(nome,v)=>{(v?ok:bad).push(nome+(v?'':'  →  falso'));};
   S.diaFech=5; S.diaVenc=12;
   R.fatAberta=(()=>{const f=faturaAberta();return f.fecha.getDate()+'/'+f.vence.getDate();})();
   R.fatAPagarSemHist=faturaAPagar();
+
+  // ── os dias do cartão: um valor fora de 1–28 não pode mover a régua
+  S.diaFech=31; S.diaVenc=30; S.lanc=[]; S.hist=[]; S.ultimoFech='2026-01-31';
+  rodarCiclos();
+  R.reguaCom31={faturas:S.hist.length, datas:S.hist.map(x=>x.data).reverse()};
+  R.fatura31=(()=>{const f=faturaAberta();
+    const cal=contasDoMes(f.vence.getFullYear(),f.vence.getMonth()).porDia;
+    return {vence:f.vence.getDate(),
+            noCalendario:+Object.entries(cal).filter(([d,is])=>is.some(i=>i.fatura)).map(([d])=>d)[0]};})();
+  S.diaFech=5; S.diaVenc=12; S.hist=[]; S.ultimoFech=null; S.lanc=[...guardaLanc];
+
+  // ── 'var' dividido não sai do fechamento com pai e divs discordando
+  const vd={id:'v',criadoEm:Date.now(),nome:'mercado',valor:600,cat:'mercado',tier:1,tipo:'var',
+    fonte:'Conta',pRest:0,pai:300,com:'pai',ref:0,venc:0,prox:0,meio:'cartao',divs:[{id:'pai',valor:300}]};
+  const guardaS=S.lanc; S.lanc=[vd]; S.hist=[];
+  fecharCiclo(iso(new Date()));
+  const dv=S.lanc[0]; dv.valor=500;
+  R.varDividido={pai:dv.pai, meu:meuValor(dv), fatias:divisoes(dv).length, temDivs:Array.isArray(dv.divs)};
+  S.lanc=guardaS; S.hist=[];
 
   // contas a vencer / pago por ocorrência
   R.aVencer=contasAVencer().map(x=>x.l.id);
@@ -156,6 +176,13 @@ const eh=(nome,v)=>{(v?ok:bad).push(nome+(v?'':'  →  falso'));};
  eh('fixo sobrevive',r.fechou.lancDepois.some(x=>/^faculdade/.test(x)));
  eh('parcela anda uma casa (8→7)',r.fechou.lancDepois.some(x=>x==='moto:parc:7:prox0'));
  eh('guardado pra próxima entra na fatura agora',r.fechou.lancDepois.some(x=>x==='presente:unico:0:prox0'));
+
+ cmp('dia 31 guardado não pula mês nenhum: 7 fechamentos, todo dia 28',
+     [r.reguaCom31.faturas,r.reguaCom31.datas[0],r.reguaCom31.datas[6]],[7,'2026-02-28','2026-08-28']);
+ cmp('motor e calendário dão a MESMA data de vencimento',
+     r.fatura31.vence,r.fatura31.noCalendario);
+ cmp('"todo mês, valor muda" sai do fechamento sem divisão pendurada',
+     [r.varDividido.pai,r.varDividido.meu,r.varDividido.fatias,r.varDividido.temDivs],[0,500,0,false]);
 
  console.log('\n✓ '+ok.length+' verificações passaram');
  if(bad.length){console.log('\n✗ FALHAS ('+bad.length+'):'); bad.forEach(x=>console.log('  '+x));}

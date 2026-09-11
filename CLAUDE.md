@@ -1119,3 +1119,99 @@ teto de 512 KB recusando de verdade).
 **A regra que fica:** dado que veio do estado nunca indexa uma tabela do código
 direto. Entre os dois vai uma função com padrão — senão a primeira chave
 inesperada apaga o app.
+
+## Auditoria do código: três defeitos que ninguém tinha visto (v10.11)
+
+Uma passagem de auditoria — análise estática do AST (`testes/auditar.js`) mais
+leitura dirigida do que roda sozinho e mexe em dinheiro. A análise estática
+sozinha não achou nada: os "identificadores nunca declarados" eram
+desestruturação de array, as igualdades frouxas comparam número com string de
+`dataset` de propósito, e os `catch` vazios guardam `localStorage` bloqueado.
+**Os três defeitos vieram da leitura, e os três foram medidos antes de
+corrigidos.**
+
+### 1. Um dia de cartão fora de 1–28 quebrava a régua do ciclo
+
+`diaDoMes` limita os dias do cartão a **1–28** — o maior dia que existe em todo
+mês, para o ciclo nunca ter que adivinhar o que fazer em fevereiro. A decisão
+estava certa; a aplicação, não: metade do app lia `+S.diaFech||5` **cru**, e o
+editor de datas do calendário aceitava até 31 (o de *Renda e meta* trava em 28).
+
+Com 31 guardado, `new Date(ano, mes, 31)` transborda para o mês seguinte. Medido:
+
+```
+régua do ciclo, fechamento no dia 31:
+  31/01 → 03/03 → 01/05 → 01/07     ← abril nunca fechou
+```
+
+Um mês inteiro não era arquivado: dois ciclos viravam uma fatura só, e o gasto
+de abril ia parar na fatura de maio. Junto disso, `vencDaFatura` (que já
+limitava a 28) dizia **28/10** enquanto o calendário desenhava a mesma fatura
+no **dia 30** — duas datas para a mesma cobrança, que é exatamente o defeito da
+v9.3 voltando por outra porta.
+
+Agora **`fechDia()` e `vencDia()` são a única fonte** dos dois dias, e todo
+mundo passou por elas: `ultimoFechPassado`, `proximoFech`, `rodarCiclos`,
+`vencDaFatura`, `contasDoMes`, o editor do calendário (que também trava em 28) e
+o rótulo "fecha dia N". Quem tiver um valor maior guardado passa a ser lido como
+28 e o ciclo volta ao lugar sozinho, sem tocar no estado de ninguém. Depois da
+correção: sete fechamentos, um por mês, todos no dia 28, e o calendário
+concordando com o motor.
+
+O botão *"fecha sete dias antes"* do calendário também calculava em módulo 31 e
+propunha **dia 29** — um dia que o app não representa. Agora usa 28, como o
+irmão dele em *Renda e meta* sempre usou.
+
+### 2. "Todo mês, valor muda" dividido saía do fechamento se contradizendo
+
+No fechamento, um gasto `var` zera `valor` e `pai` — o valor do mês novo ainda
+não se sabe. Só que a v10.8 acrescentou **`l.divs`** e esta linha não foi
+atualizada: a lista de quem divide ficava pendurada com os valores do mês
+passado enquanto `pai` ia a zero. Medido: mercado de R$ 600 com a Ana cobrindo
+R$ 300; no mês seguinte a pessoa escreve R$ 500 e **a tabela dizia que a Ana
+cobre R$ 300 enquanto o orçamento contava os R$ 500 inteiros como dela**.
+
+`divs` agora zera junto com `pai`. `com` fica, como já ficava — quem divide o
+mercado costuma dividir de novo, e o select abre na pessoa certa.
+
+**A regra que fica:** `pai`, `com` e `divs` são três vistas do mesmo fato. Quem
+mexer em um mexe nos três, ou chama `sincronizarDivs`. Era o único lugar do
+arquivo que escrevia num sem os outros.
+
+### 3. A leste de Greenwich, toda data saía um dia atrás
+
+`iso()` era `d.toISOString().slice(0,10)` — e `toISOString` converte para UTC
+antes de cortar. No Brasil (UTC-3) a meia-noite local é 03:00Z e o dia sai certo
+**por sorte**. Medido em Berlim, Tóquio e Auckland: `iso(hojeD())` devolvia
+11/09 com o aparelho marcando 12/09 — fatura arquivada com a data errada,
+`pagoAte` apontando para a véspera, backup com o nome de ontem. Não é caso
+exótico: é qualquer pessoa usando o app numa viagem.
+
+Agora a data é montada dos campos **locais** (`getFullYear`/`getMonth`/
+`getDate`). No Brasil a saída é idêntica; nos outros fusos passa a ser a data
+que a pessoa vê no relógio. `testes/valida-fuso.js` roda o app em quatro fusos.
+
+### Também arrumado, menor
+
+Havia **dois `setInterval` iguais** chamando `checarAlertas` de 30 em 30
+minutos, e o primeiro rodava até deslogado. Ficou um só, junto da agenda.
+
+### O que foi descartado com razão
+
+* **Injeção de fórmula no CSV** (um gasto chamado `=1+1` vira fórmula no Excel):
+  o arquivo é o próprio dado da pessoa, aberto por ela. Prefixar `'` mudaria o
+  nome que ela escreveu para proteger dela mesma.
+* **`Object.assign(S, remoto)` no `puxarDaNuvem`** não apaga chave que sumiu do
+  outro lado. Como listas são substituídas inteiras e chaves só nascem, o efeito
+  prático é nenhum — e resolver por substituição traria o risco oposto.
+* **80 chamadas `async` sem `await`**: quase todas são `salvar()`, que é
+  deliberadamente disparar-e-esquecer e trata o próprio erro.
+
+### A varredura que ficou de herança
+
+`testes/valida-nan.js` monta **dez estados que a vida produz** (conta nova, renda
+zero, meta maior que a renda, gasto zerado, terceiros cobrindo mais que o gasto,
+valor de R$ 9 trilhões, 999 parcelas, fatura sem itens, histórico velho sem os
+campos novos) e varre **sete telas** procurando `NaN`, `undefined`, `Invalid
+Date` e `[object Object]` no texto visível. Hoje passa limpa — e é ela que pega
+a próxima divisão por zero antes da pessoa.

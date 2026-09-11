@@ -5,10 +5,9 @@ exercitam com Playwright — o mesmo Chromium, os mesmos cliques.
 
 ```sh
 python3 -m http.server 8765 &        # da raiz do projeto
-cd testes && npm i playwright        # só na primeira vez
-node valida-motor.js                 # as contas
-node valida-ui.js                    # cada botão, select e camada
-node valida-borda.js                 # backup, estado estranho, auth
+cd testes && npm i                   # só na primeira vez
+npm run tudo                         # as cinco suítes
+npm run auditoria                    # a análise estática do código
 ```
 
 Cada um imprime quantas verificações passaram e sai com código 1 se alguma
@@ -25,6 +24,16 @@ falhar.
   calendário pelas três portas com navegação e editor de fatura, menu de
   perfil, tema, gráfico 3D, e as camadas de tela cheia **com a esfera ligada
   nos dois temas** — que é o defeito que já voltou duas vezes.
+* **`valida-nan.js`** — dez estados que a vida produz (conta nova, renda zero,
+  meta maior que a renda, terceiros cobrindo mais que o gasto, 999 parcelas,
+  histórico velho) contra sete telas, procurando `NaN`, `undefined` e
+  `Invalid Date` no texto visível.
+* **`valida-fuso.js`** — o app em quatro fusos horários. `iso()` já saiu um dia
+  atrás a leste de Greenwich (v10.11); esta suíte existe para isso não voltar.
+* **`auditar.js`** — análise estática do AST: declarações duplicadas, igualdade
+  frouxa, `catch` vazio, `case` sem `break`, `async` sem quem espere e
+  identificadores nunca declarados. Ela levanta suspeitas; confirmar é com
+  navegador.
 * **`valida-borda.js`** — o que entra vindo de fora: ida e volta do backup,
   estado com categoria desconhecida ou campos faltando (o defeito da v10.10),
   as frases de erro do `auth.js` e o teto de 512 KB recusando de verdade.

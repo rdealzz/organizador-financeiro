@@ -1,0 +1,10 @@
+{
+  "name": "sobra-mais-testes",
+  "private": true,
+  "description": "Validação do app em navegador de verdade. Veja LEIA.md.",
+  "scripts": {
+    "tudo": "node valida-motor.js && node valida-ui.js && node valida-borda.js && node valida-nan.js && node valida-fuso.js",
+    "auditoria": "node auditar.js"
+  },
+  "devDependencies": { "playwright": "^1.47.0", "acorn": "^8.12.0", "acorn-walk": "^8.3.0" }
+}
