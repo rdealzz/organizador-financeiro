@@ -149,10 +149,25 @@ html[data-tema="escuro"] #splash{background:#000}
         <p class="campo-erro" id="errConfirma" hidden></p>
       </div>
 
+      <!-- O código do e-mail de recuperação.
+           O Firebase manda um LINK, e dentro dele vai um código de uso único
+           (`oobCode`). Quando o link não volta para o app — e-mail aberto no
+           celular com o app no computador, ou a URL de ação ainda apontando
+           para a página do Firebase — a pessoa ficava sem saída. Aqui ela cola
+           o código ou o link inteiro, e o app tira o código de dentro. -->
+      <div class="campo" id="campoCodigo" hidden>
+        <label for="authCodigo">Código do e-mail</label>
+        <input type="text" id="authCodigo" autocomplete="one-time-code" spellcheck="false"
+               placeholder="cole aqui o código ou o link do e-mail" aria-describedby="errCodigo">
+        <p class="campo-erro" id="errCodigo" hidden></p>
+        <p class="ajuda" style="margin:6px 0 0">Pode colar o link inteiro — o app acha o código sozinho.</p>
+      </div>
+
       <button type="submit" class="btn auth-btn" id="authEnviar">Entrar</button>
     </form>
 
     <button type="button" class="link auth-link" id="authEsqueci">Esqueci minha senha</button>
+    <button type="button" class="link auth-link" id="authTenhoCodigo" hidden>Já tenho o código do e-mail</button>
 
     <div class="auth-troca">
       <span id="authTrocaTxt">Ainda não tem conta?</span>

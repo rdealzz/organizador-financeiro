@@ -41,12 +41,14 @@ Projeto Firebase: **`organizador-financeiro-98e15`**.
 ### O que ainda falta
 
 1. **URL de ação de redefinição de senha** (Authentication → Templates →
-   Redefinição de senha → personalizar URL de ação) apontando para a origem
-   publicada do app. Sem isso o link do e-mail cai numa página do Firebase em
-   vez de voltar para o app — o `app.js` espera
+   Redefinição de senha → ✏️ → *personalizar URL de ação*) apontando para a
+   origem publicada do app. Sem isso o link do e-mail cai numa página do
+   Firebase em vez de voltar para o app — o `app.js` espera
    `?mode=resetPassword&oobCode=...` na própria origem. Daqui não dá para
    conferir esse ajuste: ele mora no console do Firebase e o e-mail não é
    legível pela API — o `sendOobCode` responde 200 de qualquer jeito.
+   **Enquanto não for feito, ninguém fica preso**: a tela *Já tenho o código do
+   e-mail* (v10.12) aceita o link inteiro colado.
 2. **Contas antigas do Supabase não migram** — é uma base de usuários nova.
 
 ## O app se chama Sobra+ (v9.3)
@@ -1215,3 +1217,99 @@ valor de R$ 9 trilhões, 999 parcelas, fatura sem itens, histórico velho sem os
 campos novos) e varre **sete telas** procurando `NaN`, `undefined`, `Invalid
 Date` e `[object Object]` no texto visível. Hoje passa limpa — e é ela que pega
 a próxima divisão por zero antes da pessoa.
+
+## Uma caixa de entrada, uma conta (v10.12)
+
+A queixa: "dá pra criar mais de uma conta com o mesmo e-mail". Medido contra o
+projeto real, por `curl`, criando e apagando contas de teste:
+
+| tentativa | resposta do Firebase |
+|---|---|
+| `x@dominio.com` de novo | **`EMAIL_EXISTS`** — recusado |
+| `X@Dominio.com` (maiúsculas) | **`EMAIL_EXISTS`** — recusado |
+| ` x@dominio.com ` (espaços) | `INVALID_EMAIL` |
+| `joao.teste@gmail.com` → `joaoteste@gmail.com` | **conta nova, criada** |
+| `joao.teste@gmail.com` → `joao.teste+app@gmail.com` | **conta nova, criada** |
+
+Ou seja: o Firebase nunca deixou duas contas com o MESMO endereço. O buraco é o
+**Gmail**, que entrega `joao.silva@`, `joaosilva@` e `joao.silva+app@` na mesma
+caixa de entrada — para ele são apelidos, para o Firebase são três endereços.
+Três contas, três históricos separados, e a pessoa com razão ao dizer que usou
+"o mesmo e-mail".
+
+**`canonizarEmail()`** (em `auth.js`) resolve: minúscula, sem espaço e — **só
+para gmail.com/googlemail.com** — sem os pontos do nome e sem o `+apelido`.
+Nenhum outro domínio é tocado, e isso é decisão: em muitos servidores o ponto
+faz parte do endereço de verdade, e apagá-lo escreveria para outra pessoa.
+
+Onde ela entra:
+
+* **`cadastrar`** usa SEMPRE a forma canônica. É aqui que a duplicata deixa de
+  nascer: a segunda tentativa, escrita como for, bate na conta que já existe e
+  volta `EMAIL_EXISTS`.
+* **`entrar`** tenta a canônica e, **só quando ela difere do que foi digitado**,
+  tenta também a digitada. É o que deixa entrar quem criou a conta com pontos
+  antes desta versão — sem isso a correção trancaria essas pessoas para fora.
+  Erro de rede não vira segunda tentativa: se não há rede, a outra forma também
+  não chega.
+* **`recuperarSenha`** pede o código para as duas formas quando elas diferem. O
+  Firebase responde 200 mesmo para endereço sem conta (é a proteção contra quem
+  fica descobrindo quem tem cadastro), então não dá para perguntar antes qual
+  das duas existe — e as duas caem na mesma caixa de entrada de qualquer jeito.
+
+### "Já existe uma conta" virou um caminho, não um beco
+
+A frase já existia e estava certa. Só que dizer "já existe" e parar ali empurra
+o problema de volta: quem tenta criar conta de novo quase sempre é o dono dela e
+não lembra a senha. Agora o aviso traz **dois botões** — *Entrar nessa conta* e
+*Esqueci a senha — mandar código* — com o e-mail já preenchido na forma
+canônica, e o segundo **já dispara o código** em vez de pedir mais um toque.
+
+Quando o caso é apelido de Gmail, o aviso **diz isso**: "para o Gmail,
+`joao.teste+app@gmail.com` e `joaoteste@gmail.com` são a mesma caixa de entrada
+— sua conta aqui é a `joaoteste@gmail.com`". Sem essa frase a pessoa leria "já
+existe" olhando para um endereço que ela jura nunca ter usado.
+
+## O código que chega no e-mail (v10.12)
+
+**O Firebase não manda código numérico para redefinir senha** — isso existe só
+para SMS. Ele manda um **link**, e dentro do link vai um código de uso único
+(`oobCode`); é esse código que `accounts:resetPassword` troca pela senha nova.
+Mandar um "123456" nosso exigiria servidor próprio e um serviço de envio de
+e-mail, o que quebraria a decisão de projeto do `auth.js` (sem back-end, sem
+terceiros). Então o código é o do Firebase — e o app passou a saber recebê-lo
+de duas formas:
+
+1. **Pelo link**, como sempre: `?mode=resetPassword&oobCode=…` na própria
+   origem cai na tela *Nova senha*. Isso depende da URL de ação configurada no
+   console (ver "O que ainda falta").
+2. **Colado à mão** — a tela **“Já tenho o código do e-mail”**. É a saída para
+   os casos em que o link não volta: e-mail aberto no celular com o app no
+   computador, URL de ação ainda apontando para a página do Firebase, link que
+   o cliente de e-mail reescreveu. **`codigoColado()` aceita o link inteiro** e
+   tira o `oobCode` de dentro — quem copia de um e-mail copia a URL comprida,
+   não o pedaço depois do `=`.
+
+Três cuidados na tela:
+
+* **O campo do código vem ANTES da senha**, embora no HTML ele more no fim do
+  formulário: a ordem na tela é a ordem do que a pessoa faz. `pintarModo()` move
+  o campo de lugar conforme o modo.
+* **Ela tem volta.** Quem entra por engano sairia só recarregando a página. Só a
+  tela que veio do link (`novaSenha`) segue sem volta, porque ali a troca já
+  está em curso.
+* **O aviso de "enviamos" não repete o e-mail digitado.** Repetir confirma a
+  quem não é dono da caixa que aquela conta existe — a mesma razão de o Firebase
+  responder 200 para endereço inexistente.
+
+### Como testar isto sem criar conta em produção
+
+`testes/valida-conta.js` **emula o Firebase na rede da página** (`p.route`), com
+as respostas que o projeto real deu quando medido por `curl`: `EMAIL_EXISTS` na
+segunda conta, apelidos de Gmail como contas distintas, 200 no `sendOobCode`
+mesmo sem conta. São 31 verificações e nenhuma conta de verdade é criada.
+
+Vale anotar para a próxima vez: **o navegador da sandbox não alcança o
+`googleapis.com`** — só o `curl` passa pelo proxy do agente. Testar o caminho
+real pela interface, daqui, não funciona; medir com `curl` e emular na página é
+o que dá para fazer.

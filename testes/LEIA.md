@@ -30,6 +30,11 @@ falhar.
   `Invalid Date` no texto visível.
 * **`valida-fuso.js`** — o app em quatro fusos horários. `iso()` já saiu um dia
   atrás a leste de Greenwich (v10.11); esta suíte existe para isso não voltar.
+* **`valida-conta.js`** — duplicidade de e-mail e recuperação por código, com o
+  Firebase **emulado na rede da página**: apelidos do Gmail caindo numa conta
+  só, a segunda conta recusada com caminho para recuperar, entrar por qualquer
+  forma do endereço, e o código colado como link ou sozinho. Nenhuma conta de
+  verdade é criada.
 * **`auditar.js`** — análise estática do AST: declarações duplicadas, igualdade
   frouxa, `catch` vazio, `case` sem `break`, `async` sem quem espere e
   identificadores nunca declarados. Ela levanta suspeitas; confirmar é com

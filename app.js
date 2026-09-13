@@ -4513,35 +4513,69 @@ function carregandoAuth(ligado,rotulo){
   b.innerHTML=ligado?'<span class="girando"></span>':(rotulo||b.dataset.rotulo||'Entrar');
 }
 function pintarModo(){
-  const tit={entrar:'Entrar',cadastrar:'Criar conta',recuperar:'Recuperar senha',novaSenha:'Nova senha'}[modoAuth];
+  const tit={entrar:'Entrar',cadastrar:'Criar conta',recuperar:'Recuperar senha',
+             novaSenha:'Nova senha',codigo:'Tenho o código'}[modoAuth];
   const sub={
     entrar:'Seus dados ficam na sua conta, e só nela.',
     cadastrar:'Leva 20 segundos: seu nome, um e-mail e uma senha.',
     recuperar:'Digite seu e-mail e enviamos um link para criar uma senha nova.',
-    novaSenha:'Escolha uma senha nova para sua conta.'
+    novaSenha:'Escolha uma senha nova para sua conta.',
+    codigo:'Cole o código que chegou no e-mail e escolha a senha nova.'
   }[modoAuth];
-  const rotulo={entrar:'Entrar',cadastrar:'Criar minha conta',recuperar:'Enviar o link',novaSenha:'Salvar nova senha'}[modoAuth];
+  const rotulo={entrar:'Entrar',cadastrar:'Criar minha conta',recuperar:'Enviar o código',
+                novaSenha:'Salvar nova senha',codigo:'Salvar nova senha'}[modoAuth];
   $a('authTit').textContent=tit;
   $a('authSub').textContent=sub;
   $a('authEnviar').dataset.rotulo=rotulo;
   $a('authEnviar').textContent=rotulo;
   $a('campoNome').hidden=(modoAuth!=='cadastrar');
-  $a('campoEmail').hidden=(modoAuth==='novaSenha');
+  $a('campoEmail').hidden=(modoAuth==='novaSenha'||modoAuth==='codigo');
   $a('campoSenha').hidden=(modoAuth==='recuperar');
-  $a('campoConfirma').hidden=(modoAuth!=='cadastrar');
-  $a('forcaSenha').hidden=(modoAuth!=='cadastrar');
+  $a('campoConfirma').hidden=!(modoAuth==='cadastrar'||modoAuth==='codigo');
+  $a('forcaSenha').hidden=!(modoAuth==='cadastrar'||modoAuth==='codigo'||modoAuth==='novaSenha');
+  $a('campoCodigo').hidden=(modoAuth!=='codigo');
+  /* O código vem ANTES da senha nesta tela: a ordem na tela é a ordem do que
+     a pessoa faz — cola o que recebeu, depois escolhe a senha. No HTML ele
+     mora no fim do formulário porque nas outras telas não existe. */
+  const cc=$a('campoCodigo'), cs=$a('campoSenha');
+  if(cc&&cs&&cc.parentNode){
+    if(modoAuth==='codigo') cs.parentNode.insertBefore(cc,cs);
+    else cs.parentNode.insertBefore(cc,$a('authEnviar'));
+  }
   $a('authEsqueci').hidden=(modoAuth!=='entrar');
-  $a('authSenha').setAttribute('autocomplete',modoAuth==='cadastrar'||modoAuth==='novaSenha'?'new-password':'current-password');
-  $a('authTrocaTxt').textContent=(modoAuth==='entrar')?'Ainda não tem conta?':'Já tem conta?';
+  /* O atalho do código aparece onde ele resolve alguma coisa: depois de pedir
+     o e-mail (o link está a caminho) e na tela de entrar, para quem voltou
+     dias depois com o e-mail ainda aberto. */
+  $a('authTenhoCodigo').hidden=!(modoAuth==='recuperar'||modoAuth==='entrar');
+  $a('authSenha').setAttribute('autocomplete',
+    (modoAuth==='cadastrar'||modoAuth==='novaSenha'||modoAuth==='codigo')?'new-password':'current-password');
+  $a('authTrocaTxt').textContent=(modoAuth==='entrar')?'Ainda não tem conta?'
+    :(modoAuth==='codigo'||modoAuth==='recuperar')?'Lembrou a senha?':'Já tem conta?';
   $a('authTroca').textContent=(modoAuth==='entrar')?'Criar conta':'Entrar';
   const troca=$('.auth-troca');
+  /* A tela do código PRECISA de volta: quem entrou nela por engano ficaria
+     preso, com recarregar a página como única saída. Só a tela que veio do
+     link do e-mail (`novaSenha`) não tem volta — ali a senha está sendo
+     trocada e sair no meio deixa a pessoa sem saber se valeu. */
   if(troca) troca.hidden=(modoAuth==='novaSenha');
-  ['Nome','Email','Senha','Confirma'].forEach(c=>mostrarErroCampo(c,''));
+  ['Nome','Email','Senha','Confirma','Codigo'].forEach(c=>mostrarErroCampo(c,''));
   avisoAuth('');
 }
 function trocarModo(novo){
   modoAuth=novo; pintarModo();
-  $a(modoAuth==='cadastrar'?'authNome':modoAuth==='novaSenha'?'authSenha':'authEmail').focus();
+  $a(modoAuth==='cadastrar'?'authNome'
+    :modoAuth==='novaSenha'?'authSenha'
+    :modoAuth==='codigo'?'authCodigo':'authEmail').focus();
+}
+/* O código dentro do link. O e-mail do Firebase manda uma URL comprida; quem
+   copia costuma copiar a URL inteira, não o pedaço depois de `oobCode=`. Aceitar
+   as duas coisas é a diferença entre a pessoa conseguir e desistir. */
+function codigoColado(txt){
+  const t=String(txt||'').trim();
+  if(!t) return '';
+  const m=t.match(/[?&]oobCode=([^&\s]+)/i);
+  if(m) return decodeURIComponent(m[1]);
+  return t.replace(/\s+/g,'');
 }
 
 function validarFormulario(){
@@ -4550,17 +4584,23 @@ function validarFormulario(){
     const n=Auth.validarNome($a('authNome').value);
     mostrarErroCampo('Nome',n); if(n) ok=false;
   }
-  if(modoAuth!=='novaSenha'){
+  if(modoAuth!=='novaSenha'&&modoAuth!=='codigo'){
     const e=Auth.validarEmail($a('authEmail').value);
     mostrarErroCampo('Email',e); if(e) ok=false;
   }
+  if(modoAuth==='codigo'){
+    const c=codigoColado($a('authCodigo').value);
+    const msg=!c ? 'Cole o código que chegou no e-mail.'
+      : (c.length<8 ? 'Esse código parece curto. Confira se copiou inteiro.' : '');
+    mostrarErroCampo('Codigo',msg); if(msg) ok=false;
+  }
   if(modoAuth!=='recuperar'){
-    const s=(modoAuth==='cadastrar'||modoAuth==='novaSenha')
+    const s=(modoAuth==='cadastrar'||modoAuth==='novaSenha'||modoAuth==='codigo')
       ? Auth.validarSenha($a('authSenha').value)
       : ($a('authSenha').value ? '' : 'Digite sua senha.');
     mostrarErroCampo('Senha',s); if(s) ok=false;
   }
-  if(modoAuth==='cadastrar'){
+  if(modoAuth==='cadastrar'||modoAuth==='codigo'){
     const c=$a('authConfirma').value;
     const msg=!c ? 'Repita a senha para confirmar.'
       : (c!==$a('authSenha').value ? 'As senhas não são iguais. Confira as duas.' : '');
@@ -4588,6 +4628,11 @@ async function enviarAuth(ev){
         try{ await Auth.definirNome(nome); }catch(e2){}
       }
       await abrirApp(true,true);
+    }else if(modoAuth==='codigo'){
+      await Auth.trocarSenhaComCodigo(codigoColado($a('authCodigo').value),senha);
+      $a('authCodigo').value='';
+      await abrirApp(true,false);
+      toast('Senha trocada. Você já está com a conta aberta.');
     }else if(modoAuth==='novaSenha'){
       await Auth.trocarSenhaComCodigo(codigoRecuperacao,senha);
       codigoRecuperacao=null;
@@ -4596,14 +4641,43 @@ async function enviarAuth(ev){
       toast('Senha definida. Você já está com a conta aberta.');
     }else{
       await Auth.recuperarSenha(email, location.origin+'/?recuperar=1');
-      avisoAuth(`Se existir uma conta com <b>${esc(email)}</b>, o link para criar uma senha nova já está a caminho. Confira também o spam.`,'ok');
-      modoAuth='entrar';
+      /* Some com o e-mail do aviso de propósito: repetir o endereço confirma
+         a quem não é dono da caixa que aquela conta existe. */
+      avisoAuth(`<b>Enviamos o código.</b> Se existir uma conta com esse e-mail, ele já está a caminho — confira também o spam.
+        Abra o e-mail e <b>toque no link</b>; se ele não trouxer você de volta pra cá,
+        copie o link ou o código e use <b>“Já tenho o código do e-mail”</b> aqui embaixo.`,'ok');
       const guardado=$a('authOk').innerHTML;
       pintarModo(); avisoAuth(guardado,'ok');
     }
   }catch(e){
-    avisoAuth(Auth.mensagemDeErro(e));
-    if(/INVALID_LOGIN_CREDENTIALS|INVALID_PASSWORD/i.test(String(e.codigo||e.message||''))) $a('authSenha').select();
+    const cru=String(e.codigo||e.message||'');
+    if(/EMAIL_EXISTS|EMAIL_ALREADY/i.test(cru)){
+      /* Dizer "já existe" e parar ali é empurrar o problema de volta: quem
+         está tentando criar conta de novo quase sempre é dono da conta e não
+         lembra a senha. O botão leva direto pra recuperação, e o e-mail já
+         vai junto. */
+      const canon=Auth.canonizarEmail(email);
+      const apelido=(canon!==email.trim().toLowerCase());
+      avisoAuth(`<b>Já existe uma conta com este e-mail.</b>`
+        +(apelido?` Para o Gmail, <b>${esc(email)}</b> e <b>${esc(canon)}</b> são a mesma caixa de entrada —
+            sua conta aqui é a <b>${esc(canon)}</b>.`:'')
+        +` Entre com ela, ou crie uma senha nova.
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" class="btn sec mini" id="btnIrEntrar">Entrar nessa conta</button>
+            <button type="button" class="btn sec mini" id="btnIrRecuperar">Esqueci a senha — mandar código</button>
+          </div>`);
+      const preparar=modo=>{ modoAuth=modo; pintarModo();
+        $a('authEmail').value=canon; $a('authSenha').value=''; $a('authConfirma').value=''; };
+      const be=$a('btnIrEntrar'), br=$a('btnIrRecuperar');
+      /* "Esqueci a senha" já MANDA o código: o e-mail está na tela e a pessoa
+         acabou de dizer que não lembra a senha — pedir para ela apertar um
+         segundo botão com o mesmo endereço já preenchido é etapa à toa. */
+      if(be) be.onclick=()=>{ preparar('entrar'); $a('authSenha').focus(); };
+      if(br) br.onclick=()=>{ preparar('recuperar'); enviarAuth(); };
+    }else{
+      avisoAuth(Auth.mensagemDeErro(e));
+    }
+    if(/INVALID_LOGIN_CREDENTIALS|INVALID_PASSWORD/i.test(cru)) $a('authSenha').select();
   }finally{
     carregandoAuth(false);
   }
@@ -4613,6 +4687,7 @@ function ligarAuth(){
   $a('authForm').addEventListener('submit',enviarAuth);
   $a('authTroca').onclick=()=>trocarModo(modoAuth==='entrar'?'cadastrar':'entrar');
   $a('authEsqueci').onclick=()=>trocarModo('recuperar');
+  $a('authTenhoCodigo').onclick=()=>trocarModo('codigo');
   document.querySelectorAll('.olho').forEach(b=>b.onclick=()=>{
     const inp=$a(b.dataset.ver); if(!inp) return;
     const ver=(inp.type==='password');

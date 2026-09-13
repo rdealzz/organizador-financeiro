@@ -260,6 +260,49 @@ function limparFreio(email){
   const f = lerFreio(); delete f[chaveFreio(email)]; gravarFreio(f);
 }
 
+/* ══════════ UM E-MAIL DE VERDADE, UMA CONTA ══════════
+
+   O Firebase já recusa duas contas com o MESMO endereço: a segunda tentativa
+   volta `EMAIL_EXISTS` (medido contra o projeto real). O buraco é outro, e é o
+   Gmail: para ele, `joao.silva@gmail.com`, `joaosilva@gmail.com` e
+   `joao.silva+app@gmail.com` são **a mesma caixa de entrada**, mas para o
+   Firebase são três endereços diferentes — três contas, três históricos
+   separados, e a pessoa jurando que criou tudo com "o mesmo e-mail". Medido:
+   as três foram criadas sem um pio.
+
+   `canonizarEmail` devolve a forma canônica: minúscula, sem espaço, e — só
+   para gmail.com/googlemail.com, que são os provedores que ignoram pontos e
+   apelidos — sem os pontos do nome e sem o `+apelido`. Nenhum outro domínio é
+   tocado: em muitos servidores o ponto faz parte do endereço de verdade, e
+   apagá-lo escreveria para outra pessoa.
+
+   Quem já tem conta gravada com pontos continua entrando: `entrar` tenta a
+   forma canônica e, só quando ela difere do que foi digitado, tenta também a
+   digitada. Cadastro novo é sempre canônico — é o que impede a duplicata de
+   nascer. */
+const DOMINIO_CANONICO = {'googlemail.com':'gmail.com'};
+const IGNORA_PONTO = ['gmail.com','googlemail.com'];
+function canonizarEmail(email){
+  const limpo = String(email||'').trim().toLowerCase();
+  const at = limpo.lastIndexOf('@');
+  if(at < 1) return limpo;
+  let local = limpo.slice(0, at), dominio = limpo.slice(at + 1);
+  if(IGNORA_PONTO.includes(dominio)){
+    const mais = local.indexOf('+');
+    if(mais >= 0) local = local.slice(0, mais);
+    local = local.replace(/\./g, '');
+    dominio = DOMINIO_CANONICO[dominio] || dominio;
+  }
+  if(!local) return limpo;          // "+apelido@gmail.com" não vira "@gmail.com"
+  return local + '@' + dominio;
+}
+/* As duas formas, sem repetir: serve a quem precisa tentar as duas. */
+const formasDoEmail = email => {
+  const digitado = String(email||'').trim().toLowerCase();
+  const canonico = canonizarEmail(digitado);
+  return canonico === digitado ? [canonico] : [canonico, digitado];
+};
+
 /* ---------- entrar, cadastrar, recuperar, sair ---------- */
 async function entrar(email, senha){
   const espera = esperaDoFreio(email);
@@ -268,13 +311,24 @@ async function entrar(email, senha){
     e.segundos = Math.ceil(espera / 1000);
     throw e;
   }
-  let r;
-  try{
-    r = await chamarIdentidade('/accounts:signInWithPassword', {method:'POST',
-      body:{email:String(email).trim().toLowerCase(), password:senha, returnSecureToken:true}});
-  }catch(e){
-    if(e.codigo !== 'sem_rede') registrarErroDeLogin(email);
-    throw e;
+  /* Tenta a forma canônica e, só se ela for diferente do que a pessoa
+     digitou, tenta a digitada: é o que deixa entrar quem criou a conta com
+     pontos antes desta versão. Erro de rede não vira segunda tentativa — se
+     não há rede, a outra forma também não vai chegar. */
+  let r, ultimo;
+  for(const tentativa of formasDoEmail(email)){
+    try{
+      r = await chamarIdentidade('/accounts:signInWithPassword', {method:'POST',
+        body:{email:tentativa, password:senha, returnSecureToken:true}});
+      ultimo = null; break;
+    }catch(e){
+      ultimo = e;
+      if(e.codigo === 'sem_rede') break;
+    }
+  }
+  if(ultimo){
+    if(ultimo.codigo !== 'sem_rede') registrarErroDeLogin(email);
+    throw ultimo;
   }
   limparFreio(email);
   const s = montarSessao(r);
@@ -288,7 +342,8 @@ async function entrar(email, senha){
    Supabase exigia. `confirmar` continua na resposta só por compatibilidade
    com quem chama, mas nunca vem `true`. */
 async function cadastrar(email, senha, nome){
-  const emailLimpo = String(email).trim().toLowerCase();
+  // Canônico SEMPRE: é aqui que a conta nasce, e é aqui que a duplicata se evita.
+  const emailLimpo = canonizarEmail(email);
   const nomeLimpo = String(nome||'').trim();
   const r = await chamarIdentidade('/accounts:signUp', {method:'POST',
     body:{email:emailLimpo, password:senha, displayName:nomeLimpo, returnSecureToken:true}});
@@ -299,9 +354,17 @@ async function cadastrar(email, senha, nome){
   return {sessao:s, confirmar:false};
 }
 async function recuperarSenha(email, redirecionar){
-  const body = {requestType:'PASSWORD_RESET', email:String(email).trim().toLowerCase()};
-  if(redirecionar) body.continueUrl = redirecionar;
-  await chamarIdentidade('/accounts:sendOobCode', {method:'POST', body});
+  /* Pede para as duas formas quando elas diferem. O Firebase responde 200
+     mesmo para endereço sem conta (é a proteção contra quem fica descobrindo
+     quem tem cadastro), então não dá para perguntar antes qual das duas
+     existe — e mandar nas duas custa uma requisição a mais e garante que o
+     e-mail chegue para quem se cadastrou com pontos. Cai na mesma caixa de
+     entrada de qualquer jeito. */
+  for(const alvo of formasDoEmail(email)){
+    const body = {requestType:'PASSWORD_RESET', email:alvo};
+    if(redirecionar) body.continueUrl = redirecionar;
+    await chamarIdentidade('/accounts:sendOobCode', {method:'POST', body});
+  }
 }
 /* O link do e-mail de recuperação traz um `oobCode` (não uma sessão pronta,
    como no Supabase). Trocamos a senha com ele e, para manter a mesma
@@ -478,5 +541,6 @@ window.Auth = {
   definirNome, primeiroNome,
   puxarEstado, enviarEstado, apagarEstadoNaNuvem,
   usuario, logado, tokenValido, guardarSessao, montarSessao,
-  mensagemDeErro, validarEmail, validarSenha, validarNome, forcaDaSenha
+  mensagemDeErro, validarEmail, validarSenha, validarNome, forcaDaSenha,
+  canonizarEmail
 };
