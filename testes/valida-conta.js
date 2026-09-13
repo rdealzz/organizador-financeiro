@@ -35,6 +35,10 @@ const eh=(n,v,d)=>{(v?ok:bad).push(n+(v?'':'  →  '+JSON.stringify(d)));};
      return rota.fulfill(jsonOK(sessao(corpo.email)));
    }
    if(url.includes(':sendOobCode')){
+     /* Como o projeto real: continueUrl de domínio fora da lista é recusado,
+        e o e-mail NÃO sai. Sem continueUrl, sai. */
+     if(corpo.continueUrl&&!/organizador-financeiro-98e15/.test(corpo.continueUrl))
+       return rota.fulfill(jsonErro('UNAUTHORIZED_DOMAIN : Domain not allowlisted by project'));
      enviados.push(corpo.email);
      // Como o de verdade: 200 mesmo para endereço sem conta.
      if(contas.has(corpo.email)) oobs.set('oob-'+corpo.email,corpo.email);
@@ -138,6 +142,15 @@ const eh=(n,v,d)=>{(v?ok:bad).push(n+(v?'':'  →  '+JSON.stringify(d)));};
  eh('o aviso fala em código e no caminho de colar',/código/i.test(rec.ok)&&/já tenho o código/i.test(rec.ok),rec.ok.slice(0,120));
  eh('o aviso não repete o e-mail de volta',!rec.ok.includes(comPontos),rec.ok.slice(0,60));
  eh('o atalho do código está à vista',await p.evaluate(()=>!document.getElementById('authTenhoCodigo').hidden));
+
+ // ── 5b. domínio não autorizado: o e-mail sai mesmo assim, e a frase muda
+ const antesDom=enviados.length;
+ await p.evaluate(()=>trocarModo('recuperar'));
+ await preencher({authEmail:comPontos});
+ await enviar();
+ const rd=await aviso();
+ eh('domínio fora da lista não impede o envio',enviados.length>antesDom,{antesDom,depois:enviados.length});
+ eh('e a instrução muda para colar o código',/página do Firebase/i.test(rd.ok)&&/copie o link/i.test(rd.ok),rd.ok.slice(0,140));
 
  // ── 6. a tela do código
  await p.evaluate(()=>trocarModo('codigo'));

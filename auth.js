@@ -353,7 +353,9 @@ async function cadastrar(email, senha, nome){
   guardarSessao(s);
   return {sessao:s, confirmar:false};
 }
+let dominioRecusado = false;
 async function recuperarSenha(email, redirecionar){
+  dominioRecusado = false;
   /* Pede para as duas formas quando elas diferem. O Firebase responde 200
      mesmo para endereço sem conta (é a proteção contra quem fica descobrindo
      quem tem cadastro), então não dá para perguntar antes qual das duas
@@ -363,8 +365,31 @@ async function recuperarSenha(email, redirecionar){
   for(const alvo of formasDoEmail(email)){
     const body = {requestType:'PASSWORD_RESET', email:alvo};
     if(redirecionar) body.continueUrl = redirecionar;
-    await chamarIdentidade('/accounts:sendOobCode', {method:'POST', body});
+    try{
+      await chamarIdentidade('/accounts:sendOobCode', {method:'POST', body});
+    }catch(e){
+      /* `continueUrl` só é aceito para domínio que esteja na lista de
+         autorizados do projeto (Authentication → Settings → Domínios
+         autorizados). Medido: com um endereço fora da lista a resposta é
+         `UNAUTHORIZED_DOMAIN` e **o e-mail não é enviado** — quem publicou o
+         app num domínio novo ficava sem recuperação de senha nenhuma, com uma
+         mensagem genérica na tela.
+
+         O endereço de volta é conforto, não requisito: sem ele o Firebase
+         manda o mesmo e-mail, com a página de ação dele. Então, em vez de
+         falhar, mandamos de novo SEM o continueUrl — a pessoa recebe o
+         código do mesmo jeito e a tela "Já tenho o código" resolve o resto. */
+      const cru = String(e.codigo || e.message || '').toUpperCase();
+      if(!redirecionar || !(cru.includes('UNAUTHORIZED_DOMAIN') || cru.includes('INVALID_CONTINUE_URI')
+                            || cru.includes('MISSING_CONTINUE_URI'))) throw e;
+      dominioRecusado = true;
+      await chamarIdentidade('/accounts:sendOobCode', {method:'POST',
+        body:{requestType:'PASSWORD_RESET', email:alvo}});
+    }
   }
+  /* Diz a quem chamou se o link vai conseguir voltar para o app: a tela de
+     recuperação muda a frase por causa disso. */
+  return {dominioRecusado};
 }
 /* O link do e-mail de recuperação traz um `oobCode` (não uma sessão pronta,
    como no Supabase). Trocamos a senha com ele e, para manter a mesma

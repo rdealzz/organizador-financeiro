@@ -4640,12 +4640,21 @@ async function enviarAuth(ev){
       await abrirApp(true,false);
       toast('Senha definida. Você já está com a conta aberta.');
     }else{
-      await Auth.recuperarSenha(email, location.origin+'/?recuperar=1');
+      const r=await Auth.recuperarSenha(email, location.origin+'/?recuperar=1');
       /* Some com o e-mail do aviso de propósito: repetir o endereço confirma
          a quem não é dono da caixa que aquela conta existe. */
-      avisoAuth(`<b>Enviamos o código.</b> Se existir uma conta com esse e-mail, ele já está a caminho — confira também o spam.
-        Abra o e-mail e <b>toque no link</b>; se ele não trouxer você de volta pra cá,
-        copie o link ou o código e use <b>“Já tenho o código do e-mail”</b> aqui embaixo.`,'ok');
+      /* Quando o domínio publicado não está autorizado no Firebase, o e-mail
+         sai mesmo assim (sem o endereço de volta), mas o link cai numa página
+         do Firebase. Aí a instrução muda: colar o código é o caminho, não o
+         plano B. Dizer "toque no link" nesse caso seria mandar a pessoa para
+         uma tela que não devolve ela pra cá. */
+      avisoAuth(r&&r.dominioRecusado
+        ? `<b>Enviamos o código.</b> Se existir uma conta com esse e-mail, ele já está a caminho — confira também o spam.
+           O link vai abrir uma página do Firebase, não o app: <b>copie o link (ou só o código)</b>
+           e use <b>“Já tenho o código do e-mail”</b> aqui embaixo.`
+        : `<b>Enviamos o código.</b> Se existir uma conta com esse e-mail, ele já está a caminho — confira também o spam.
+           Abra o e-mail e <b>toque no link</b>; se ele não trouxer você de volta pra cá,
+           copie o link ou o código e use <b>“Já tenho o código do e-mail”</b> aqui embaixo.`,'ok');
       const guardado=$a('authOk').innerHTML;
       pintarModo(); avisoAuth(guardado,'ok');
     }

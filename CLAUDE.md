@@ -49,7 +49,15 @@ Projeto Firebase: **`organizador-financeiro-98e15`**.
    legível pela API — o `sendOobCode` responde 200 de qualquer jeito.
    **Enquanto não for feito, ninguém fica preso**: a tela *Já tenho o código do
    e-mail* (v10.12) aceita o link inteiro colado.
-2. **Contas antigas do Supabase não migram** — é uma base de usuários nova.
+2. **O domínio publicado precisa entrar nos Domínios autorizados**
+   (Authentication → Settings → Domínios autorizados). Hoje a lista tem só
+   `localhost`, `organizador-financeiro-98e15.firebaseapp.com` e `.web.app` —
+   **o endereço da Vercel não está lá**. Medido: `sendOobCode` com
+   `continueUrl` de domínio fora da lista responde `UNAUTHORIZED_DOMAIN` e **o
+   e-mail não é enviado**. Desde a v10.13 o app reenvia sem o `continueUrl`
+   quando isso acontece, então ninguém fica sem recuperar a senha — mas o link
+   só volta para o app depois desse ajuste.
+3. **Contas antigas do Supabase não migram** — é uma base de usuários nova.
 
 ## O app se chama Sobra+ (v9.3)
 
@@ -1313,3 +1321,62 @@ Vale anotar para a próxima vez: **o navegador da sandbox não alcança o
 `googleapis.com`** — só o `curl` passa pelo proxy do agente. Testar o caminho
 real pela interface, daqui, não funciona; medir com `curl` e emular na página é
 o que dá para fazer.
+
+## O domínio não autorizado matava o "esqueci minha senha" (v10.13)
+
+Achado ao responder uma pergunta sobre SMS, consultando o projeto real: a lista
+de **Domínios autorizados** tem só `localhost`,
+`organizador-financeiro-98e15.firebaseapp.com` e `.web.app`. O endereço onde o
+app é publicado não está nela.
+
+Isso não é detalhe de configuração — quebra uma função inteira. Medido:
+
+| `continueUrl` | resposta |
+|---|---|
+| `…firebaseapp.com/?recuperar=1` | 200, e-mail enviado |
+| `…vercel.app/?recuperar=1` | **`UNAUTHORIZED_DOMAIN`, e-mail NÃO enviado** |
+| nenhum | 200, e-mail enviado |
+
+`recuperarSenha` sempre mandava `continueUrl = location.origin + '/?recuperar=1'`,
+então num domínio fora da lista **o e-mail nunca saía** e a pessoa via uma frase
+genérica de erro. "Esqueci minha senha" simplesmente não funcionava em produção.
+
+**O endereço de volta é conforto, não requisito.** Sem ele o Firebase manda o
+mesmo e-mail, com a página de ação dele — e o código continua válido. Então,
+quando o domínio é recusado, o app **manda de novo sem o `continueUrl`** em vez
+de falhar, e a tela muda de instrução: em vez de "toque no link", diz que o link
+vai abrir uma página do Firebase e que o caminho é **copiar o código** e usar
+*Já tenho o código do e-mail*. Um caminho que funciona hoje vale mais que um
+caminho bonito que depende de um ajuste no console.
+
+Para o link voltar ao app, o ajuste continua valendo a pena — são dois campos no
+console, e os dois estão na lista de "o que ainda falta".
+
+## Código por SMS: o que custa (v10.13)
+
+Perguntado: dá para usar código por SMS? **Dá, mas não é o mesmo problema** — e
+custa três coisas que hoje o projeto não paga.
+
+Primeiro, o estado de agora: `accounts:sendVerificationCode` responde
+**`OPERATION_NOT_ALLOWED`** — o provedor Telefone está desligado no projeto.
+
+Se fosse ligado:
+
+1. **SMS não redefine senha.** O Firebase não troca senha de conta
+   e-mail/senha com código de SMS. O que existe é *entrar* por telefone — um
+   segundo jeito de login. O desenho seria: entra por SMS e, já dentro do app,
+   usa `definirNovaSenha()` (que já existe) para pôr uma senha nova. Funciona,
+   mas é outra coisa, não "esqueci minha senha por SMS".
+2. **Exige reCAPTCHA, que exige CDN.** O envio na web só é aceito com um token
+   de verificação da Google, e obtê-lo pede o script do
+   `google.com/recaptcha` — proibido pelo `script-src 'self'` do `vercel.json`
+   e contra a decisão de o app não carregar terceiros. Seria preciso abrir a
+   CSP e depender de um script externo para a pessoa conseguir entrar. É o
+   oposto da decisão do `auth.js`, e vale reler: ela existe para o app abrir
+   offline e não ter terceiro nenhum no caminho do login.
+3. **SMS é pago, por mensagem.** Sai do plano gratuito, e o custo é por envio —
+   inclusive dos envios de quem só errou o número.
+
+Por isso o código por e-mail continua sendo o caminho: chega na mesma caixa, não
+custa por mensagem, não pede script de terceiro e já está inteiro — inclusive
+com a tela de colar o código, que é a parte que faltava.
