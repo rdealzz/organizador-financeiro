@@ -30,6 +30,13 @@ falhar.
   `Invalid Date` no texto visível.
 * **`valida-fuso.js`** — o app em quatro fusos horários. `iso()` já saiu um dia
   atrás a leste de Greenwich (v10.11); esta suíte existe para isso não voltar.
+* **`valida-extrato.js`** — o acerto por gasto ("ele já me pagou") e o extrato
+  em PDF: os números de `calc()` idênticos antes e depois de marcar (marcar não
+  é dinheiro entrando), a cobrança que não pede de novo o que já foi pago, o
+  gasto rachado em três com um pagando e o outro não, o extrato batendo com a
+  soma das fatias, o acerto sobrevivendo ao fechamento da fatura, a impressão
+  deixando só o papel na página e a camada opaca nos dois temas com a esfera
+  ligada.
 * **`valida-conta.js`** — duplicidade de e-mail e recuperação por código, com o
   Firebase **emulado na rede da página**: apelidos do Gmail caindo numa conta
   só, a segunda conta recusada com caminho para recuperar, entrar por qualquer

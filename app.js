@@ -108,6 +108,48 @@ function sincronizarDivs(l){
 }
 const nDivisoes=l=>divisoes(l).length;
 
+/* ══════════ "ELE JÁ ME PAGOU" — O ACERTO POR GASTO (v10.14) ══════════
+
+   `x.recebido` responde por uma FATURA inteira: a Mãe acertou setembro. Só que
+   quem divide gasto com alguém de casa recebe ADIANTADO, gasto a gasto — o pai
+   compra no seu cartão e manda o Pix na mesma tarde, semanas antes de a fatura
+   fechar. Até aqui não havia onde anotar isso, e o gasto voltava na cobrança do
+   fim do mês como se nada tivesse acontecido. Cobrar de novo o que já foi pago
+   é o erro que estraga a relação com quem divide a conta.
+
+   `l.acerto` é `{idPessoa: 'AAAA-MM-DD'}` no próprio lançamento: a data em que
+   aquela pessoa acertou a parte DELA naquele gasto. Por pessoa e por gasto,
+   porque é assim que o dinheiro anda — o pai pode ter pago o mercado e não o
+   posto, e num jantar rachado em três um pode ter mandado o Pix e o outro não.
+
+   **Marcar não mexe em valor nenhum**, e isto é a coisa mais importante do
+   bloco — é a mesma regra do "paguei no cartão" da v9.3. A parte do pai NUNCA
+   foi sua: `meuValor()` é `valor - pai`, e o orçamento, os tetos e a sobra do
+   mês já contam só o que é seu. O Pix que ele mandou é REEMBOLSO, não renda;
+   lançá-lo como dinheiro que entrou contaria o mesmo dinheiro duas vezes e
+   inflaria a sobra do mês. O acerto resolve a OBRIGAÇÃO: sai da cobrança, e é
+   só isso que ele faz.
+
+   Campo novo e ADITIVO, sem migração e sem tocar em `pai`, `com` ou `divs`:
+   lançamento sem `acerto` é lançamento cuja parte ainda está em aberto — que é
+   a verdade para tudo que já estava gravado. Uma versão antiga do app noutro
+   aparelho ignora o campo e continua certa; esta, ao ler o mesmo estado, mostra
+   o que já foi acertado. */
+const acertado=(l,id)=>!!(l&&l.acerto&&l.acerto[id||'']);
+const dataAcerto=(l,id)=>(l&&l.acerto&&l.acerto[id||''])||'';
+function marcarAcerto(l,id,ligar){
+  const k=id||'';
+  if(ligar){ l.acerto=l.acerto||{}; l.acerto[k]=iso(hojeD()); }
+  else if(l.acerto){ delete l.acerto[k]; if(!Object.keys(l.acerto).length) delete l.acerto; }
+  return acertado(l,k);
+}
+/* O que ainda falta receber e o que já veio, por lançamento. Ninguém além da
+   cobrança e do extrato lê estes dois: eles não entram em conta de orçamento
+   nenhuma, pelo motivo escrito acima. */
+const aReceberDe=l=>divisoes(l).filter(d=>!acertado(l,d.id)).reduce((s,d)=>s+d.valor,0);
+const recebidoDe=l=>divisoes(l).filter(d=>acertado(l,d.id)).reduce((s,d)=>s+d.valor,0);
+const tudoAcertado=l=>{ const ds=divisoes(l); return ds.length>0&&ds.every(d=>acertado(l,d.id)); };
+
 function fatiasPessoa(itens){
   const m={};
   (itens||[]).forEach(l=>divisoes(l).forEach(d=>{ m[d.id]=(m[d.id]||0)+d.valor; }));
@@ -129,24 +171,41 @@ function fatiasPessoa(itens){
 function cobrancas(itens,congeladas){
   const m={};
   (itens||[]).forEach(l=>divisoes(l).forEach(d=>{
-    if(!m[d.id]) m[d.id]={id:d.id,itens:[],total:0};
-    m[d.id].itens.push({nome:l.nome,cat:l.cat,valor:d.valor,cheio:+l.valor||0});
+    if(!m[d.id]) m[d.id]={id:d.id,itens:[],total:0,aberto:0,quitado:0};
+    const pg=acertado(l,d.id);
+    m[d.id].itens.push({nome:l.nome,cat:l.cat,valor:d.valor,cheio:+l.valor||0,
+      pg,quando:dataAcerto(l,d.id),l});
     m[d.id].total+=d.valor;
+    if(pg) m[d.id].quitado+=d.valor; else m[d.id].aberto+=d.valor;
   }));
   return Object.values(m).map(g=>{
     const cong=(congeladas||[]).find(f=>String(f.id)===String(g.id));
     g.nome=(cong&&cong.nome)||nomePessoa(g.id);
     g.cor=(cong&&cong.cor)||corPessoa(g.id);
-    g.itens.sort((a,b)=>b.valor-a.valor);
+    /* O que ainda falta primeiro: é isso que a pessoa precisa ver e é isso que
+       vai no texto da cobrança. O que já foi acertado desce, com a marca. */
+    g.itens.sort((a,b)=>(a.pg===b.pg)?b.valor-a.valor:(a.pg?1:-1));
+    g.tudoPago=g.total>0&&g.aberto<0.005;
     return g;
-  }).sort((a,b)=>b.total-a.total);
+  }).sort((a,b)=>b.aberto-a.aberto||b.total-a.total);
 }
 /* O texto que vai pro WhatsApp. Item a item de propósito: uma cobrança que
    chega só com o total vira conversa; com a lista, a pessoa confere e paga. */
 function textoCobranca(g,quando){
+  const abertos=g.itens.filter(i=>!i.pg), pagos=g.itens.filter(i=>i.pg);
+  if(!abertos.length){
+    return `Fatura de ${quando}\n\n`
+      +pagos.map(i=>'• '+i.nome+': '+brl(i.valor)+' (pago)').join('\n')
+      +`\n\nTudo acertado — nada a pagar. Total já recebido: ${brl(g.quitado)}`;
+  }
+  /* O que já foi acertado vai junto, mas FORA do total. Some-lo em silêncio
+     faria a pessoa do outro lado pagar de novo; escondê-lo faria ela achar que
+     o gasto sumiu da conta. */
   return `Fatura de ${quando}\n\n`
-    +g.itens.map(i=>'• '+i.nome+': '+brl(i.valor)).join('\n')
-    +`\n\nTotal: ${brl(g.total)}`;
+    +abertos.map(i=>'• '+i.nome+': '+brl(i.valor)).join('\n')
+    +`\n\nTotal: ${brl(g.aberto)}`
+    +(pagos.length?`\n\nJá acertado antes (não entra no total): `
+      +pagos.map(i=>i.nome+' '+brl(i.valor)).join(', '):'');
 }
 /* Copiar tem que funcionar mesmo onde a API nova não existe (navegador antigo,
    página sem contexto seguro): o textarea escondido é o plano B de sempre. */
@@ -175,6 +234,30 @@ async function enviarCobranca(g,quando){
   const ok=await copiar(txt);
   toast(ok?'Cobrança de '+g.nome+' copiada':'Não consegui copiar aqui',!ok);
 }
+
+/* O botão de "já me pagou" aparece em quatro telas — a linha da tabela, o
+   bloco de quem divide, a cobrança da fatura fechada e o extrato — e todas
+   mexem no MESMO campo. Em vez de repetir id de lançamento e id de pessoa em
+   cada uma (e de inventar um caminho para achar o item dentro de uma fatura
+   arquivada, que não tem id), o botão guarda a referência do objeto numa lista
+   e leva só o índice. A lista é zerada no começo de cada `render()`: o HTML
+   inteiro é reescrito ali, então índice de antes não sobrevive — e nem
+   precisa. */
+let refAcerto=[];
+function botaoAcerto(l,id,rotulo){
+  const on=acertado(l,id), i=refAcerto.push({l,id})-1;
+  return `<button type="button" class="acerto${on?' on':''}" data-acerto="${i}"
+    aria-pressed="${on?'true':'false'}"
+    title="${on?'Acertado em '+dataBR(dataAcerto(l,id))+' — toque para desmarcar':'Marcar que '+esc(nomePessoa(id))+' já te pagou esta parte'}"
+    >${on?'✓ já pagou':(rotulo||'já me pagou')}</button>`;
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-acerto]'); if(!b) return;
+  const r=refAcerto[+b.dataset.acerto]; if(!r) return;
+  const on=marcarAcerto(r.l,r.id,!acertado(r.l,r.id));
+  vibrar(12); render(); salvar();
+  toast(on?nomePessoa(r.id)+' já pagou este gasto':'Voltou para a lista de cobrança');
+});
 
 /* Estado de antes desta versão: havia valor em `pai` e pessoa nenhuma. Em vez
    de jogar essa informação fora, ela vira uma pessoa de verdade chamada
@@ -374,7 +457,13 @@ function fecharCiclo(dataStr){
     porCat[l.cat]=(porCat[l.cat]||0)+m; });
   const itens=daFatura.map(l=>({nome:l.nome,cat:l.cat,tier:l.tier,valor:l.valor,pai:+l.pai||0,
     com:l.com||'',divs:Array.isArray(l.divs)?l.divs.map(d=>({id:d.id,valor:d.valor})):undefined,
-    tipo:l.tipo,fonte:l.fonte,pRest:+l.pRest||0,venc:+l.venc||0,meio:l.meio||'cartao'}));
+    tipo:l.tipo,fonte:l.fonte,pRest:+l.pRest||0,venc:+l.venc||0,meio:l.meio||'cartao',
+    /* O acerto vai ARQUIVADO junto do item, não recalculado depois: quem pagou
+       o mercado adiantado em setembro continua tendo pago o mercado de setembro
+       daqui a um ano. `criadoEm` vem junto pelo mesmo motivo — é a data que o
+       extrato mostra, e a fatura arquivada era o único lugar que a perdia. */
+    criadoEm:+l.criadoEm||0,
+    acerto:l.acerto?Object.assign({},l.acerto):undefined}));
   /* O nome e a cor da pessoa vão CONGELADOS na fatura arquivada, não por
      referência: quem apagar "Mãe" daqui a três meses continua vendo de quem
      era aquela metade do mercado de setembro.
@@ -384,8 +473,15 @@ function fecharCiclo(dataStr){
   /* `bruto` é a fatura do cartão; `avista` é o que saiu por fora dela. As
      faturas gravadas antes desta versão não têm `avista` — para elas o campo
      não existe e vale zero, que é a verdade: naquela época tudo era cartão. */
+  /* Quem acertou TODOS os gastos dela antes do fechamento já está quitado
+     nesta fatura: a marca de fatura (`recebido`) nasce preenchida, senão o
+     bloco "Para cobrar" pediria de novo o que já foi pago no Pix. */
+  const recebido={};
+  cobrancas(itens).forEach(g=>{ if(g.tudoPago)
+    recebido[g.id||'']=g.itens.reduce((mx,i)=>i.quando>mx?i.quando:mx,'')||dataStr; });
   S.hist.unshift({data:dataStr,venc:iso(vencDaFatura(dataDeISO(dataStr))),
-    bruto,avista,meu,pai,porCat,itens,pessoas:fatiasPessoa(daFatura)});
+    bruto,avista,meu,pai,porCat,itens,pessoas:fatiasPessoa(daFatura),
+    recebido:Object.keys(recebido).length?recebido:undefined});
   S.hist=S.hist.slice(0,24);
   let sumiram=0, andaram=0;
   const ficam=daFatura.filter(l=>{
@@ -400,6 +496,10 @@ function fecharCiclo(dataStr){
          `com` fica, como já ficava: quem divide o mercado costuma dividir de
          novo, e o select já abre na pessoa certa. */
       if(Array.isArray(l.divs)) delete l.divs;
+      /* E o acerto vai junto, pela mesma razão: ele dizia que a Ana tinha
+         pagado os R$ 300 dela no mercado de setembro. Esse mercado foi
+         arquivado com a marca; o de outubro começa devendo. */
+      delete l.acerto;
       return true;
     }
     if(l.tipo==='rec'||l.tipo==='fixo') return true;
@@ -513,7 +613,11 @@ function avisoModo(){
     $('#alertaSalvar').innerHTML='';
   }
 }
-const META=['_ts','_ultimoSalvo','_revisao','_ultimaCopia'];
+/* Campos de CONTROLE, não de conteúdo. Eles não podem carimbar `_ts`: quem
+   grava `_ts` ganha o conflito de sincronização, e abrir o app numa versão
+   nova (que escreve `_versaoApp`) faria um aparelho parado vencer o aparelho
+   onde a pessoa realmente lançou os gastos. */
+const META=['_ts','_ultimoSalvo','_revisao','_ultimaCopia','_versaoApp'];
 function conteudoDe(o){
   const c={}; Object.keys(o).forEach(k=>{ if(!META.includes(k)) c[k]=o[k]; });
   return JSON.stringify(c);
@@ -554,6 +658,34 @@ async function copiaDeSeguranca(txt){
       velhas.forEach(k=>t.objectStore('kv').delete(k)); }
   }catch(e){}
 }
+/* ---------- a atualização do app não pode custar um dado ----------
+
+   O estado é um JSON só, sem esquema, e toda versão nova lê o que a anterior
+   escreveu: campo que ela não conhece é ignorado, campo que falta cai no
+   padrão. Nenhuma versão renomeia ou apaga campo de ninguém — é a mesma regra
+   que mantém `l.pai` com esse nome desde a v9.2 e que fez `l.acerto` nascer
+   aditivo. Por isso atualizar não perde nada: os dados nem são tocados.
+
+   Isto aqui é o cinto por cima do suspensório. Na PRIMEIRA abertura depois de
+   uma versão nova, o estado como a versão anterior o deixou vai inteiro para
+   uma cópia à parte, antes que qualquer código novo escreva por cima. Se um
+   dia uma versão sair com um defeito que estrague o estado, a foto do minuto
+   anterior existe — e não depende de a pessoa ter lembrado de baixar backup.
+
+   A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
+   ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
+   para não carimbar `_ts` e não virar uma gravação com cara de edição. */
+const VERSAO_APP='v10.14';
+async function copiaDeVersao(){
+  try{
+    if(S._versaoApp===VERSAO_APP) return;
+    const antes=S._versaoApp||'anterior';
+    const foto={}; Object.keys(S).forEach(k=>{ foto[k]=S[k]; });
+    delete foto._versaoApp;
+    await idbSet('copia:versao-'+antes,JSON.stringify(foto));
+    S._versaoApp=VERSAO_APP;
+  }catch(e){}
+}
 async function carregar(){
   try{ const v=await storeGet(KEY); if(v) S=Object.assign(S,JSON.parse(v)); }catch(e){}
   ultimoConteudo=conteudoDe(S);
@@ -564,6 +696,9 @@ async function carregar(){
   $('#diaFech').value=S.diaFech||5; $('#diaVenc').value=S.diaVenc||S.diaFech||12;
   // O rosto escolhido vem no estado da conta: pinta assim que ele chega.
   pintarAvatares();
+  /* Antes do primeiro render da versão nova: a foto é do estado como a versão
+     anterior o deixou, e depois de render() já não seria. */
+  await copiaDeVersao();
   render(); salvar(); avisoModo();
 }
 
@@ -636,6 +771,7 @@ function calc(){
 
 /* ---------- render ---------- */
 function render(){
+  refAcerto=[];      // o HTML inteiro é reescrito daqui pra baixo
   const c=calc();
   renderHero(c);
   resumoDivisao(c);
@@ -658,6 +794,11 @@ function render(){
   renderTopCats(c); renderUltimos(c);
   renderMeta(c); renderHist(); renderTetos(c); renderPessoas(c); renderLanc(c); renderCortes(c); renderReserva(c); renderObj(c); renderDiv();
   renderVenc(c); renderFatura(c); renderAlertas(c); renderChips();
+  /* O extrato só é montado quando está na tela. Ele pode varrer o histórico
+     inteiro ("tudo"), e render() roda a cada tecla digitada — é o mesmo motivo
+     pelo qual os gráficos também esperam a aba. Estar sempre atualizado não
+     exige ser refeito o tempo todo: exige ser refeito na hora de mostrar. */
+  if(AREA==='analise'&&SUB.analise==='extratos') renderExtratos();
   if(AREA==='analise'&&SUB.analise==='graficos') renderGraficos(c);
   $('#dlFontes').innerHTML=[...new Set(S.lanc.map(l=>l.fonte).filter(Boolean))].map(f=>`<option value="${esc(f)}">`).join('');
   pintarPagadorForm();   // as opções são as pessoas cadastradas, e elas mudam
@@ -798,8 +939,11 @@ function blocoCobrancas(x){
   const gs=cobrancas(x.itens,fatiasDoHist(x));
   if(!gs.length) return '';
   const quando=dataBR(x.data);
-  const falta=gs.filter(g=>!recebeuDe(x,g.id)).reduce((t,g)=>t+g.total,0);
-  const pagos=gs.filter(g=>recebeuDe(x,g.id)).length;
+  /* O que falta é o que está ABERTO: quem mandou o Pix do mercado antes de a
+     fatura fechar já pagou aquele pedaço, e somá-lo aqui seria cobrar duas
+     vezes — que é justamente o que este bloco existe para evitar. */
+  const falta=gs.filter(g=>!recebeuDe(x,g.id)).reduce((t,g)=>t+g.aberto,0);
+  const pagos=gs.filter(g=>recebeuDe(x,g.id)||g.tudoPago).length;
   return `<h3>Para cobrar · ${brl(falta)}</h3>
    <p class="ajuda" style="margin:-6px 0 12px">O que cada pessoa deve desta fatura, item a item.
      ${pagos?`<b>${pagos}</b> já ${pagos===1?'acertou':'acertaram'}.`:'Toque em <b>Enviar</b> para mandar a lista pronta.'}</p>`
@@ -810,12 +954,14 @@ function blocoCobrancas(x){
         <span class="cb-ini" style="background:color-mix(in srgb,${g.cor} 16%,transparent);color:${g.cor}"
           >${esc(g.nome.trim().charAt(0).toUpperCase()||'?')}</span>
         <div class="cb-nome">${esc(g.nome)}<small>${g.itens.length} gasto${g.itens.length===1?'':'s'}${pago?' · pago em '+dataBR(x.recebido[g.id||''])
-          :''}</small></div>
-        <div class="cb-v" style="color:${pago?'var(--txt-3)':g.cor}">${brl(g.total)}</div>
+          :(g.quitado>0?' · '+brl(g.quitado)+' já acertado antes':'')}</small></div>
+        <div class="cb-v" style="color:${pago||g.tudoPago?'var(--txt-3)':g.cor}">${brl(pago?g.total:g.aberto)}${
+          !pago&&g.quitado>0?`<small>de ${brl(g.total)}</small>`:''}</div>
       </div>
-      <div class="cb-itens">${g.itens.map(i=>`<div class="cb-i">
+      <div class="cb-itens">${g.itens.map(i=>`<div class="cb-i${i.pg?' pgo':''}">
         <span class="pt" style="background:${catDe(i.cat).c}"></span>
         <span class="cb-in">${esc(i.nome)}</span>
+        ${botaoAcerto(i.l,g.id)}
         <span class="cb-iv">${brl(i.valor)}${i.cheio>i.valor+0.005?`<small>de ${brl(i.cheio)}</small>`:''}</span>
       </div>`).join('')}</div>
       <div class="cb-acoes">
@@ -1273,6 +1419,11 @@ function opcoesPagador(l,curto){
     +`<option value="+">${curto?'+ pessoa…':'+ Nova pessoa…'}</option>`;
 }
 function aplicarPagador(l,v){
+  /* Trocar quem divide apaga o acerto: a marca dizia que FULANO já tinha
+     pagado, e ela não vale para quem entrou no lugar dele. Deixá-la seria dar
+     por acertada uma parte que ninguém pagou — o defeito que o bloco inteiro
+     existe para evitar. É a mesma regra do `pagoAte` ao trocar o vencimento. */
+  delete l.acerto;
   if(v==='eu'){ l.pai=0; l.com=''; return; }
   const [modo,id]=String(v).split(':'), val=+l.valor||0;
   l.com=id||'';
@@ -1305,6 +1456,7 @@ function removerPessoa(id){
   S.lanc.forEach(l=>{
     if(Array.isArray(l.divs)){ l.divs=l.divs.filter(d=>d.id!==id); sincronizarDivs(l); }
     if(l.com===id&&!Array.isArray(l.divs)){ l.com=''; l.pai=0; }
+    if(l.acerto&&l.acerto[id]) marcarAcerto(l,id,false);
   });
   S.pessoas=pessoas().filter(x=>x.id!==id);
   render(); salvar(); toast(p.nome+' saiu da lista');
@@ -1331,33 +1483,38 @@ function renderPessoas(c){
   const linhas=reg.map(p=>({id:p.id,nome:p.nome,cor:p.cor||'var(--pai)'})).concat(soltas)
     .map(p=>{
       const itens=doCiclo().filter(l=>divisoes(l).some(d=>d.id===p.id));
-      const dela=itens.reduce((t,l)=>t+Math.min(+l.pai||0,l.valor),0);
+      const fatia=l=>(divisoes(l).find(d=>d.id===p.id)||{valor:0}).valor;
+      const dela=itens.reduce((t,l)=>t+fatia(l),0);
+      const jaVeio=itens.reduce((t,l)=>t+(acertado(l,p.id)?fatia(l):0),0);
       const minha=itens.reduce((t,l)=>t+meuValor(l),0);
       const n=itens.length;
-      return {p,dela,minha,n};
+      return {p,dela,jaVeio,minha,n};
     }).sort((a,b)=>b.dela-a.dela);
   const total=linhas.reduce((t,x)=>t+x.dela,0);
   /* Aberto por dentro: o total já existia, o que faltava era o "de quê". A
      lista fica recolhida para não empurrar o resto da tela — quem só quer o
      número continua vendo o número. */
   const prev={}; cobrancas(doCiclo()).forEach(g=>{ prev[g.id]=g; });
-  el.innerHTML=linhas.map(({p,dela,minha,n})=>`<div class="item">
+  el.innerHTML=linhas.map(({p,dela,jaVeio,minha,n})=>`<div class="item">
     <div class="ic" style="background:color-mix(in srgb,${p.cor} 14%,transparent);color:${p.cor}"
       ><span class="pessoa-ini">${esc(p.nome.trim().charAt(0).toUpperCase()||'?')}</span></div>
     <div class="tx"><div class="nm">${esc(p.nome)}</div>
       <div class="dt">${n?n+' gasto'+(n===1?'':'s')+' no ciclo · sua parte '+brl(minha):'nenhum gasto dividido neste ciclo'}
         ${achaPessoa(p.id)?`<button class="link" data-ren="${esc(p.id)}">renomear</button>`:''}</div></div>
-    <div class="vl" style="color:${dela>0?p.cor:'var(--txt-3)'}">${brl(dela)}${dela>0?'<small>não é seu</small>':''}</div>
+    <div class="vl" style="color:${dela<=0?'var(--txt-3)':(dela-jaVeio<0.005?'var(--verde)':p.cor)}">${
+      dela>0&&dela-jaVeio<0.005?'✓ acertado':brl(Math.max(dela-jaVeio,0))}${
+      dela>0?(jaVeio>0?`<small>${brl(jaVeio)} já veio de ${brl(dela)}</small>`:'<small>a receber</small>'):''}</div>
     ${achaPessoa(p.id)?`<button class="rm" data-rmp="${esc(p.id)}" aria-label="Remover ${esc(p.nome)}">×</button>`:''}
   </div>`+(prev[p.id]?`<details class="previa"><summary>${prev[p.id].itens.length===1?'ver o gasto':'ver os '+prev[p.id].itens.length+' gastos'} de ${esc(p.nome)}</summary>
-    <div class="cb-itens">${prev[p.id].itens.map(i=>`<div class="cb-i">
+    <div class="cb-itens">${prev[p.id].itens.map(i=>`<div class="cb-i${i.pg?' pgo':''}">
       <span class="pt" style="background:${catDe(i.cat).c}"></span>
       <span class="cb-in">${esc(i.nome)}</span>
+      ${botaoAcerto(i.l,p.id)}
       <span class="cb-iv">${brl(i.valor)}${i.cheio>i.valor+0.005?`<small>de ${brl(i.cheio)}</small>`:''}</span></div>`).join('')}</div>
     <button class="btn sec" data-prev="${esc(p.id)}" style="margin-top:10px">${navigator.share?'Enviar':'Copiar'} prévia</button>
    </details>`:'')).join('')
    +`<p class="ajuda" style="margin:12px 0 0">${total>0
-      ? 'Ao todo <b>'+brl(total)+'</b> da fatura deste ciclo é de outra pessoa. Esse valor aparece na fatura, mas não entra nos seus tetos. A cobrança fechada, item a item e com o “já recebi”, aparece quando a fatura fechar — em <b>Análises → Faturas</b>.'
+      ? 'Ao todo <b>'+brl(total)+'</b> da fatura deste ciclo é de outra pessoa. Esse valor aparece na fatura, mas não entra nos seus tetos. A cobrança fechada, item a item e com o “já recebi”, aparece quando a fatura fechar — em <b>Análises → Faturas</b>. Para mandar o extrato de alguém em PDF, a qualquer momento: <b>Análises → Extrato</b>.'
       : 'Marque quem divide cada gasto na coluna <b>Quem paga</b>, em “Todos os gastos do ciclo”.'}</p>
     <div class="nova-pessoa">
       <input id="pNome" maxlength="28" placeholder="Ex.: Mãe" aria-label="Nome da pessoa">
@@ -1401,8 +1558,9 @@ function renderLanc(c){
      amontoado, e o que a pessoa procura na linha é o caminho pra mudar o gasto. */
   const linha=l=>`<tr${+l.prox>0?' class="lin-prox"':''}>
     <td>
-      <div class="lin-nome">${esc(l.nome)} ${selo(l)}${+l.prox>0?'<span class="tag cicloprox">próxima fatura</span>':''}${naFatura(l)?'':'<span class="tag avista">à vista</span>'}</div>
-      <div class="lin-meta">${esc(l.fonte||'Conta')}<span class="tag ${tierDe(l.tier).cl}">${tierDe(l.tier).n}</span>${+l.pai>0?divisoes(l).map(d=>`<b style="color:${corPessoa(d.id)}">${esc(nomePessoa(d.id))}</b>`).join('<i>+</i>'):''}</div>
+      <div class="lin-nome">${esc(l.nome)} ${selo(l)}${+l.prox>0?'<span class="tag cicloprox">próxima fatura</span>':''}${naFatura(l)?'':'<span class="tag avista">à vista</span>'}${
+        tudoAcertado(l)?'<span class="tag pgo">já me pagaram</span>':(recebidoDe(l)>0?'<span class="tag pgo">parte já paga</span>':'')}</div>
+      <div class="lin-meta">${esc(l.fonte||'Conta')}<span class="tag ${tierDe(l.tier).cl}">${tierDe(l.tier).n}</span>${+l.pai>0?divisoes(l).map(d=>`<b style="color:${corPessoa(d.id)}">${acertado(l,d.id)?'✓ ':''}${esc(nomePessoa(d.id))}</b>`).join('<i>+</i>'):''}</div>
       <div class="lin-acoes">
         <button class="acao-mini forte" data-editar="${l.id}">✎ editar</button>
       </div></td>
@@ -1733,8 +1891,11 @@ function pintarPagadorForm(valor){
 function rotularPai(){
   const lab=$('#labPai'), sel=$('#lPagador'); if(!lab||!sel) return;
   const [,id]=String(sel.value).split(':');
-  lab.textContent=(sel.value==='eu'||sel.value==='+')?'Quanto a outra pessoa cobre'
-    :'Quanto '+nomePessoa(id)+' cobre';
+  const quem=(sel.value==='eu'||sel.value==='+')?'a outra pessoa':nomePessoa(id);
+  lab.textContent='Quanto '+quem+' cobre';
+  const tx=$('#lJaPagoTx');
+  if(tx) tx.textContent=(sel.value==='eu'||sel.value==='+')
+    ? 'Ela já me pagou esta parte' : nomePessoa(id)+' já me pagou esta parte';
 }
 $('#lPagador').onchange=e=>{
   if(e.target.value==='+'){
@@ -1933,9 +2094,17 @@ $('#addLanc').onclick=()=>{
     const [modo,id]=pag.split(':');
     l.com=id||'';
     l.pai=modo==='t'?valor:(l.pai>0?Math.min(l.pai,valor):+(valor/2).toFixed(2));
+    /* Já veio o Pix: o gasto nasce acertado. Nenhum valor muda por causa
+       disto — a parte dela nunca entrou no seu orçamento; o que a marca faz é
+       tirar o gasto da lista do que ainda falta receber. */
+    if($('#lJaPago')&&$('#lJaPago').checked&&l.pai>0) marcarAcerto(l,l.com,true);
   }
   S.lanc.push(l);
   ['lNome','lValor','lParc','lPai','lVenc'].forEach(i=>$('#'+i).value=''); $('#lFatura').value='0';
+  /* Pelo mesmo motivo que a repetição volta a "compra única": ninguém confere
+     um campo que já estava certo da última vez, e um "já me pagou" grudado no
+     próximo gasto esconderia uma cobrança de verdade. */
+  if($('#lJaPago')) $('#lJaPago').checked=false;
   /* A repetição volta ao padrão a cada lançamento. Sem isto, o "todo mês"
      escolhido para o aluguel continuaria selecionado no cinema lançado logo
      depois — e ninguém confere um campo que já estava certo da última vez. */
@@ -2582,6 +2751,8 @@ function linhasDivisao(){
       <input type="number" inputmode="decimal" min="0" step="0.01" data-divv="${i}"
         value="${d.valor||''}" placeholder="0,00" aria-label="Quanto ${esc(nomePessoa(d.id))} cobre">
       <button type="button" class="btn-x" data-divx="${i}" aria-label="Tirar ${esc(nomePessoa(d.id))}">×</button>
+      <button type="button" class="acerto ed${d.pg?' on':''}" data-divpg="${i}" aria-pressed="${d.pg?'true':'false'}"
+        >${d.pg?'✓ já pagou':'já me pagou'}</button>
     </div>`).join('');
   }
   const soma=edDivs.reduce((s,d)=>s+Math.max(+d.valor||0,0),0);
@@ -2609,6 +2780,13 @@ function linhasDivisao(){
   });
   el.querySelectorAll('[data-divx]').forEach(b=>b.onclick=()=>{
     edDivs.splice(+b.dataset.divx,1); linhasDivisao();
+  });
+  /* Aqui o acerto é só marcado na lista em edição; quem grava é salvarEdicao,
+     junto do resto. Gravar a cada toque salvaria metade de uma edição que a
+     pessoa ainda pode abandonar. */
+  el.querySelectorAll('[data-divpg]').forEach(b=>b.onclick=()=>{
+    const d=edDivs[+b.dataset.divpg]; if(!d) return;
+    d.pg=!d.pg; linhasDivisao();
   });
 }
 function addDivisao(){
@@ -2642,7 +2820,7 @@ function abrirEdicao(id){
   $('#eVenc').value=(+l.venc||0)||'';
   $('#eFatura').value=(+l.prox>0)?'1':'0';
   edMeio=naFatura(l)?'cartao':'avista';
-  edDivs=divisoes(l).map(d=>({id:d.id,valor:d.valor}));
+  edDivs=divisoes(l).map(d=>({id:d.id,valor:d.valor,pg:acertado(l,d.id),quando:dataAcerto(l,d.id)}));
   pintarMeioEd(); ajustarEdicao();
   $('#edBg').classList.add('abre');
   $('#edFolha').classList.add('abre');
@@ -2710,6 +2888,13 @@ function salvarEdicao(){
   const partes=edDivs.map(d=>({id:d.id,valor:Math.max(+d.valor||0,0)})).filter(d=>d.valor>0);
   if(!partes.length){ l.pai=0; l.com=''; delete l.divs; }
   else{ l.divs=partes; sincronizarDivs(l); }
+  /* O acerto é reescrito a partir da lista em edição: quem saiu da divisão sai
+     do acerto junto, senão ficaria uma marca de pagamento pendurada numa
+     pessoa que não divide mais este gasto. A data de quem já estava marcado é
+     preservada — ela é o dia em que o dinheiro entrou, não o dia da edição. */
+  delete l.acerto;
+  edDivs.forEach(d=>{ if(d.pg&&Math.max(+d.valor||0,0)>0){
+    l.acerto=l.acerto||{}; l.acerto[d.id||'']=d.quando||iso(hojeD()); } });
   /* Trocou o dia de vencimento? A marca de "já paguei" era sobre a data
      ANTIGA e deixou de valer — mantê-la esconderia a conta do mês inteiro. */
   if(l.pagoAte&&(!(l.venc>0)||l.pagoAte!==iso(proximoVenc(l.venc)))){
@@ -3139,6 +3324,249 @@ function renderVenc(){
   el.querySelectorAll('[data-pagocom]').forEach(b=>b.onclick=()=>marcarPago(b.dataset.id,b.dataset.pagocom));
 }
 
+
+/* ══════════════════════ EXTRATO — O PAPEL QUE SE MANDA (v10.14) ══════════════════════
+
+   A cobrança do WhatsApp responde "quanto você me deve deste mês". O extrato
+   responde outra coisa: "o que aconteceu entre nós" — item a item, com data,
+   com o que já foi acertado e com o que ainda falta, num documento que a outra
+   pessoa guarda. Uma é mensagem, o outro é papel.
+
+   Três decisões governam este bloco:
+
+   1. **Ele é MONTADO NA HORA, do estado.** Não existe "extrato salvo" em lugar
+      nenhum, e é de propósito: um arquivo guardado envelhece em silêncio, e a
+      pessoa mandaria um PDF de terça no sábado sem saber. Cada gasto lançado
+      entra no próximo extrato gerado, sem nenhum passo a mais — e o cabeçalho
+      diz a hora em que foi gerado, que é o que permite a quem recebe saber o
+      que está lendo.
+
+   2. **Ele soma o que é da PESSOA, não o valor cheio do gasto.** Um jantar de
+      R$ 300 rachado em três entra no extrato do Gui como R$ 100, com o valor
+      cheio ao lado para ele conferir. O extrato "Eu" faz o espelho disso: só a
+      MINHA parte, que é a mesma que o orçamento conta.
+
+   3. **O PDF sai pela janela de impressão do navegador.** Não há biblioteca de
+      PDF aqui e não vai haver: `script-src 'self'` no vercel.json recusa CDN, o
+      app é offline-first, e vendorizar meio megabyte para desenhar uma tabela
+      custaria mais que o app inteiro (é a mesma decisão do `intro.js` e do
+      `viz3d.js`). O caminho do navegador — imprimir → "Salvar como PDF" —
+      produz um PDF de verdade, com texto selecionável, no Android, no iOS e no
+      computador, e não custa um byte de terceiro. */
+
+let extAlvo='eu', extEscopo='aberto';
+
+/* De onde saem os itens. Cada fonte é uma fatura: a que está em formação (e
+   ainda muda — o extrato dela é prévia, e diz isso) e as arquivadas, que estão
+   congeladas. Misturar as duas sem dizer qual é qual faria a pessoa achar que
+   o número de hoje é final. */
+function fontesExtrato(escopo){
+  const fs=[];
+  const m=/^h:(\d+)$/.exec(String(escopo));
+  if(escopo==='aberto'||escopo==='tudo'){
+    const f=faturaAberta();
+    fs.push({rotulo:'Fatura em formação',detalhe:'fecha em '+dataBR(iso(f.fecha))+' · cobrada em '+dataBR(iso(f.vence)),
+      data:'',aberta:true,itens:doCiclo(),congeladas:null});
+  }
+  const daHist=x=>({rotulo:'Fatura fechada em '+dataBR(x.data),
+    detalhe:'cobrada em '+dataBR(x.venc||iso(vencDaFatura(dataDeISO(x.data)))),
+    data:x.data,aberta:false,itens:x.itens||[],congeladas:fatiasDoHist(x)});
+  if(escopo==='tudo') (S.hist||[]).forEach(x=>fs.push(daHist(x)));
+  else if(m&&S.hist&&S.hist[+m[1]]) fs.push(daHist(S.hist[+m[1]]));
+  return fs;
+}
+/* O nome de quem o extrato é sobre. Pessoa apagada do cadastro continua tendo
+   nome nas faturas arquivadas — a mesma regra de congelamento do resto do
+   histórico —, então o nome é procurado primeiro onde ele foi congelado. */
+function nomeNoExtrato(alvo,fontes){
+  if(alvo==='eu'){
+    /* O nome de quem usa o app mora na CONTA, não no estado — é o mesmo que
+       aparece no menu de perfil. Sem conta (ou sem nome), "Você" serve. */
+    let meu=''; try{ meu=((Auth.usuario()||{}).nome||'').trim(); }catch(e){}
+    return meu||'Você';
+  }
+  if(achaPessoa(alvo)) return nomePessoa(alvo);
+  for(const f of fontes){
+    const c=(f.congeladas||[]).find(x=>String(x.id)===String(alvo));
+    if(c&&c.nome) return c.nome;
+  }
+  return nomePessoa(alvo);
+}
+function extratoDe(alvo,escopo){
+  const eu=(alvo==='eu');
+  const fontes=fontesExtrato(escopo);
+  const blocos=fontes.map(f=>{
+    const linhas=[];
+    (f.itens||[]).forEach(l=>{
+      const base={nome:l.nome,cat:l.cat,fonte:l.fonte||'Conta',cheio:+l.valor||0,
+        meio:naFatura(l)?'cartão':'à vista',tipo:l.tipo,
+        /* A data do gasto é a do lançamento. Quem foi gravado antes da v10.14
+           não tem `criadoEm` — e inventar uma data seria pior que não ter: cai
+           na data da fatura, e sem ela fica em branco. */
+        data:(+l.criadoEm>0)?iso(new Date(l.criadoEm)):(f.data||'')};
+      if(eu){
+        const v=meuValor(l); if(!(v>0)) return;
+        linhas.push(Object.assign(base,{valor:v,pg:false,quando:'',
+          divide:divisoes(l).map(d=>nomePessoa(d.id)).join(', ')}));
+      }else{
+        const d=divisoes(l).find(d=>String(d.id)===String(alvo)); if(!d) return;
+        linhas.push(Object.assign(base,{valor:d.valor,pg:acertado(l,alvo),
+          quando:dataAcerto(l,alvo),l}));
+      }
+    });
+    linhas.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||b.valor-a.valor);
+    const total=linhas.reduce((t,x)=>t+x.valor,0);
+    const pago=linhas.reduce((t,x)=>t+(x.pg?x.valor:0),0);
+    return Object.assign({},f,{linhas,total,pago,aberto:total-pago});
+  }).filter(b=>b.linhas.length);
+  const total=blocos.reduce((t,b)=>t+b.total,0);
+  const pago=blocos.reduce((t,b)=>t+b.pago,0);
+  return {alvo,eu,escopo,nome:nomeNoExtrato(alvo,fontes),cor:eu?'var(--azul)':corPessoa(alvo),
+    blocos,total,pago,aberto:total-pago,n:blocos.reduce((t,b)=>t+b.linhas.length,0),
+    geradoEm:new Date()};
+}
+const rotuloEscopo=e=>{
+  const m=/^h:(\d+)$/.exec(String(e));
+  if(e==='aberto') return 'fatura em formação';
+  if(e==='tudo') return 'todo o histórico guardado';
+  return (S.hist&&S.hist[+(m?m[1]:-1)])?'fatura de '+dataBR(S.hist[+m[1]].data):'—';
+};
+const dataHora=d=>d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+
+/* O mesmo extrato em texto puro, para o WhatsApp de quem não quer abrir PDF.
+   Sai do MESMO objeto que desenha a tela e o papel: três fontes diriam três
+   coisas ligeiramente diferentes, e a pessoa do outro lado é quem notaria. */
+function textoExtrato(e){
+  const cab=`Extrato — ${e.nome}\n${rotuloEscopo(e.escopo)}\nGerado em ${dataHora(e.geradoEm)}\n`;
+  const corpo=e.blocos.map(b=>`\n${b.rotulo} (${b.detalhe})\n`
+    +b.linhas.map(x=>'• '+(x.data?dataBR(x.data)+' — ':'')+x.nome+': '+brl(x.valor)
+      +(x.cheio>x.valor+0.005?' (de '+brl(x.cheio)+')':'')
+      +(x.pg?' — pago em '+dataBR(x.quando):'')).join('\n')).join('\n');
+  const fim=e.eu
+    ? `\n\nTotal (sua parte): ${brl(e.total)}`
+    : `\n\nTotal: ${brl(e.total)}`
+      +(e.pago>0?`\nJá acertado: ${brl(e.pago)}`:'')
+      +`\nEm aberto: ${brl(e.aberto)}`;
+  return cab+corpo+fim;
+}
+
+function renderExtratos(){
+  const sel=$('#extPessoa'), per=$('#extPeriodo'); if(!sel||!per) return;
+  const gente=pessoas();
+  /* Quem já teve gasto dividido e foi apagado do cadastro continua no select:
+     o extrato dele existe nas faturas arquivadas, e é justamente quem some da
+     lista que a pessoa vai querer conferir depois. */
+  const extras=[];
+  (S.hist||[]).forEach(x=>fatiasDoHist(x).forEach(f=>{
+    if(f.id&&!achaPessoa(f.id)&&!extras.some(e=>e.id===f.id)) extras.push({id:f.id,nome:f.nome});
+  }));
+  if(!gente.some(p=>p.id===extAlvo)&&!extras.some(p=>p.id===extAlvo)) extAlvo='eu';
+  sel.innerHTML=`<option value="eu"${extAlvo==='eu'?' selected':''}>Eu — a minha parte</option>`
+    +gente.map(p=>`<option value="${esc(p.id)}"${p.id===extAlvo?' selected':''}>${esc(p.nome)}</option>`).join('')
+    +extras.map(p=>`<option value="${esc(p.id)}"${p.id===extAlvo?' selected':''}>${esc(p.nome)} (fora da lista)</option>`).join('');
+  per.innerHTML=`<option value="aberto"${extEscopo==='aberto'?' selected':''}>Fatura em formação</option>`
+    +(S.hist||[]).map((x,i)=>`<option value="h:${i}"${extEscopo==='h:'+i?' selected':''}>Fatura de ${dataBR(x.data)}</option>`).join('')
+    +`<option value="tudo"${extEscopo==='tudo'?' selected':''}>Tudo — desde o começo</option>`;
+  if(!per.value) { extEscopo='aberto'; per.value='aberto'; }
+
+  const e=extratoDe(extAlvo,extEscopo);
+  $('#extResumo').innerHTML=`<div class="cards" style="margin-top:14px">
+    <div class="card" style="border-color:${e.cor}"><div class="l">${e.eu?'Sua parte':'Total de '+esc(e.nome)}</div>
+      <div class="v" style="color:${e.cor}">${brl(e.total)}</div>
+      <div class="n">${e.n} lançamento${e.n===1?'':'s'} · ${rotuloEscopo(e.escopo)}</div></div>
+    ${e.eu?'':`<div class="card" style="border-color:var(--verde)"><div class="l">Já acertado</div>
+      <div class="v" style="color:var(--verde)">${brl(e.pago)}</div><div class="n">Pix, dinheiro ou desconto já recebido</div></div>
+    <div class="card" style="border-color:var(--alerta)"><div class="l">Em aberto</div>
+      <div class="v" style="color:${e.aberto>0?'var(--alerta)':'var(--txt-3)'}">${brl(e.aberto)}</div>
+      <div class="n">é isto que falta receber</div></div>`}
+  </div>`;
+
+  $('#extCorpo').innerHTML = e.n
+    ? e.blocos.map(b=>`<h3>${esc(b.rotulo)}${b.aberta?' <span class="tag cicloprox">ainda muda</span>':''}</h3>
+      <p class="ajuda" style="margin:-6px 0 10px">${esc(b.detalhe)} · ${b.linhas.length} lançamento${b.linhas.length===1?'':'s'} · <b>${brl(b.total)}</b></p>
+      <div class="tab-rol"><table><thead><tr><th>Quando</th><th>O que foi</th>
+        <th style="text-align:right">${e.eu?'Sua parte':'Parte de '+esc(e.nome)}</th>
+        ${e.eu?'':'<th>Acertado</th>'}</tr></thead><tbody>`
+      +b.linhas.map(x=>`<tr${x.pg?' class="lin-pga"':''}>
+        <td>${x.data?dataBR(x.data).slice(0,5):'—'}</td>
+        <td>${esc(x.nome)}<div style="font-size:12px;color:var(--txt-3)"><span class="pt" style="background:${catDe(x.cat).c}"></span>${catDe(x.cat).n} · ${esc(x.fonte)} · ${x.meio}</div></td>
+        <td class="v" style="font-weight:700">${brl(x.valor)}${
+          x.cheio>x.valor+0.005?`<div style="font-size:11px;font-weight:400;color:var(--txt-3)">de ${brl(x.cheio)}</div>`:''}</td>
+        ${e.eu?'':`<td>${x.l?botaoAcerto(x.l,e.alvo):(x.pg?'✓ pago':'—')}</td>`}</tr>`).join('')
+      +`</tbody></table></div>`).join('')
+    : `<p class="vazio">Nada aqui ainda. ${e.eu?'Lance um gasto e ele aparece neste extrato.':'Marque os gastos que '+esc(e.nome)+' divide com você na coluna <b>Quem paga</b>.'}</p>`;
+
+  sel.onchange=()=>{ extAlvo=sel.value; renderExtratos(); };
+  per.onchange=()=>{ extEscopo=per.value; renderExtratos(); };
+  $('#extPdf').onclick=()=>abrirRecibo(extratoDe(extAlvo,extEscopo));
+  $('#extEnviar').onclick=async()=>{
+    const e2=extratoDe(extAlvo,extEscopo), txt=textoExtrato(e2);
+    if(navigator.share){
+      try{ await navigator.share({text:txt}); return; }
+      catch(err){ if(err&&err.name==='AbortError') return; }
+    }
+    const ok=await copiar(txt);
+    toast(ok?'Extrato de '+e2.nome+' copiado':'Não consegui copiar aqui',!ok);
+  };
+}
+
+/* ---------- o papel ----------
+
+   Uma camada de tela cheia com a cara de documento: fundo branco nos dois
+   temas, porque é papel — o que se vê aqui é o que sai no PDF, e uma prévia
+   escura que imprime clara mentiria sobre o resultado.
+
+   A camada é filha direta do <body> de propósito: a regra de impressão esconde
+   `body > *` e mostra só ela. Fosse filha do `.wrap`, esconder o resto do app
+   esconderia o pai dela junto. */
+let reciboAtual=null;
+function linhasDoRecibo(e){
+  return e.blocos.map(b=>`
+    <h2>${esc(b.rotulo)}${b.aberta?' — prévia, ainda muda':''}</h2>
+    <p class="rec-sub">${esc(b.detalhe)}</p>
+    <table><thead><tr><th>Quando</th><th>O que foi</th><th>Categoria</th>
+      <th class="d">${e.eu?'Sua parte':'Parte de '+esc(e.nome)}</th><th class="d cheio">Valor cheio</th>
+      ${e.eu?'':'<th class="d">Situação</th>'}</tr></thead><tbody>`
+    +b.linhas.map(x=>`<tr><td>${x.data?dataBR(x.data):'—'}</td>
+      <td>${esc(x.nome)}<small>${esc(x.fonte)} · ${x.meio}</small></td>
+      <td>${catDe(x.cat).n}</td>
+      <td class="d"><b>${brl(x.valor)}</b></td>
+      <td class="d cheio">${brl(x.cheio)}</td>
+      ${e.eu?'':`<td class="d">${x.pg?'pago em '+dataBR(x.quando):'em aberto'}</td>`}</tr>`).join('')
+    +`</tbody><tfoot><tr><td colspan="${e.eu?3:3}">Total desta fatura</td>
+      <td class="d">${brl(b.total)}</td><td class="d cheio"></td>${e.eu?'':`<td class="d">${b.aberto>0?brl(b.aberto)+' em aberto':'tudo acertado'}</td>`}</tr></tfoot></table>`).join('');
+}
+function abrirRecibo(e){
+  reciboAtual=e;
+  const fim=e.eu
+    ? `<div class="rec-tot"><span>Sua parte no período</span><b>${brl(e.total)}</b></div>`
+    : `<div class="rec-tot"><span>Total do período</span><b>${brl(e.total)}</b></div>
+       ${e.pago>0?`<div class="rec-tot menor"><span>Já acertado</span><b>${brl(e.pago)}</b></div>`:''}
+       <div class="rec-tot forte"><span>Em aberto</span><b>${brl(e.aberto)}</b></div>`;
+  $('#recFolha').innerHTML=`
+    <header class="rec-cab">
+      <div><span class="rec-marca">Sobra+</span>
+        <h1>Extrato de ${esc(e.nome)}</h1>
+        <p class="rec-sub">${esc(rotuloEscopo(e.escopo))} · ${e.n} lançamento${e.n===1?'':'s'}</p></div>
+      <div class="rec-data">Gerado em<br><b>${dataHora(e.geradoEm)}</b></div>
+    </header>
+    ${e.n?linhasDoRecibo(e):'<p class="rec-sub">Nada lançado neste período.</p>'}
+    ${fim}
+    <p class="rec-rodape">${e.eu
+      ? 'Este extrato mostra só a sua parte de cada gasto — a parte que outras pessoas cobrem fica de fora, como no seu orçamento.'
+      : 'Os valores são a parte de '+esc(e.nome)+' em cada gasto; ao lado, o valor cheio do lançamento. O que está marcado como pago não entra no que falta receber.'}
+      Documento gerado pelo próprio aparelho, a partir dos lançamentos registrados até a data acima.</p>`;
+  $('#recibo').hidden=false;
+  document.body.classList.add('recibo-aberto');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>{ const b=$('#recImprimir'); if(b) b.focus(); },60);
+}
+function fecharRecibo(){
+  $('#recibo').hidden=true;
+  document.body.classList.remove('recibo-aberto');
+  document.body.style.overflow='';
+}
+
 /* ---------- exportar CSV ---------- */
 function exportarCSV(){
   const cab=['descricao','categoria','peso','tipo','valor_fatura','dividido_com','pago_por_outro','meu_valor','fonte','parcelas_restantes','vence_dia','entra_na_fatura','pago_como'];
@@ -3437,6 +3865,11 @@ $('#btnChecarAgora').onclick=async()=>{
   S[id]=+e.target.value||0; salvar(); renderAlertas(calc());
 }));
 $('#btnCSV').onclick=exportarCSV;
+$('#recFechar').onclick=fecharRecibo;
+$('#recImprimir').onclick=()=>{ try{ window.print(); }catch(e){ toast('Este navegador não abriu a impressão',true); } };
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!$('#recibo').hidden){ e.stopImmediatePropagation(); fecharRecibo(); }
+},true);
 
 /* Ao VOLTAR pro app. A checagem periódica mora num lugar só, mais abaixo,
    junto da agenda — havia duas iguais de 30 em 30 minutos, e a daqui ainda
@@ -3452,7 +3885,7 @@ document.addEventListener('visibilitychange',()=>{
 const AREAS={
   hoje:    {titulo:'Hoje',        subs:[]},
   plano:   {titulo:'Planejamento',subs:['renda','tetos','objetivos']},
-  analise: {titulo:'Análises',    subs:['graficos','cortes','hist']},
+  analise: {titulo:'Análises',    subs:['graficos','cortes','hist','extratos']},
   ajustes: {titulo:'Ajustes',     subs:['alertas','conta','assinatura','extrato','dados']}
 };
 let AREA='hoje';
@@ -3473,6 +3906,7 @@ function irPara(destino){
   });
   $('#tituloArea').textContent=AREAS[area].titulo;
   if(area==='analise'&&SUB.analise==='graficos') renderGraficos(calc());
+  if(area==='analise'&&SUB.analise==='extratos') renderExtratos();
   if(area==='ajustes'){ renderAlertas(calc()); renderAssinatura(); }
   try{ history.replaceState(null,'','?ir='+area+(AREAS[area].subs.length?':'+SUB[area]:'')); }catch(e){}
   window.scrollTo({top:0,behavior:'smooth'});
@@ -3574,6 +4008,11 @@ function resumoDivisao(c){
   if(!(c.pai>0)||!S.lanc.length){ el.innerHTML=''; return; }
   const total=c.bruto+c.avista;
   const fatias=c.fatias||[];
+  /* O Pix que já chegou não é renda, e não entra em conta nenhuma — mas é a
+     pergunta seguinte de quem lê "terceiros pagam R$ 910": quanto disso já
+     está na minha mão? Sem a resposta, o número parece dinheiro no ar. */
+  const jaVeio=doCiclo().reduce((t,l)=>t+recebidoDe(l),0);
+  const faltaVir=Math.max(c.pai-jaVeio,0);
   el.innerHTML=`<section class="bloco divisao-bloco">
     <div class="bloco-topo"><h2>Quanto é seu, de verdade</h2>
       <button class="link" data-ir="analise:lanc">ver por pessoa</button></div>
@@ -3586,6 +4025,9 @@ function resumoDivisao(c){
       <div class="card" style="border-color:var(--pai)"><div class="l">Terceiros pagam</div>
         <div class="v" style="color:var(--pai)">${brl(c.pai)}</div>
         <div class="n">${fatias.length?fatias.map(f=>esc(f.nome)+' '+brl(f.valor)).join(' · '):'de outras pessoas'}</div></div>
+      ${jaVeio>0?`<div class="card" style="border-color:var(--verde)"><div class="l">Já me pagaram</div>
+        <div class="v" style="color:var(--verde)">${brl(jaVeio)}</div>
+        <div class="n">${faltaVir>0?brl(faltaVir)+' ainda por receber':'está tudo acertado'}</div></div>`:''}
     </div>
     <p class="ajuda" style="margin:12px 0 0">Os <b>${brl(c.pai)}</b> de outras pessoas não consomem nada do seu
       orçamento: o <i>quanto posso gastar</i>, os tetos e a sobra do mês contam apenas os

@@ -1758,7 +1758,7 @@ body.fundo-vivo .atualiza{
   border:1px solid rgba(255,255,255,.13);
 }
 /* Tela cheia não leva moldura: a borda viraria um fio no canto do monitor. */
-body.fundo-vivo .retro,body.fundo-vivo .cal{border:none}
+body.fundo-vivo .retro,body.fundo-vivo .cal,body.fundo-vivo .recibo{border:none}
 
 /* O calendário é opaco POR TEMA, e não com o #08131F da lista acima.
 
@@ -1770,6 +1770,11 @@ body.fundo-vivo .retro,body.fundo-vivo .cal{border:none}
    que o tema pede. */
 [data-tema="claro"] body.fundo-vivo .cal{background:#FFFFFF}
 [data-tema="escuro"] body.fundo-vivo .cal{background:#08131F}
+/* O extrato é outra TELA INTEIRA, e entra pela mesma porta — opaco nos dois
+   temas, com a cor que o tema pede. A folha de dentro é branca sempre: ela é
+   papel, e o que se vê na tela tem que ser o que sai no PDF. */
+[data-tema="claro"] body.fundo-vivo .recibo{background:#F2F4F7}
+[data-tema="escuro"] body.fundo-vivo .recibo{background:#08131F}
 body.fundo-vivo .menu-perfil{box-shadow:0 26px 70px -18px rgba(0,0,0,.9)}
 
 @media (prefers-reduced-motion:reduce){
@@ -2961,6 +2966,7 @@ h1, .capa-tit, .portal-tit, .carta-tit, .auth-tit, .etapa h2{
 /* Com o calendário aberto, nada flutua por cima dele. O botão de tema da capa
    vive em z-index 180 e caía justamente sobre as setas de navegação. */
 body.cal-aberto .tema-flutua{display:none}
+body.recibo-aberto .tema-flutua{display:none}
 /* O ícone do calendário no cabeçalho. Mesmo tamanho e mesmo peso visual do
    botão de tema — são vizinhos, e dois botões redondos de tamanhos diferentes
    lado a lado leem como erro. */
@@ -3067,3 +3073,107 @@ body.cal-aberto .tema-flutua{display:none}
 /* A primeira coluna precisa de largura pra que nome, selos e ações não virem uma
    escada de uma palavra por linha. A tabela já rola no eixo x. */
 #tbLanc td:first-child{min-width:208px}
+
+
+/* ══════════ "JÁ ME PAGOU" — O ACERTO POR GASTO (v10.14) ══════════
+   Um botão pequeno que vive dentro de listas apertadas: na cobrança, na prévia
+   do ciclo, na folha de edição e no extrato. Ligado, ele é verde e some da
+   lista do que falta receber — por isso a linha inteira desbota junto: o olho
+   tem que achar o que ainda está ABERTO. */
+.acerto{
+  flex:0 0 auto;border:1px solid var(--sep);background:transparent;color:var(--txt-3);
+  font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:var(--r-full);
+  cursor:pointer;white-space:nowrap;line-height:1.5;transition:background .16s,color .16s,border-color .16s;
+}
+.acerto:hover{border-color:var(--verde);color:var(--verde)}
+.acerto.on{background:color-mix(in srgb,var(--verde) 16%,transparent);border-color:transparent;color:var(--verde)}
+.acerto:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+.acerto.ed{font-size:12px;padding:6px 10px}
+.cb-i.pgo .cb-in,.cb-i.pgo .cb-iv{color:var(--txt-3);text-decoration:line-through}
+.tag.pgo{background:var(--verde);color:var(--sobre-azul)}
+#tbLanc tr.lin-pga td,#extCorpo tr.lin-pga td{color:var(--txt-3)}
+
+/* A caixa de "ele já me pagou" na folha de lançar. Alvo de toque inteiro: a
+   pessoa toca no texto, não no quadradinho de 13px. */
+.caixa{
+  display:flex;gap:10px;align-items:flex-start;margin-top:10px;padding:10px 12px;
+  border:1px solid var(--sep);border-radius:var(--r-s);background:var(--fill);cursor:pointer;
+}
+.caixa input{flex:0 0 auto;width:18px;height:18px;margin:1px 0 0;accent-color:var(--verde)}
+.caixa span{font-size:13.5px;line-height:1.45}
+.caixa em{display:block;font-style:normal;font-size:12px;color:var(--txt-3);margin-top:2px}
+
+/* ══════════ O PAPEL ══════════
+   Tela cheia com uma folha branca no meio. Branca nos DOIS temas de propósito:
+   é a prévia do PDF, e prévia escura de papel claro mentiria sobre o resultado. */
+.recibo{
+  position:fixed;inset:0;z-index:200;overflow:auto;
+  background:var(--bg-solido,#F2F4F7);
+  padding:0 0 40px;
+}
+[data-tema="escuro"] .recibo{background:#08131F}
+[data-tema="claro"] .recibo{background:#F2F4F7}
+.rec-barra{
+  position:sticky;top:0;z-index:2;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+  padding:12px 16px;background:inherit;border-bottom:1px solid var(--sep);
+}
+.rec-dica{font-size:12.5px;color:var(--txt-3);flex:1;min-width:200px}
+.rec-folha{
+  max-width:820px;margin:18px auto;background:#FFFFFF;color:#14181F;
+  padding:34px 34px 30px;border-radius:10px;box-shadow:0 18px 50px -24px rgba(0,0,0,.55);
+}
+.rec-cab{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;
+  border-bottom:2px solid #14181F;padding-bottom:14px;margin-bottom:18px;flex-wrap:wrap}
+.rec-marca{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#0C4FA8}
+.rec-folha h1{font-size:23px;margin:4px 0 2px;color:#14181F;letter-spacing:-.01em}
+.rec-folha h2{font-size:15px;margin:22px 0 2px;color:#14181F}
+.rec-sub{font-size:12.5px;color:#5A6472;margin:0}
+.rec-data{font-size:12px;color:#5A6472;text-align:right;line-height:1.5}
+.rec-folha table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px}
+.rec-folha th,.rec-folha td{padding:7px 8px;border-bottom:1px solid #E3E7EC;text-align:left;vertical-align:top}
+.rec-folha th{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:#5A6472;font-weight:700}
+.rec-folha td small{display:block;color:#5A6472;font-size:11px}
+.rec-folha .d{text-align:right;font-variant-numeric:tabular-nums}
+.rec-folha tfoot td{font-weight:700;border-bottom:none;border-top:1.5px solid #14181F}
+.rec-tot{display:flex;justify-content:space-between;gap:16px;padding:8px 0;font-size:15px;
+  border-top:1px solid #E3E7EC;margin-top:16px}
+.rec-tot b{font-variant-numeric:tabular-nums}
+.rec-tot.menor{font-size:13px;color:#5A6472;border-top:none;padding:2px 0}
+.rec-tot.forte{font-size:19px;font-weight:700;border-top:2px solid #14181F}
+.rec-rodape{margin-top:22px;padding-top:12px;border-top:1px solid #E3E7EC;
+  font-size:11px;color:#5A6472;line-height:1.55}
+
+/* Na tela pequena o papel encolhe: a folha é desenhada para A4, e as cinco
+   colunas dela não cabem em 430px sem virar uma tira de rolagem horizontal
+   dentro de um documento — que é a pior forma de conferir uma conta. No PDF
+   nada disso vale: lá a página é larga de novo. */
+@media screen and (max-width:700px){
+  .rec-folha{padding:20px 16px;margin:12px 10px;border-radius:8px}
+  .rec-folha h1{font-size:19px}
+  .rec-folha table{font-size:11px}
+  .rec-folha th,.rec-folha td{padding:6px 4px}
+  .rec-folha th{font-size:9.5px;letter-spacing:.03em}
+  .rec-folha td small{font-size:10px}
+  .rec-cab{gap:8px}
+  .rec-data{text-align:left}
+  /* O valor cheio some da PRÉVIA num celular: ele é conferência, e a coluna
+     que não pode sumir é a que diz se já foi pago. No PDF ela volta. */
+  .rec-folha .cheio{display:none}
+}
+
+/* Impressão: o navegador é quem faz o PDF.
+   `body > *` some e só a camada do papel fica — por isso ela é filha direta do
+   <body>. Sem isto o app inteiro entraria no arquivo. */
+@media print{
+  html,body{background:#FFFFFF!important;margin:0!important;padding:0!important}
+  body>*{display:none!important}
+  body>.recibo{
+    display:block!important;position:static!important;inset:auto!important;
+    overflow:visible!important;background:#FFFFFF!important;padding:0!important;
+  }
+  .nao-imprime{display:none!important}
+  .rec-folha{max-width:none;margin:0;padding:0;border-radius:0;box-shadow:none}
+  .rec-folha table{page-break-inside:auto}
+  .rec-folha tr{page-break-inside:avoid}
+  .rec-folha h2{page-break-after:avoid}
+}

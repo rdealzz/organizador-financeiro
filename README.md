@@ -181,6 +181,35 @@ uma cobrança que vai mudar.
 O nome de quem dividiu fica congelado na fatura. Apagar a pessoa do cadastro em
 dezembro não apaga de quem era a metade do mercado de setembro.
 
+## "Ele já me pagou" — o acerto por gasto
+
+Quem divide gasto com alguém de casa costuma receber adiantado: o pai compra no
+seu cartão e manda o Pix na mesma tarde, semanas antes de a fatura fechar. Ao
+lançar, a caixa **já me pagou esta parte** marca isso; depois, dá para marcar
+gasto a gasto na folha de edição, na lista de quem divide, na cobrança da fatura
+fechada e no extrato.
+
+**Marcar não muda valor nenhum.** A parte da outra pessoa nunca entrou no seu
+orçamento — o app sempre contou `valor − o que ela cobre`. O Pix que chegou é
+reembolso, não renda: somá-lo contaria o mesmo dinheiro duas vezes. O que a
+marca faz é tirar o gasto da lista do que falta receber, para ninguém ser
+cobrado duas vezes pela mesma coisa.
+
+## Extrato em PDF, por pessoa
+
+Em **Análises → Extrato**: escolha de quem (você, ou cada pessoa que divide
+gastos) e o período (fatura em formação, uma fatura fechada, ou tudo). Sai a
+lista item a item, com data, a parte daquela pessoa, o valor cheio do gasto e o
+que já foi acertado — mais o total, o já recebido e o que está em aberto.
+
+*Ver e salvar em PDF* abre a folha pronta e chama a impressão do navegador:
+escolhendo **Salvar como PDF** você tem o arquivo, com texto selecionável, no
+celular ou no computador. *Enviar em texto* manda a mesma coisa pelo WhatsApp.
+
+O extrato é **montado na hora**: cada gasto novo já entra no próximo que você
+gerar, e o cabeçalho traz a data e a hora da geração. Não existe arquivo
+guardado envelhecendo em silêncio.
+
 ## O número principal
 
 O painel não abre com "sobra prevista" — abre com **quanto você pode gastar
@@ -345,6 +374,15 @@ IndexedDB (as 7 últimas ficam), e o rodapé tem *Baixar backup* (JSON),
 
 > Os dados são **deste aparelho e deste navegador**. Para levar pra outro,
 > use Baixar backup → Restaurar backup.
+
+### Atualizar o app não apaga nada
+
+O estado é um JSON só, sem esquema: toda versão nova lê o que a anterior
+gravou, campo desconhecido passa direto e campo que falta cai no padrão.
+Nenhuma versão renomeia nem apaga campo — por isso atualizar não migra nada.
+Além disso, o botão *Atualizar agora* **grava e sobe para a nuvem antes** de
+trocar de versão, e na primeira abertura depois de uma atualização o app guarda
+uma cópia do estado como a versão anterior o deixou.
 
 ## Alertas por notificação
 

@@ -1035,6 +1035,139 @@ orçamento conta R$ 100, a fatura arquivada leva a lista junto e as cobranças
 saem itemizadas por pessoa. Apagar uma pessoa devolve a fatia dela para mim —
 alguém tem que pagar.
 
+## "Ele já me pagou" e o extrato em PDF (v10.14)
+
+Três pedidos que são o mesmo problema visto de três lados: *atualizar o app não
+pode custar um dado*, *o pai gastou no meu cartão mas já mandou o Pix* e *quero
+mandar um extrato dele e das outras pessoas, em PDF, sempre atualizado*.
+
+### A atualização não toca nos dados de ninguém
+
+Vale escrever por extenso porque a pergunta volta. O estado é **um JSON só, sem
+esquema**, guardado em `estado/<uid>` e nas camadas locais. Toda versão nova lê
+o que a anterior escreveu: campo que ela não conhece passa direto, campo que
+falta cai no padrão do `S`. **Nenhuma versão renomeia nem apaga campo de
+ninguém** — é a mesma regra que mantém `l.pai` com esse nome desde a v9.2, que
+manteve as chaves `sobra-do-mes:` depois da troca de nome, e que fez `l.acerto`
+nascer aditivo nesta versão. Atualizar não migra nada porque não há o que
+migrar.
+
+Em volta disso já existiam três redes: o botão *Atualizar agora* grava e
+**sobe para a nuvem antes** de trocar o service worker; há uma cópia de
+segurança automática por dia no IndexedDB (as 7 últimas); e o estado continua
+na nuvem de qualquer jeito.
+
+Faltava uma, e ela entrou aqui: **`copiaDeVersao()`**. Na primeira abertura
+depois de uma versão nova, o estado como a versão ANTERIOR o deixou vai inteiro
+para `copia:versao-<versão antiga>`, antes que qualquer código novo escreva por
+cima. Se um dia uma versão sair com um defeito que estrague o estado, a foto do
+minuto anterior existe — e não depende de a pessoa ter lembrado de baixar
+backup.
+
+**`_versaoApp` entrou no `META`**, junto de `_ts` e `_ultimoSalvo`. Fora dali
+ele contaria como conteúdo: abrir o app numa versão nova carimbaria `_ts`, e um
+aparelho parado ganharia o conflito de sincronização contra o aparelho onde a
+pessoa realmente lançou os gastos.
+
+### `l.acerto` — a parte dela já foi paga, neste gasto
+
+`x.recebido` responde por uma FATURA inteira ("a Mãe acertou setembro"). Só que
+quem divide gasto com alguém de casa recebe **adiantado, gasto a gasto**: o pai
+compra no cartão e manda o Pix na mesma tarde, semanas antes de a fatura fechar.
+Não havia onde anotar isso, e o gasto voltava na cobrança do fim do mês como se
+nada tivesse acontecido.
+
+`l.acerto` é `{idPessoa: 'AAAA-MM-DD'}` no próprio lançamento. Por pessoa e por
+gasto, porque é assim que o dinheiro anda — o pai pode ter pago o mercado e não
+o posto, e num jantar rachado em três um pode ter mandado o Pix e o outro não.
+
+**Marcar não mexe em valor nenhum, e esta é a decisão que sustenta o resto** —
+é a mesma regra do "paguei no cartão" da v9.3. A parte do pai NUNCA foi sua:
+`meuValor()` é `valor - pai`, e o orçamento, os tetos e a sobra do mês já contam
+só o que é seu. O Pix que ele mandou é **reembolso, não renda**; lançá-lo como
+dinheiro que entrou contaria o mesmo dinheiro duas vezes e inflaria a sobra do
+mês. O acerto resolve a OBRIGAÇÃO: sai da cobrança, e só. Há teste para isso —
+`calc()` antes e depois de marcar tem que devolver os mesmos cinco números.
+
+Onde ele se marca, e por que nesses lugares: na **folha de lançar** (a caixa
+*já me pagou esta parte*, que é o caso do pedido — o gasto nasce acertado), na
+**folha de edição** (um botão por pessoa da lista), na **cobrança da fatura
+fechada**, na **prévia do ciclo** e no **extrato**. Todos escrevem no mesmo
+campo por `botaoAcerto()`, que guarda a referência do objeto numa lista
+(`refAcerto`) e leva só o índice — um item de fatura arquivada não tem id, e
+inventar um caminho até ele em cada tela seria quatro chances de errar. A lista
+é zerada no começo de cada `render()`, que é quando o HTML todo é reescrito.
+
+Quatro pontos onde o acerto tem que morrer junto com o que ele descrevia, todos
+pela mesma razão — a marca dizia que FULANO pagou AQUELE gasto:
+
+1. **trocar quem divide** (`aplicarPagador`) apaga o acerto — é a regra do
+   `pagoAte` ao trocar o vencimento;
+2. **tirar a pessoa da divisão** na folha de edição tira do acerto junto;
+3. **remover a pessoa** do cadastro, idem;
+4. **o fechamento do gasto `var`**, que já zerava `valor`, `pai` e `divs`,
+   agora zera `acerto` também: o mercado de setembro foi arquivado com a marca,
+   o de outubro começa devendo. É o defeito da v10.11 (item 2) pela porta nova —
+   **`pai`, `com`, `divs` e `acerto` são quatro vistas do mesmo fato**.
+
+No fechamento, quem acertou TODOS os gastos dela entra na fatura já quitado:
+`recebido` nasce preenchido a partir dos itens, senão o bloco *Para cobrar*
+pediria de novo o que já foi pago no Pix. O item arquivado leva `acerto` e
+**`criadoEm`** — a data do lançamento, que a fatura arquivada era o único lugar
+que perdia, e sem a qual o extrato não tem coluna "quando".
+
+### O extrato (Análises → Extrato)
+
+A cobrança do WhatsApp responde "quanto você me deve deste mês". O extrato
+responde outra coisa: **o que aconteceu entre nós** — item a item, com data, com
+o que já foi acertado e com o que falta, num documento que a outra pessoa
+guarda. Uma é mensagem, o outro é papel. Escolhe-se **de quem** (eu, ou cada
+pessoa) e **o período** (fatura em formação, uma fatura fechada, ou tudo).
+
+Três decisões:
+
+1. **Ele é montado NA HORA, do estado.** Não existe extrato salvo em lugar
+   nenhum, e é de propósito: arquivo guardado envelhece em silêncio, e a pessoa
+   mandaria em sábado o PDF de terça sem saber. Cada gasto lançado entra no
+   próximo extrato gerado, sem nenhum passo a mais — e o cabeçalho traz a hora
+   da geração, que é o que deixa quem recebe saber o que está lendo. (`render()`
+   só monta o extrato quando a aba está na tela: estar sempre atualizado exige
+   ser refeito na hora de mostrar, não a cada tecla digitada.)
+2. **Ele soma o que é da PESSOA, não o valor cheio do gasto.** Um jantar de
+   R$ 300 rachado em três entra no extrato do Gui como R$ 100, com o valor cheio
+   ao lado para ele conferir. O extrato *Eu* é o espelho: só `meuValor()`, que é
+   a mesma parte que o orçamento conta.
+3. **O PDF sai pela janela de impressão do navegador.** Não há biblioteca de PDF
+   aqui e não vai haver: `script-src 'self'` recusa CDN, o app é offline-first, e
+   vendorizar meio megabyte para desenhar uma tabela custaria mais que o app
+   inteiro — é a mesma decisão do `intro.js` e do `viz3d.js`. *Imprimir → Salvar
+   como PDF* produz um PDF de verdade, com texto selecionável, no Android, no
+   iOS e no computador, sem um byte de terceiro.
+
+A camada `.recibo` é **filha direta do `<body>`**, e isso é estrutural: a regra
+de impressão esconde `body > *` e mostra só ela. Fosse filha da `.wrap`,
+esconder o app esconderia o pai dela junto.
+
+Ela entrou na regra das **superfícies opacas por TEMA**, junto da `.cal` — não
+no `#08131F` fixo da lista, pelo motivo já escrito na v10.6: tela cheia com
+conteúdo que usa as variáveis do tema não aceita escuro fixo. **A folha de
+dentro (`.rec-folha`) é branca nos dois temas de propósito**: ela é papel, e uma
+prévia escura de um papel claro mentiria sobre o que vai sair no PDF.
+
+Num celular a folha encolhe e a coluna *valor cheio* some da PRÉVIA (`.cheio`,
+só em `@media screen`): a coluna que não pode sumir é a que diz se já foi pago.
+No PDF a página é larga de novo e ela volta.
+
+Quem foi apagado do cadastro continua no select e continua com nome no extrato:
+o nome vem congelado da fatura arquivada, como no resto do histórico.
+
+`testes/valida-extrato.js` (48 verificações) guarda tudo isto: os cinco números
+de `calc()` iguais antes e depois de marcar, a cobrança que não pede de novo o
+que já foi pago, o gasto rachado em três com um pagando e o outro não, o extrato
+"Eu" batendo com a soma de `meuValor()`, o acerto sobrevivendo ao fechamento, a
+impressão deixando só o papel na página e a camada opaca nos dois temas com a
+esfera ligada.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

@@ -409,6 +409,7 @@ html[data-tema="escuro"] #splash{background:#000}
     <button class="sub" role="tab" aria-selected="true" data-s="graficos">Gráficos</button>
     <button class="sub" role="tab" aria-selected="false" data-s="cortes">O que cortar</button>
     <button class="sub" role="tab" aria-selected="false" data-s="hist">Meses</button>
+    <button class="sub" role="tab" aria-selected="false" data-s="extratos">Extrato</button>
   </div>
 
   <section class="bloco" id="t-graficos">
@@ -445,6 +446,25 @@ html[data-tema="escuro"] #splash{background:#000}
     <div id="listaCiclos"></div>
     <div style="margin:16px 0"><button class="btn sec" id="fecharAgora">Fechar a fatura agora</button></div>
     <div id="detalheCiclo"></div>
+  </section>
+
+  <!-- ── Extrato: o papel que se manda ──
+       A cobrança do WhatsApp diz quanto; o extrato diz o que aconteceu, item a
+       item e com data. Ele é montado na hora, do estado: não existe arquivo
+       guardado envelhecendo em silêncio. -->
+  <section class="bloco" id="t-extratos" hidden>
+    <h2>Extrato para enviar</h2>
+    <p class="ajuda">O extrato de cada pessoa que divide gasto com você — e o seu. Ele é montado <b>na hora</b>: cada gasto novo já entra no próximo que você gerar, sem nenhum passo a mais. O PDF sai pela janela de impressão do navegador, escolhendo <b>Salvar como PDF</b>.</p>
+    <div class="grade g2">
+      <div><label for="extPessoa">De quem é o extrato</label><select id="extPessoa"></select></div>
+      <div><label for="extPeriodo">Período</label><select id="extPeriodo"></select></div>
+    </div>
+    <div id="extResumo"></div>
+    <div class="acoes">
+      <button class="btn" id="extPdf">Ver e salvar em PDF</button>
+      <button class="btn sec" id="extEnviar">Enviar em texto</button>
+    </div>
+    <div id="extCorpo"></div>
   </section>
 </div>
 
@@ -797,6 +817,19 @@ html[data-tema="escuro"] #splash{background:#000}
   </div>
 </div>
 
+<!-- ══════════════════════ O PAPEL (EXTRATO EM PDF) ══════════════════════
+     Filha direta do <body> de propósito: a regra de impressão esconde
+     `body > *` e mostra só esta camada. Fosse filha do .wrap, esconder o app
+     esconderia o pai dela junto. -->
+<div class="recibo" id="recibo" role="dialog" aria-modal="true" aria-label="Extrato para imprimir" hidden>
+  <div class="rec-barra nao-imprime">
+    <button class="btn" id="recImprimir">Salvar em PDF</button>
+    <button class="btn sec" id="recFechar">Fechar</button>
+    <span class="rec-dica">Na janela que abrir, escolha <b>Salvar como PDF</b> em “Destino”. No celular o caminho é o mesmo, por <b>Imprimir</b>.</span>
+  </div>
+  <div class="rec-folha" id="recFolha"></div>
+</div>
+
 <div class="sheet-bg" id="sheetBg"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTit">
   <div class="sheet-alca"></div>
@@ -866,6 +899,15 @@ html[data-tema="escuro"] #splash{background:#000}
             <input type="number" inputmode="decimal" id="lPai" min="0" step="0.01" placeholder="0,00">
           </div>
           <p class="div-diz" id="lDivDiz"></p>
+          <!-- O caso que faltava: o pai compra no seu cartão e manda o Pix na
+               mesma tarde. A parte dele já não era sua (o orçamento nunca a
+               contou); o que muda aqui é só a COBRANÇA — marcado, o gasto não
+               volta na lista do que falta receber. -->
+          <label class="caixa" for="lJaPago">
+            <input type="checkbox" id="lJaPago">
+            <span><b id="lJaPagoTx">Ela já me pagou esta parte</b>
+              <em>Pix, dinheiro ou desconto — já acertado, não entra na cobrança do mês.</em></span>
+          </label>
         </div>
       </div>
 

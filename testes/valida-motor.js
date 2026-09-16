@@ -95,7 +95,14 @@ const eh=(nome,v)=>{(v?ok:bad).push(nome+(v?'':'  →  falso'));};
   // calendário: parcelas espalhadas, última marcada
   const hoje=new Date(); const m=(k)=>{const d=new Date(hoje.getFullYear(),hoje.getMonth()+k,1);return contasDoMes(d.getFullYear(),d.getMonth());};
   const nomes=k=>Object.values(m(k).porDia).flat().map(x=>x.nome+(x.ultima?'(última)':'')+(x.semFim?'(semFim)':''));
-  R.cal0=nomes(0); R.cal7=nomes(7); R.cal8=nomes(8);
+  /* A moto vence dia 15 e faltam 8 parcelas. Em que mês cai a última depende
+     de HOJE: rodando dia 10, a próxima é neste mês e a oitava cai em +7;
+     rodando dia 16, a próxima já é a do mês que vem e a oitava cai em +8. Sem
+     esta conta a suíte falhava toda segunda metade do mês — e a falha não era
+     do app, era do teste supondo que hoje é dia 1º. */
+  const k1=mesesEntre(new Date(hoje.getFullYear(),hoje.getMonth(),1),proximoVenc(15));
+  R.kUltima=k1+7;
+  R.cal0=nomes(0); R.cal7=nomes(k1+7); R.cal8=nomes(k1+8);
 
   // palpite e classificação
   R.agua=palpiteDoNome('agua'); R.contaAgua=palpiteDoNome('conta de agua');
@@ -155,7 +162,7 @@ const eh=(nome,v)=>{(v?ok:bad).push(nome+(v?'':'  →  falso'));};
  cmp('desmarcar devolve à lista',[...r.voltou].sort(),['faculdade','moto','netflix']);
 
  eh('mês atual traz fatura + contas',r.cal0.length>0);
- eh('a 8ª e última parcela cai no 7º mês à frente',r.cal7.some(n=>n==='moto(última)'));
+ eh('a 8ª e última parcela cai no mês certo à frente',r.cal7.some(n=>n==='moto(última)'),r.kUltima);
  eh('depois da última, a parcela some do calendário',!r.cal8.some(n=>/^moto/.test(n)));
  eh('conta todo mês é marcada sem fim',r.cal0.some(n=>/semFim/.test(n)));
 
