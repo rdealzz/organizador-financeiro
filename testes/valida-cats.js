@@ -13,20 +13,26 @@ const eh=(n,v,d)=>{(v?ok:bad).push(n+(v?'':'  →  '+JSON.stringify(d)));};
 const PROMESSAS={
   pessoal:['corte de cabelo','barbeiro','barbearia','cabeleireiro','manicure','pedicure',
            'perfume','esmalte','depilação','sobrancelha','maquiagem','shampoo','sabonete',
-           'salão','progressiva','hidratante'],
+           'salão','progressiva','hidratante','barba','creme dental','unhas'],
   roupa:  ['jaqueta','JAQUETA ALPINESTARS','tênis','camiseta','calça jeans','moletom',
            'casaco','sapato','chinelo','bermuda','vestido','renner','riachuelo','zara',
-           'shein','centauro','nike','adidas','mochila','óculos de sol','roupa'],
+           'shein','centauro','nike','adidas','óculos de sol','roupa',
+           'calças','blusas','bonés','cintos','saias','botas','roupa de banho','sunga'],
+  /* Os três últimos são os nomes que as regras novas QUASE roubaram: a loja
+     Marisa contra o presente de uma pessoa chamada Marisa, o salão de festas do
+     condomínio contra o salão de beleza, a meia entrada contra o par de meias. */
   lazer:  ['cinema','bar','balada','presente','viagem','hotel','airbnb','teatro','show',
-           'mercado livre','shopee','amazon','steam','festa','cerveja'],
-  comida: ['ifood','almoço','padaria','lanche','pizza','sushi','água','suco','marmita'],
+           'mercado livre','shopee','amazon','steam','festa','cerveja',
+           'presente da marisa','salão de festas','meia entrada cinema'],
+  comida: ['ifood','uber eats','almoço','padaria','lanche','pizza','sushi','água','suco','marmita'],
   mercado:['supermercado','carrefour','feira','açougue','compra do mês'],
-  transporte:['posto de gasolina','uber','estacionamento','pedágio','oficina','ipva',
+  transporte:['posto de gasolina','uber','estacionamento','estacionamento do parque','pedágio','oficina','ipva',
               'troca de óleo','capacete','parcela moto','seguro do carro'],
-  casa:   ['aluguel','condomínio','internet','conta de água','luz','faxineira','ração'],
+  casa:   ['aluguel','condomínio','internet','conta de água','luz','faxineira','ração',
+           'roupa de cama','lençol'],
   assinatura:['netflix','spotify','disney','anuidade','claude'],
-  saude:  ['farmácia','academia','dentista','consulta','remédio','óculos','nutricionista'],
-  estudo: ['faculdade','curso','matrícula','inglês','autoescola','apostila'],
+  saude:  ['farmácia','academia','dentista','consulta','remédio','óculos','óculos de grau','nutricionista'],
+  estudo: ['faculdade','curso','matrícula','inglês','autoescola','apostila','mochila escolar','material escolar'],
   divida: ['fatura do cartão','empréstimo','financiamento','nubank','picpay']
 };
 

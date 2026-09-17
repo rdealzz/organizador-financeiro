@@ -37,7 +37,7 @@ falhar.
   soma das fatias, o acerto sobrevivendo ao fechamento da fatura, a impressão
   deixando só o papel na página e a camada opaca nos dois temas com a esfera
   ligada.
-* **`valida-cats.js`** — a classificação por nome: 106 nomes contra a promessa
+* **`valida-cats.js`** — a classificação por nome: 126 nomes contra a promessa
   de cada categoria, todo atalho de `CHIP_PADRAO`/`CHIP_EXTRA` contra o
   `classificar()` de verdade (um atalho que cai na categoria errada é pior do
   que não existir), o cadastro completo das categorias novas (cor, ícone,

@@ -1218,7 +1218,7 @@ pior que deixá-lo onde está — dinheiro guardado tem lugar próprio no app
 (a meta de guardar, `S.metaVal`).
 
 `testes/valida-cats.js` (15 verificações) é a conferência automática que o
-resto deste arquivo já pedia e que não existia como arquivo: 106 nomes contra a
+resto deste arquivo já pedia e que não existia como arquivo: 126 nomes contra a
 promessa de cada categoria, **todo** atalho contra o `classificar()` de verdade,
 o cadastro completo das categorias novas e as sete asserções da migração.
 
