@@ -1168,6 +1168,60 @@ que já foi pago, o gasto rachado em três com um pagando e o outro não, o extr
 impressão deixando só o papel na página e a camada opaca nos dois temas com a
 esfera ligada.
 
+## Roupa e cuidados pessoais saíram de dentro de lazer (v10.15)
+
+A queixa veio de uma tela real: **corte de cabelo (R$ 90) e uma jaqueta
+(R$ 80) empilhados em "Outros"**, no topo da lista de onde cortar. Duas coisas
+diferentes com o mesmo defeito — nenhuma regra as reconhecia, e a categoria que
+as receberia ("Lazer e compras") não descrevia nem uma nem outra.
+
+Agora são duas categorias próprias:
+
+* **`roupa` — "Roupa e calçado"** (peso 4, tier 3): jaqueta, tênis, camiseta,
+  calça, e as lojas de roupa que estavam em lazer (Renner, Riachuelo, Zara,
+  Shein, Centauro, Nike, Adidas). `alpinestars` entrou junto.
+* **`pessoal` — "Cuidados pessoais"** (peso 3, tier 2): corte de cabelo,
+  barbeiro, salão, manicure, perfume, e os cosméticos que não são farmácia.
+  O ícone é a `tesoura`, que já existia.
+
+`lazer` virou **"Lazer e rolê"** e ficou com o que é rolê mesmo — cinema, bar,
+viagem, presente, marketplace. Os pesos vieram de dentro dele (era 8, ficou 5),
+então a distribuição padrão não inchou.
+
+Três coisas que isto exigiu e que valem para a próxima categoria nova:
+
+1. **Cor própria, nos dois temas.** Três categorias dividindo o marrom do lazer
+   no gráfico é o mesmo que não as ter separado. `--crou` aponta para `--rosa`,
+   que já existia na paleta de dado e não era usada por categoria nenhuma;
+   `--ccui` é um verde-oliva novo, escolhido longe do teal do mercado e do
+   verde de "sobrou dinheiro" do cromo, e clareado à mão no tema escuro.
+   Categoria nova também precisa entrar em `EMOJI`, `ICONE_CAT` e
+   `VALOR_EXEMPLO` — e em `CHIP_PADRAO`, senão ela deixa de estar a um toque.
+2. **A ordem do array `REGRAS` decidiu o resultado.** As duas regras novas vêm
+   ANTES de lazer, porque a primeira que casa ganha e os termos delas moravam
+   lá dentro. Pôr no fim seria o mesmo que não tê-las criado. `capacete` foi
+   para transporte, não para roupa: equipamento de moto é conta de moto.
+3. **Houve migração, e ela é a exceção que confirma a regra da v9.9.**
+   `migrarCategorias()` mexe em lançamento do ciclo aberto quando as TRÊS
+   condições valem juntas: sem `catManual` (escolha da pessoa continua acima de
+   qualquer regra), saindo só de `outros` ou `lazer` (os dois destinos que estes
+   gastos tinham antes), e entrando só em `roupa` ou `pessoal` (categorias
+   novas, então nada disputa lugar com classificação que já existia). `S.hist`
+   fica intocado — fatura fechada é foto, e reescrever a categoria de setembro
+   mudaria um número que a pessoa já conferiu. O `tier` também fica: pode ter
+   sido ajustado à mão e não existe marca que diga isso. Roda uma vez por conta
+   (`S.catsOk`), nos mesmos quatro pontos de `migrarPessoas()`.
+
+**O que continua em "Outros" de propósito:** `investimento`, que aparecia na
+mesma tela. Não é gasto de consumo, e enfiá-lo numa categoria de gasto seria
+pior que deixá-lo onde está — dinheiro guardado tem lugar próprio no app
+(a meta de guardar, `S.metaVal`).
+
+`testes/valida-cats.js` (15 verificações) é a conferência automática que o
+resto deste arquivo já pedia e que não existia como arquivo: 106 nomes contra a
+promessa de cada categoria, **todo** atalho contra o `classificar()` de verdade,
+o cadastro completo das categorias novas e as sete asserções da migração.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

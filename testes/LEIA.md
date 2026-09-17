@@ -6,7 +6,7 @@ exercitam com Playwright — o mesmo Chromium, os mesmos cliques.
 ```sh
 python3 -m http.server 8765 &        # da raiz do projeto
 cd testes && npm i                   # só na primeira vez
-npm run tudo                         # as cinco suítes
+npm run tudo                         # as suítes todas
 npm run auditoria                    # a análise estática do código
 ```
 
@@ -37,6 +37,14 @@ falhar.
   soma das fatias, o acerto sobrevivendo ao fechamento da fatura, a impressão
   deixando só o papel na página e a camada opaca nos dois temas com a esfera
   ligada.
+* **`valida-cats.js`** — a classificação por nome: 106 nomes contra a promessa
+  de cada categoria, todo atalho de `CHIP_PADRAO`/`CHIP_EXTRA` contra o
+  `classificar()` de verdade (um atalho que cai na categoria errada é pior do
+  que não existir), o cadastro completo das categorias novas (cor, ícone,
+  emoji, exemplo) e a migração da v10.15 — que só mexe em lançamento sem
+  `catManual`, só sai de `outros` e `lazer`, e não toca em fatura fechada.
+  **Quem mexer em `REGRAS`, `CHIP_PADRAO` ou `CHIP_EXTRA` roda esta suíte.**
+
 * **`valida-conta.js`** — duplicidade de e-mail e recuperação por código, com o
   Firebase **emulado na rede da página**: apelidos do Gmail caindo numa conta
   só, a segunda conta recusada com caminho para recuperar, entrar por qualquer

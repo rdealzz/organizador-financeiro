@@ -4,7 +4,9 @@ const CATS={
   transporte:{n:'Carro e transporte',c:'var(--c10)',peso:14,dica:'combustível, estacionamento, manutenção'},
   comida:{n:'Comida fora e delivery',c:'var(--c20)',peso:7,dica:'almoço fora, lanche, ifood, padaria'},
   assinatura:{n:'Assinaturas',c:'var(--c5)',peso:3,dica:'streaming, apps, anuidade'},
-  lazer:{n:'Lazer e compras',c:'var(--c50)',peso:8,dica:'rolê, roupa, compras online'},
+  lazer:{n:'Lazer e rolê',c:'var(--c50)',peso:5,dica:'cinema, bar, viagem, compras online'},
+  roupa:{n:'Roupa e calçado',c:'var(--crou)',peso:4,dica:'jaqueta, tênis, loja de roupa'},
+  pessoal:{n:'Cuidados pessoais',c:'var(--ccui)',peso:3,dica:'cabelo, barbeiro, manicure, perfume'},
   saude:{n:'Saúde e academia',c:'var(--c200)',peso:5,dica:'farmácia, academia, consulta'},
   estudo:{n:'Estudo e trabalho',c:'var(--cedu)',peso:20,dica:'faculdade, curso, material'},
   divida:{n:'Dívidas e parcelas',c:'var(--cdiv)',peso:13,dica:'parcelas do cartão, empréstimo'},
@@ -277,6 +279,39 @@ function migrarPessoas(){
   (S.hist||[]).forEach(x=>{
     (x.itens||[]).forEach(l=>{ if(legado(l)) l.com=p.id; });
     if(!x.pessoas) x.pessoas=fatiasPessoa(x.itens);
+  });
+}
+/* Roupa e cuidados pessoais nasceram na v10.15, e quem já usa o app tem esses
+   gastos gravados nos dois lugares onde eles cabiam antes: em `outros` (o corte
+   de cabelo, a jaqueta — nomes que regra nenhuma reconhecia) e em `lazer` (o
+   tênis, o perfume, que os termos de lazer pegavam).
+
+   Reclassificar estado alheio é coisa que este app evita de propósito (ver a
+   nota da v9.9: dentro de "casa" cabem a garrafa de água e a conta da Sanepar,
+   e adivinhar qual é qual trocaria um erro por outro). Aqui as três condições
+   que tornam seguro estão todas presentes:
+
+   1. só mexe em lançamento SEM `catManual` — escolha da pessoa continua valendo
+      mais que qualquer regra, como em todo o resto do app;
+   2. só sai de `outros` e de `lazer`, que são exatamente os dois destinos que
+      estes gastos tinham antes de existir categoria para eles;
+   3. só entra em `roupa` ou `pessoal` — categorias NOVAS, então nada disputa
+      lugar com uma classificação que já existia.
+
+   `S.hist` fica intocado: fatura fechada é foto, e reescrever a categoria de
+   setembro mudaria um número que a pessoa já conferiu. O `tier` também fica —
+   ele pode ter sido ajustado à mão e não existe marca que diga isso.
+
+   Roda uma vez por conta, marcada por `catsOk`, que viaja no estado — o segundo
+   aparelho não repete. */
+function migrarCategorias(){
+  if(S.catsOk) return;
+  S.catsOk=true;
+  (S.lanc||[]).forEach(l=>{
+    if(l.catManual) return;
+    if(l.cat!=='outros'&&l.cat!=='lazer') return;
+    const [cat]=classificar(l.nome||'');
+    if(cat==='roupa'||cat==='pessoal') l.cat=cat;
   });
 }
 const KEY_ANTIGA='sobra-do-mes:novo';   // dados de antes do login, neste aparelho
@@ -675,7 +710,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v10.14';
+const VERSAO_APP='v10.15';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -689,7 +724,7 @@ async function copiaDeVersao(){
 async function carregar(){
   try{ const v=await storeGet(KEY); if(v) S=Object.assign(S,JSON.parse(v)); }catch(e){}
   ultimoConteudo=conteudoDe(S);
-  migrarPessoas(); rodarCiclos(); aplicarTema();
+  migrarPessoas(); migrarCategorias(); rodarCiclos(); aplicarTema();
   $('#salario').value=S.salario||''; $('#extra').value=S.extra||'';
   $('#metaPct').value=S.metaPct||''; $('#metaVal').value=S.metaVal||'';
   $('#meses').value=S.meses||6; $('#jaTem').value=S.jaTem||'';
@@ -718,7 +753,7 @@ function restaurarBackup(file){
       const dados=JSON.parse(fr.result);
       if(!dados||typeof dados!=='object'||!('lanc' in dados)) throw new Error('formato');
       S=Object.assign(S,dados);
-      migrarPessoas(); rodarCiclos(); aplicarTema();
+      migrarPessoas(); migrarCategorias(); rodarCiclos(); aplicarTema();
       $('#salario').value=S.salario||''; $('#extra').value=S.extra||'';
       $('#metaPct').value=S.metaPct||''; $('#metaVal').value=S.metaVal||'';
       $('#meses').value=S.meses||6; $('#jaTem').value=S.jaTem||''; $('#diaFech').value=S.diaFech||5;
@@ -1133,10 +1168,10 @@ function orcamentoAdaptativo(c){
   if(sobra<0){
     /* O padrão de gasto pede mais do que cabe depois de guardar. O corte sai
        primeiro do que a própria pessoa classifica como cortável — lazer, comida
-       fora, assinatura — e só depois, se ainda faltar, de todo mundo. Cortar
+       fora, assinatura, roupa — e só depois, se ainda faltar, de todo mundo. Cortar
        proporcionalmente logo de cara tiraria do mercado tanto quanto do rolê. */
     apertado=true;
-    const cortavel=['lazer','comida','assinatura'];
+    const cortavel=['lazer','comida','assinatura','roupa'];
     let falta=-sobra;
     const podeCortar=cats.filter(x=>cortavel.includes(x.k)&&x.bruto>piso);
     const folgaCortavel=podeCortar.reduce((s,x)=>s+(x.bruto-piso),0);
@@ -1349,7 +1384,7 @@ function renderOrcaIA(c){
         <button class="btn sec" data-ir="plano:objetivos">Pôr num objetivo</button>
       </div></div>`:'';
 
-  const blocoApertado=o.apertado?`<div class="nota aviso" style="margin:14px 0 0">Seu padrão de gasto pede mais do que cabe depois de guardar ${brl(c.meta)}. Os tetos sugeridos já vêm cortados — o corte saiu de lazer, comida fora e assinaturas primeiro, que é o que você mesmo classifica como cortável. Se não for por aí, a meta é que precisa ceder.</div>`:'';
+  const blocoApertado=o.apertado?`<div class="nota aviso" style="margin:14px 0 0">Seu padrão de gasto pede mais do que cabe depois de guardar ${brl(c.meta)}. Os tetos sugeridos já vêm cortados — o corte saiu de lazer, comida fora, assinaturas e roupa primeiro, que é o que você mesmo classifica como cortável. Se não for por aí, a meta é que precisa ceder.</div>`:'';
 
   el.innerHTML=`<div class="orca">${cabecalho}${blocoPrev}${corpo}${blocoSobra}${blocoApertado}</div>`;
 
@@ -2165,10 +2200,16 @@ const REGRAS=[
      reconhecida — e precisa ser lida ANTES, senão "conta de água" cairia em comida
      pelo próprio \bagua\b. */
   [/conta de (agua|luz|energia|gas)|agua e esgoto|\bsanepar\b|\bsabesp\b|\bcopasa\b|\bcedae\b|\bcagece\b|\bcaesb\b|\bembasa\b|\bcorsan\b|\bcasan\b|aguas d[eo]\b/,'casa',1],
-  [/mercadolivre|mercado livre|\bmp\*|shopee|amazon|magalu|aliexpress|shein|americanas|renner|riachuelo|zara|centauro|nike|adidas|steam|playstation|xbox|nintendo|cinema|ingresso|barbearia|barbeiro|cabelereir|salao|manicure|pedicure|tatuagem|cerveja|bar\b|balada|\bshow\b|teatro|boliche|festa|viagem|hotel|pousada|airbnb|\bspa\b|presente|roupa|tenis|perfum/,'lazer',3],
+  /* Cuidados pessoais e roupa vêm ANTES de lazer de propósito: os dois saíram de
+     dentro dele (v10.15), e a primeira regra que casa ganha. Deixá-los depois
+     seria o mesmo que não os ter criado — "barbeiro" e "tênis" continuariam
+     caindo em lazer pelos termos que moravam ali. */
+  [/corte de cabelo|\bcabelo\b|barbearia|barbeiro|barbear|cabeleireir|cabelereir|\bsalao\b|manicure|pedicure|\bunha\b|esmalte|depilacao|sobrancelha|\bcilios\b|esteticista|\bestetica\b|maquiagem|cosmetic|perfum|\bspa\b|shampoo|xampu|condicionador|hidratante|sabonete|desodorante|progressiva|\bbotox\b/,'pessoal',2],
+  [/\broupa|vestuario|jaqueta|casaco|moletom|camisa|camiseta|\bblusa\b|\bcalca\b|calcado|bermuda|short|vestido|\bsaia\b|pijama|cueca|calcinha|sutia|\bmeias\b|sapato|\btenis\b|sandalia|chinelo|\bbotas?\b|sapatilha|havaianas|sunga|biquini|\bbone\b|\bcinto\b|oculos de sol|renner|riachuelo|c&a|\bhering\b|\bmarisa\b|pernambucanas|shein|\bzara\b|centauro|netshoes|decathlon|\bnike\b|adidas|\bpuma\b|olympikus|mizuno|alpinestars|\bmochila\b/,'roupa',3],
+  [/mercadolivre|mercado livre|\bmp\*|shopee|amazon|magalu|aliexpress|americanas|steam|playstation|xbox|nintendo|cinema|ingresso|tatuagem|cerveja|bar\b|balada|\bshow\b|teatro|boliche|festa|viagem|hotel|pousada|airbnb|presente/,'lazer',3],
   [/ifood|rappi|delivery|\beats\b|food|mcdonald|burger|pizza|lanche|lanchonete|hamburg|sushi|padaria|panificadora|restaurante|subway|\bcafe|starbucks|habib|marmita|quentinha|self.?service|almoco|jantar|sorvete|acai|doceria|agua mineral|agua de coco|\bagua\b|\bsuco\b|refrigerante|salgado|coxinha|pastel|espetinho|churrasc/,'comida',3],
   [/supermerc|\bmercado\b|mercado |carrefour|assai|atacad|condor|muffato|angeloni|hortifruti|acougue|pao de acucar|big\b|extra\b|tenda|dia\b|sacolao|feira|quitanda|compra do mes/,'mercado',1],
-  [/posto|ipiranga|shell|petrobr|combust|gasolin|etanol|alcool|diesel|\buber\b|99app|99pop|indriver|taxi|onibus|metro|\bbus\b|passagem|pedagio|estacion|\bpark|zona azul|oficina|mecanic|manutencao|borracharia|alinhament|balanceament|troca de oleo|lava.?(rapido|jato)|\bipva\b|licenciam|detran|multa|seguro (auto|do carro|do veiculo|veicular)|pneu|lavagem|revisao|\bcarro\b|\bmoto\b/,'transporte',1],
+  [/posto|ipiranga|shell|petrobr|combust|gasolin|etanol|alcool|diesel|\buber\b|99app|99pop|indriver|taxi|onibus|metro|\bbus\b|passagem|pedagio|estacion|\bpark|zona azul|oficina|mecanic|manutencao|borracharia|alinhament|balanceament|troca de oleo|lava.?(rapido|jato)|\bipva\b|licenciam|detran|multa|seguro (auto|do carro|do veiculo|veicular)|pneu|lavagem|revisao|capacete|\bcarro\b|\bmoto\b/,'transporte',1],
   [/netflix|spotify|disney|hbo|\bmax\b|prime video|deezer|youtube|apple\.com|\bicloud|google \*|canva|chatgpt|anthropic|claude|assinatura|globoplay|paramount|crunchyroll|telecine|plano do cartao|anuidade/,'assinatura',3],
   [/farmacia|drogaria|drogasil|pacheco|panvel|raia|nissei|remedio|unimed|amil|hapvida|plano de saude|dentista|ortodont|medic|consulta|clinica|exame|laborator|oculos|optica|fisioterap|nutricion|academia|smartfit|bluefit|gympass|suplement|whey|psicolog|terapia|vacina/,'saude',1],
   [/aluguel|condominio|energia|copel|cemig|enel|light\b|\bluz\b|sanepar|sabesp|\bgas\b|comgas|ultragaz|internet|\bvivo\b|claro|\btim\b|oi fibra|nextfibra|\biptu\b|celular|telefone|recarga|faxin|diarist|empregada|jardineir|encanador|eletricista|pedreiro|dedetiza|seguro residencial|gato|racao|\bpet|veterinar/,'casa',1],
@@ -4084,7 +4125,7 @@ function renderTopCats(c){
 
 /* ---------- últimos lançamentos ---------- */
 const EMOJI={casa:'🏠',mercado:'🛒',transporte:'⛽',comida:'🍔',assinatura:'📺',
-  lazer:'🎬',saude:'💊',estudo:'📚',divida:'💳',outros:'📦'};
+  lazer:'🎬',roupa:'🧥',pessoal:'✂️',saude:'💊',estudo:'📚',divida:'💳',outros:'📦'};
 function renderUltimos(c){
   const el=$('#ultimos');
   if(!S.lanc.length){
@@ -4296,7 +4337,8 @@ function salvarRapido(){
 const CHIP_PADRAO=[
   ['Mercado','mercado'], ['Combustível','transporte'], ['iFood','comida'],
   ['Aluguel','casa'],    ['Farmácia','saude'],         ['Faculdade','estudo'],
-  ['Netflix','assinatura'], ['Roupa','lazer'],         ['Fatura do cartão','divida']
+  ['Netflix','assinatura'], ['Cinema','lazer'],        ['Fatura do cartão','divida'],
+  ['Roupa','roupa'],        ['Corte de cabelo','pessoal']
 ];
 /* Um nome por categoria não basta para quem gasta MUITO numa delas. Quem
    abastece, estaciona e paga pedágio tem três gastos de transporte por semana
@@ -4312,7 +4354,9 @@ const CHIP_EXTRA={
   comida:['Almoço','Padaria','Lanche'],
   mercado:['Feira','Açougue'],
   casa:['Luz','Internet','Conta de água','Condomínio'],
-  lazer:['Cinema','Bar','Presente'],
+  lazer:['Bar','Presente','Viagem'],
+  roupa:['Tênis','Jaqueta','Camiseta'],
+  pessoal:['Barbeiro','Manicure','Perfume'],
   saude:['Academia','Consulta','Dentista'],
   estudo:['Curso','Apostila','Impressão'],
   assinatura:['Spotify','Disney'],
@@ -4324,7 +4368,7 @@ const CHIPS_MAX=12;
    não soa absurdo — assim que ela lançar o gasto de verdade, o exemplo passa a
    usar o valor dela. */
 const VALOR_EXEMPLO={mercado:820,transporte:15,comida:45,casa:120,assinatura:30,
-                     lazer:90,saude:60,estudo:400,divida:250,outros:50};
+                     lazer:90,roupa:120,pessoal:50,saude:60,estudo:400,divida:250,outros:50};
 /* O exemplo que aparece embaixo do campo de gasto. Nasce genérico e passa a
    ser o do primeiro atalho da pessoa assim que renderChips roda. */
 let exemploRapido='mercado 820';
@@ -4887,7 +4931,7 @@ async function puxarDaNuvem(silencioso){
     if(adotarRemoto){
       S=Object.assign(S,remoto);
       S._revisao=linha.revisao;
-      migrarPessoas(); rodarCiclos(); aplicarTema(); preencherCampos(); render();
+      migrarPessoas(); migrarCategorias(); rodarCiclos(); aplicarTema(); preencherCampos(); render();
       await storeSet(KEY,JSON.stringify(S));
       marcarSinc('ok');
       if(!silencioso) toast('Dados atualizados desta conta');
@@ -5231,7 +5275,7 @@ async function abrirApp(recemLogado, contaNova){
         const d=JSON.parse(antigo);
         if(d && (d.lanc||[]).length){
           S=Object.assign(S,d); delete S._revisao;
-          migrarPessoas(); rodarCiclos(); preencherCampos(); render(); await salvar();
+          migrarPessoas(); migrarCategorias(); rodarCiclos(); preencherCampos(); render(); await salvar();
           toast('Importamos os dados que já estavam neste aparelho');
         }
       }
@@ -5554,6 +5598,7 @@ const TRACOS={
   saude:     '<path d="M12 20.3s-7.5-4.3-7.5-9.5A4.3 4.3 0 0 1 12 7.9a4.3 4.3 0 0 1 7.5 2.9c0 5.2-7.5 9.5-7.5 9.5Z"/>',
   estudo:    '<path d="M12 4 2.8 8.4 12 12.8l9.2-4.4z"/><path d="M6.4 10.6v5c0 1.4 2.5 2.6 5.6 2.6s5.6-1.2 5.6-2.6v-5"/><path d="M21.2 8.4v5.4"/>',
   divida:    '<rect x="2.8" y="5.4" width="18.4" height="13.2" rx="2.2"/><path d="M2.8 9.8h18.4"/><path d="M6.6 14.6h3.6"/>',
+  roupa:     '<path d="M9 3.6 4.4 6.2l1.7 3.9 2.2-.8v11.1h7.4V9.3l2.2.8 1.7-3.9L15 3.6a3 3 0 0 1-6 0Z"/>',
   outros:    '<rect x="3.4" y="3.4" width="7" height="7" rx="1.8"/><rect x="13.6" y="3.4" width="7" height="7" rx="1.8"/><rect x="3.4" y="13.6" width="7" height="7" rx="1.8"/><rect x="13.6" y="13.6" width="7" height="7" rx="1.8"/>',
 
   subindo:   '<path d="M3.5 17.5 9.5 11l4 4 7-7.5"/><path d="M15.5 7.5h5.5V13"/>',
@@ -5580,7 +5625,8 @@ function icone(nome, tamanho){
 }
 /* qual traço representa cada categoria e cada tipo de conselho */
 const ICONE_CAT={casa:'casa',mercado:'mercado',transporte:'transporte',comida:'comida',
-  assinatura:'assinatura',lazer:'lazer',saude:'saude',estudo:'estudo',divida:'divida',outros:'outros'};
+  assinatura:'assinatura',lazer:'lazer',roupa:'roupa',pessoal:'tesoura',
+  saude:'saude',estudo:'estudo',divida:'divida',outros:'outros'};
 
 /* ==========================================================================
    v5.2 — menu de perfil e esqueleto de assinatura

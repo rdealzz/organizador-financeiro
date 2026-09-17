@@ -77,6 +77,12 @@
   --c100:var(--azul); --c2:var(--teal); --c10:var(--vermelho); --c20:var(--laranja);
   --c5:var(--roxo); --c50:var(--marrom); --c200:#6B7280; --cedu:var(--indigo);
   --cdiv:#3F4550; --cout:#6B7280; --pai:var(--azul); --alerta:var(--vermelho);
+  /* Roupa e cuidados pessoais saíram de dentro de lazer (v10.15). Precisavam de
+     cor PRÓPRIA: três categorias com o mesmo marrom no gráfico é o mesmo que
+     não ter separado. --rosa já existia na paleta de dado e não era usada por
+     categoria nenhuma; o verde-oliva é novo, e foi escolhido longe do teal do
+     mercado e do verde de "sobrou dinheiro" do cromo. */
+  --crou:var(--rosa); --ccui:#6E7A2E;
 
   /* ---- cores de PESSOA: quem divide o gasto com você ----
      São cor de DADO, não cromo: separam o pai da mãe numa lista de três
@@ -107,7 +113,7 @@
   --roxo:#A98BE8; --rosa:#EE7BA0; --teal:#3FBDD1; --indigo:#7B7FEB; --marrom:#B99270;
   --pes1:#7FCBFF; --pes2:#C4A8F5; --pes3:#4FCFE3; --pes4:#F0A140;
   --pes5:#F58CB0; --pes6:#3DD68C; --pes7:#9A9DF5; --pes8:#C9A183;
-  --c200:#9AA1AC; --cdiv:#C8CDD4; --cout:#9AA1AC;
+  --c200:#9AA1AC; --cdiv:#C8CDD4; --cout:#9AA1AC; --ccui:#B5C463;
 
   /* no escuro a profundidade vem da borda, não da sombra */
   --s1:none;
@@ -1672,7 +1678,7 @@ body.fundo-vivo{background:transparent; --bg:transparent}
   --vermelho:#FF6B5E; --vermelho-txt:#FF8C82; --vermelho-fraco:rgba(255,107,94,.16);
   --laranja:#F0A140; --laranja-txt:#F5B764; --amarelo:#E3B341;
   --roxo:#BCA2F0; --rosa:#F294B4; --teal:#5BCFE0; --indigo:#9296F0; --marrom:#C9A585;
-  --c200:#9AA1AC; --cdiv:#C8CDD4; --cout:#9AA1AC;
+  --c200:#9AA1AC; --cdiv:#C8CDD4; --cout:#9AA1AC; --ccui:#BFCD72;
   --s1:none;
   --s2:0 1px 0 rgba(255,255,255,.05) inset, 0 8px 26px rgba(0,0,0,.45);
   --s3:0 18px 54px -18px rgba(0,0,0,.75);
