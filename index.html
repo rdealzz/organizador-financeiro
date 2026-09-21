@@ -306,6 +306,8 @@ html[data-tema="escuro"] #splash{background:#000}
     <button class="sub" role="tab" aria-selected="true" data-s="renda">Renda e meta</button>
     <button class="sub" role="tab" aria-selected="false" data-s="tetos">Tetos</button>
     <button class="sub" role="tab" aria-selected="false" data-s="objetivos">Metas</button>
+    <button class="sub" role="tab" aria-selected="false" data-s="guardar">Guardar</button>
+    <button class="sub" role="tab" aria-selected="false" data-s="entrou">Entrou</button>
   </div>
 
   <!-- Renda e meta em dois passos numerados, e nada mais na primeira olhada.
@@ -400,6 +402,74 @@ html[data-tema="escuro"] #splash{background:#000}
     <table><thead><tr><th>#</th><th>Dívida</th><th style="text-align:right">Saldo</th><th style="text-align:right">Juros</th><th style="text-align:right">Custo do juro</th><th></th></tr></thead>
     <tbody id="tbDiv"></tbody></table></div>
     <div id="notaDiv"></div>
+  </section>
+
+  <!-- ─────────── GUARDAR: o cofre, e o que de fato foi guardado ───────────
+       A meta sempre existiu como INTENÇÃO ("quero guardar 20%"). O que não
+       existia era o outro lado: o quanto foi guardado de verdade. Aqui o
+       movimento é registrado, o saldo é somado a partir dele, e cada depósito
+       pode apontar para um objetivo — que é o que faz o progresso das Metas
+       andar sozinho, em vez de esperar alguém reeditar o número à mão. -->
+  <section class="bloco" id="t-guardar" hidden>
+    <h2>Quanto você está guardando</h2>
+    <p class="ajuda">Anote o que sai da conta para o cofre — poupança, CDB, caixinha, dinheiro embaixo do colchão. <b>Guardar não é gastar</b>: nada disto entra no seu gasto do mês nem mexe nos tetos. Tirar de volta também não é renda; é o mesmo dinheiro voltando.</p>
+    <div class="cards" id="cardsCofre"></div>
+    <div id="progressoCofre"></div>
+
+    <h3>Registrar movimento</h3>
+    <div class="grade g-obj">
+      <div class="full"><label for="gNota">De onde veio <em class="opc">opcional</em></label><input id="gNota" placeholder="Ex.: sobra do mês, 13º, venda da bike"></div>
+      <div><label for="gValor">Quanto</label><input type="number" inputmode="decimal" id="gValor" min="0" step="0.01" placeholder="0,00"></div>
+      <div><label for="gObj">Destino</label><select id="gObj"></select></div>
+      <div><button class="btn" id="addGuard">Guardei</button></div>
+      <div><button class="btn sec" id="addSaque">Tirei</button></div>
+    </div>
+    <div id="notaGuard"></div>
+
+    <h3>Movimentos deste ciclo</h3>
+    <div style="overflow-x:auto">
+    <table><thead><tr><th>Quando</th><th>O quê</th><th style="text-align:right">Valor</th><th></th></tr></thead>
+    <tbody id="tbGuard"></tbody></table></div>
+
+    <h3>Onde o cofre está dividido</h3>
+    <div id="cofreDestinos"></div>
+
+    <h3>Quanto guardei por mês</h3>
+    <div id="cofreHist"></div>
+  </section>
+
+  <!-- ─────────── ENTROU: dinheiro de fora do salário ───────────
+       Renda extra FIXA continua sendo o campo de Renda e meta — ela se repete
+       todo mês. Aqui é o avulso: a venda, o freela, o 13º. Cada entrada diz
+       para onde vai, porque é essa escolha que a pessoa realmente faz. -->
+  <section class="bloco" id="t-entrou" hidden>
+    <h2>Entrou um dinheiro extra</h2>
+    <p class="ajuda">Uma venda, um freela, um bônus. Você decide o destino na hora: o que for <b>gastar</b> sobe o quanto cabe no mês, o que for <b>guardar</b> vai direto para o cofre e sobe a meta deste ciclo. A sua meta em % continua calculada sobre o salário — um extra nunca aumenta sozinho o quanto você "tem que" guardar.</p>
+    <div class="cards" id="cardsEntrou"></div>
+
+    <h3>Nova entrada</h3>
+    <div class="grade g-obj">
+      <div class="full"><label for="eNome">O que foi</label><input id="eNome" placeholder="Ex.: venda da bicicleta, freela do site"></div>
+      <div><label for="eValor">Quanto entrou</label><input type="number" inputmode="decimal" id="eValor" min="0" step="0.01" placeholder="0,00"></div>
+      <div><label for="eData">Quando</label><input type="date" id="eData"></div>
+    </div>
+    <div class="rot-seg" style="margin-top:14px">Para onde vai esse dinheiro</div>
+    <div class="metas-rapidas" id="chipsDestino" role="group" aria-label="Destino do dinheiro">
+      <button class="tecla tecla-chip" type="button" data-dest="gastar"><span class="tecla-face">Gastar</span></button>
+      <button class="tecla tecla-chip" type="button" data-dest="meio"><span class="tecla-face">Meio a meio</span></button>
+      <button class="tecla tecla-chip" type="button" data-dest="guardar"><span class="tecla-face">Guardar</span></button>
+    </div>
+    <div class="grade g2" style="margin-top:12px">
+      <div><label for="eGuardar">Desse dinheiro, vai pro cofre</label><input type="number" inputmode="decimal" id="eGuardar" min="0" step="0.01" placeholder="0,00"></div>
+      <div><button class="btn" id="addEntrada">Lançar entrada</button></div>
+    </div>
+    <div id="ecoEntrada" class="rapido-eco"></div>
+
+    <h3>Entradas deste ciclo</h3>
+    <div style="overflow-x:auto">
+    <table><thead><tr><th>Quando</th><th>O quê</th><th style="text-align:right">Entrou</th><th style="text-align:right">Pro cofre</th><th></th></tr></thead>
+    <tbody id="tbEntrada"></tbody></table></div>
+    <div id="notaEntrada"></div>
   </section>
 </div>
 

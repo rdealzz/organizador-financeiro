@@ -1222,6 +1222,84 @@ resto deste arquivo já pedia e que não existia como arquivo: 126 nomes contra 
 promessa de cada categoria, **todo** atalho contra o `classificar()` de verdade,
 o cadastro completo das categorias novas e as sete asserções da migração.
 
+## O cofre e o dinheiro que entra fora do salário (v10.16)
+
+Dois pedidos que são o mesmo buraco visto de dois lados: *quero controlar o
+quanto estou guardando* e *fiz uma venda extra, quero que isso mude o quanto
+posso gastar ou guardar*. O app sabia a INTENÇÃO (a meta: "guardar 20%") e
+nunca soube o FATO (se ela foi cumprida); e sabia a renda que se repete
+(`S.salario`, `S.extra`), nunca a avulsa.
+
+Duas sub-abas novas em Planejamento — **Guardar** e **Entrou**. Elas não
+viraram áreas na barra de baixo de propósito: a barra lista ÁREAS e o resto do
+app conta com isso (é a mesma razão pela qual o calendário é uma camada e não
+uma quinta aba, v10.5).
+
+### `S.entradas` — a venda, o freela, o 13º
+
+**A entrada guarda um VALOR, não um modo.** `e.guardar` é quanto daquele
+dinheiro vai para o cofre; o resto é gastável. É a escolha do `l.pai` da v9.2
+pelo mesmo motivo: um número sobrevive a mudar o valor da entrada, atravessa
+versões sem tabela de modos e não obriga tela nenhuma a conhecer a lista de
+destinos que existia quando o dado foi gravado. Os três atalhos (Gastar /
+Meio a meio / Guardar) só escrevem `0`, `valor/2` ou `valor` — e o campo fica
+para a divisão torta, como os atalhos de divisão da v10.7.
+
+**O extra NÃO infla a meta percentual, e é isso que faz a função servir para
+alguma coisa.** `meta` passou a ser calculada sobre `rendaBase` (salário +
+renda extra fixa), não sobre `renda`. Se a venda de R$ 500 entrasse na conta
+da meta de 20%, guardar viraria R$ 100 a mais e o dinheiro sumiria sozinho: a
+pessoa leria "entrou 500" e "posso gastar 400". O extra vai onde ela mandou —
+`entrouGastar` sobe o `disponivel`, `entrouGuardar` sobe a meta DESTE ciclo
+(`metaMes`) e vira depósito no cofre.
+
+`S.extra` continua sendo outra coisa e continua onde estava: renda que se
+repete todo mês. Uma venda de sábado não volta em outubro, e somá-la ali faria
+o app achar que volta.
+
+### `S.guard` — o cofre, movimento a movimento
+
+Antes havia só `S.jaTem`, um número digitado à mão. Agora ele é o **ponto de
+partida** e o saldo é somado: `saldoGuardado()`.
+
+**O cofre tem dois bolsos, e o saldo é a soma deles — nunca um menos o outro.**
+O livre (`S.jaTem` + movimentos sem destino) e o que cada objetivo já juntou
+(`o.tem` + os depósitos apontados para ele). A primeira versão somava o total e
+subtraía os objetivos, o que tirava duas vezes o mesmo dinheiro; **foi pego na
+validação, não por queixa** — e é por isso que `valida-cofre.js` confere as
+duas contas separadas. Movimento apontado para um objetivo APAGADO volta a ser
+livre: alguém tem que ficar com o dinheiro.
+
+Efeito colateral bom: `juntadoDo(o)` fez o progresso das Metas andar sozinho.
+Antes `o.tem` só mudava se a pessoa reeditasse o objetivo à mão.
+
+**Depósito não é gasto e saque não é renda.** Nenhum dos dois passa por
+`calc().gasto` nem por `renda` — é a mesma regra do reembolso da v10.14, e
+existe pelo mesmo motivo: o mesmo dinheiro não pode ser contado duas vezes.
+Há teste para as duas metades.
+
+### A compactação no fechamento
+
+O movimento do ciclo que fechou sai da lista e vira SALDO: `o.tem` quando tinha
+destino, `S.jaTem` quando não tinha. O dinheiro é o mesmo somado de outro jeito
+(`saldoGuardado()` não muda — é asserção de teste), a lista para de crescer
+para sempre (o estado tem teto de 512 KB) e o detalhe fica no histórico, que
+é onde se olha o passado. As entradas saem junto, já arquivadas em
+`hist[].entradas` — deixá-las vivas daria renda de setembro em outubro.
+
+`hist[]` ganhou **`entrou`**, **`entrouGuardar`** e **`guardado`**: é deles que
+sai a série "quanto guardei por mês". Fatura fechada antes desta versão não
+tem os campos, e zero é a verdade para elas.
+
+### O que ficou de fora, e por quê
+
+* **Lançar o saque como gasto.** Tirar do cofre para pagar uma conta são DUAS
+  coisas (o saque e o gasto), e juntá-las esconderia uma delas.
+* **Depósito automático da sobra no fechamento.** O app não inventa dinheiro:
+  sobra em conta não é dinheiro guardado até sair para o cofre.
+* **Rendimento do que está guardado.** Precisaria de índice e data por
+  aplicação — outro app, não este.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

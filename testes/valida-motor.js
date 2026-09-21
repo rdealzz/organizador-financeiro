@@ -102,7 +102,12 @@ const eh=(nome,v)=>{(v?ok:bad).push(nome+(v?'':'  →  falso'));};
      do app, era do teste supondo que hoje é dia 1º. */
   const k1=mesesEntre(new Date(hoje.getFullYear(),hoje.getMonth(),1),proximoVenc(15));
   R.kUltima=k1+7;
+  /* Mesma armadilha para a conta "todo mês": a netflix vence dia 20, então
+     rodando dia 21 a próxima ocorrência dela já é no mês seguinte e o mês
+     atual não a traz. O mês certo de olhar é o do próximo vencimento dela,
+     não "este". */
   R.cal0=nomes(0); R.cal7=nomes(k1+7); R.cal8=nomes(k1+8);
+  R.calFixa=nomes(mesesEntre(new Date(hoje.getFullYear(),hoje.getMonth(),1),proximoVenc(20)));
 
   // palpite e classificação
   R.agua=palpiteDoNome('agua'); R.contaAgua=palpiteDoNome('conta de agua');
@@ -164,7 +169,7 @@ const eh=(nome,v)=>{(v?ok:bad).push(nome+(v?'':'  →  falso'));};
  eh('mês atual traz fatura + contas',r.cal0.length>0);
  eh('a 8ª e última parcela cai no mês certo à frente',r.cal7.some(n=>n==='moto(última)'),r.kUltima);
  eh('depois da última, a parcela some do calendário',!r.cal8.some(n=>/^moto/.test(n)));
- eh('conta todo mês é marcada sem fim',r.cal0.some(n=>/semFim/.test(n)));
+ eh('conta todo mês é marcada sem fim',r.calFixa.some(n=>/semFim/.test(n)),r.calFixa);
 
  cmp('"agua" → comida',r.agua.cat,'comida');
  cmp('"conta de agua" → casa',r.contaAgua.cat,'casa');

@@ -25,9 +25,17 @@ const {chromium}=require('playwright');
  for(const [nome,semear] of Object.entries(casos)){
    await p.evaluate(fn=>{ document.querySelector('#auth').hidden=true;document.querySelector('#appWrap').hidden=false;
      eval('('+fn+')()'); }, semear.toString());
-   for(const [area,sub] of [['hoje',''],['gastos',''],['analise','graficos'],['analise','cortes'],['analise','faturas'],['config','']]){
+   /* A lista tinha nomes de área que não existem mais ('gastos', 'config',
+      'faturas') e chamava irPara com DOIS argumentos — ele recebe um só,
+      'area:sub'. As duas coisas juntas faziam a varredura repetir a mesma
+      tela e dizer que tinha visto sete. Agora são as áreas e sub-abas de
+      verdade, as duas novas do cofre incluídas. */
+   for(const [area,sub] of [['hoje',''],['plano','renda'],['plano','tetos'],['plano','objetivos'],
+                            ['plano','guardar'],['plano','entrou'],
+                            ['analise','graficos'],['analise','cortes'],['analise','hist'],
+                            ['analise','extratos'],['ajustes','alertas']]){
      const r=await p.evaluate(([a,s])=>{
-       try{ irPara(a,s||undefined); render(); }catch(e){ return {erro:e.message}; }
+       try{ irPara(a+(s?':'+s:'')); render(); }catch(e){ return {erro:e.message}; }
        const t=document.querySelector('#appWrap').innerText;
        const m=t.match(/NaN|undefined|Invalid Date|\[object Object\]|R\$\s*$/g);
        return {ruins:m?[...new Set(m)]:[]};
@@ -42,7 +50,7 @@ const {chromium}=require('playwright');
    if(c.erro) achados.push(`${nome} › calendário: QUEBROU — ${c.erro}`);
    else if(c.ruins.length) achados.push(`${nome} › calendário: ${c.ruins.join(', ')}`);
  }
- console.log(achados.length?('⚠ '+achados.length+' achados:\n  '+achados.join('\n  ')):'✓ nenhum NaN/undefined/Invalid Date na tela em 10 estados × 7 telas');
+ console.log(achados.length?('⚠ '+achados.length+' achados:\n  '+achados.join('\n  ')):'✓ nenhum NaN/undefined/Invalid Date na tela em 10 estados × 11 telas');
  const e=errs.filter(x=>!/favicon|sw\.js|manifest/i.test(x));
  if(e.length) console.log('erros:',[...new Set(e)].slice(0,5));
  await b.close();

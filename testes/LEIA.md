@@ -45,6 +45,13 @@ falhar.
   `catManual`, só sai de `outros` e `lazer`, e não toca em fatura fechada.
   **Quem mexer em `REGRAS`, `CHIP_PADRAO` ou `CHIP_EXTRA` roda esta suíte.**
 
+* **`valida-cofre.js`** — o cofre e as entradas extras: guardar não vira gasto,
+  sacar não vira renda, um extra de R$ 2.000 não infla a meta de 20%, o destino
+  (gastar / guardar / meio a meio) cai onde promete, o depósito de uma entrada
+  não se duplica quando o valor muda, o objetivo anda sozinho com o depósito e
+  **o fechamento do ciclo não cria nem some dinheiro** — o saldo antes e depois
+  da compactação é o mesmo número.
+
 * **`valida-conta.js`** — duplicidade de e-mail e recuperação por código, com o
   Firebase **emulado na rede da página**: apelidos do Gmail caindo numa conta
   só, a segunda conta recusada com caminho para recuperar, entrar por qualquer

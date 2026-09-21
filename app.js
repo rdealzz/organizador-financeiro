@@ -367,7 +367,7 @@ const ALERTAS_PADRAO={
    claro a cada recarga. O padrão claro mora em TEMA_PADRAO, lá embaixo, como
    ÚLTIMO recurso: só vale quando não há escolha nenhuma. */
 let S={versao:2,tema:'auto',avatar:'',salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:12,ultimoFech:null,hist:[],
-       tetos:{},lanc:SEED,div:[],obj:[],pessoas:[],meses:6,jaTem:0,
+       tetos:{},lanc:SEED,div:[],obj:[],pessoas:[],meses:6,jaTem:0,entradas:[],guard:[],
        orcaOculto:null,orcaEm:null,
        alertas:{teto:true,gasto:true,meta:true,fechamento:true,vencimento:true,contas:true,variavel:true,parcela:false},
        aTetoPct:85,aDiasFech:3,aDiasVenc:2,notifLog:{},_ultimoSalvo:0};
@@ -514,9 +514,36 @@ function fecharCiclo(dataStr){
   const recebido={};
   cobrancas(itens).forEach(g=>{ if(g.tudoPago)
     recebido[g.id||'']=g.itens.reduce((mx,i)=>i.quando>mx?i.quando:mx,'')||dataStr; });
+  /* O que entrou fora do salário e o que foi para o cofre fecham JUNTO com a
+     fatura — é o mesmo mês, e sem isso "quanto eu guardei em setembro" não
+     teria onde ser respondido depois. As faturas gravadas antes desta versão
+     não têm os campos, e zero é a verdade para elas. */
+  const antes=d=>!d||d<dataStr;
+  const entradasDoMes=(S.entradas||[]).filter(e=>antes(e.data));
+  const movsDoMes=(S.guard||[]).filter(m=>antes(m.data));
+  const entrou=entradasDoMes.reduce((t,e)=>t+Math.max(+e.valor||0,0),0);
+  const entrouGuardar=entradasDoMes.reduce((t,e)=>t+parteGuardada(e),0);
+  const guardado=movsDoMes.reduce((t,m)=>t+sinalMov(m),0);
   S.hist.unshift({data:dataStr,venc:iso(vencDaFatura(dataDeISO(dataStr))),
     bruto,avista,meu,pai,porCat,itens,pessoas:fatiasPessoa(daFatura),
+    entrou,entrouGuardar,guardado,
+    entradas:entradasDoMes.length?entradasDoMes.map(e=>({nome:e.nome,valor:+e.valor||0,
+      guardar:parteGuardada(e),data:e.data})):undefined,
     recebido:Object.keys(recebido).length?recebido:undefined});
+  /* Compactação do cofre: o movimento do ciclo que fechou deixa a lista e vira
+     SALDO — `o.tem` quando tinha um objetivo, `S.jaTem` quando não tinha. O
+     dinheiro é o mesmo somado de outro jeito (`saldoGuardado()` não muda), a
+     lista para de crescer para sempre (o estado tem teto de 512 KB) e o
+     detalhe continua no histórico, que é onde se olha o passado.
+     As entradas saem junto: elas já estão arquivadas acima, e deixá-las
+     somando no ciclo novo daria renda de setembro em outubro. */
+  movsDoMes.forEach(m=>{
+    const o=(S.obj||[]).find(o=>mesmoId(o.id,m.obj));
+    if(o) o.tem=Math.max((+o.tem||0)+sinalMov(m),0);
+    else S.jaTem=Math.max((+S.jaTem||0)+sinalMov(m),0);
+  });
+  S.guard=(S.guard||[]).filter(m=>!antes(m.data));
+  S.entradas=(S.entradas||[]).filter(e=>!antes(e.data));
   S.hist=S.hist.slice(0,24);
   let sumiram=0, andaram=0;
   const ficam=daFatura.filter(l=>{
@@ -710,7 +737,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v10.15';
+const VERSAO_APP='v10.16';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -765,8 +792,72 @@ function restaurarBackup(file){
 }
 
 /* ---------- cálculo ---------- */
+/* ══════════ O QUE ENTRA FORA DO SALÁRIO, E O COFRE (v10.16) ══════════
+
+   Faltavam as duas pontas do dinheiro que não é gasto:
+
+   * **`S.entradas`** — a venda, o freela, o 13º: dinheiro que entrou e que o
+     app não tinha onde anotar. `S.extra` continua existindo e continua sendo
+     outra coisa: renda extra que se repete TODO mês. Uma venda de sábado não é
+     renda fixa, e somá-la ali faria o app achar que ela volta em outubro.
+   * **`S.guard`** — o que de fato foi para o cofre, movimento a movimento.
+     Antes havia só `S.jaTem`, um número digitado à mão: o app sabia a meta
+     ("quero guardar R$ 400") e nunca soube se ela foi cumprida.
+
+   **A entrada guarda um VALOR, não um modo.** `e.guardar` é quanto daquele
+   dinheiro vai para o cofre; o resto é gastável. É a mesma escolha do `l.pai`
+   da v9.2, e pelo mesmo motivo: um número sobrevive a mudar o valor da entrada
+   (é só reapertar), atravessa versões sem tabela de modos e não obriga nenhuma
+   tela a saber a lista de destinos que existia quando o dado foi gravado. Os
+   três botões (Gastar / Guardar / Meio a meio) só escrevem 0, o valor inteiro,
+   ou a metade — e o campo continua ali para a divisão torta.
+
+   **Entrada NÃO infla a meta percentual**, e esta é a decisão que faz a
+   função servir para alguma coisa: `meta` é calculada sobre `rendaBase`
+   (salário + renda extra fixa). Se a venda de R$ 500 entrasse na conta da
+   meta de 20%, guardar passaria a ser R$ 100 a mais e o dinheiro sumiria
+   sozinho — a pessoa veria "entrou 500" e "posso gastar 400". O extra entra
+   onde a pessoa mandou: `entrouGastar` sobe o disponível, `entrouGuardar`
+   sobe a meta DESTE mês (`metaMes`) e vira depósito no cofre.
+
+   **Depósito não é gasto, e saque não é renda.** Nenhum dos dois passa por
+   `calc().gasto`: guardar dinheiro não é gastá-lo, e tirar do cofre não é
+   ganhar de novo — é a mesma regra do reembolso da v10.14, que existe para o
+   mesmo dinheiro não ser contado duas vezes. */
+const mesmoId=(a,b)=>String(a)===String(b);
+const parteGuardada=e=>{ const v=Math.max(+e.valor||0,0); return Math.min(Math.max(+e.guardar||0,0),v); };
+const parteGastavel=e=>Math.max(+e.valor||0,0)-parteGuardada(e);
+/* Entrada e movimento do cofre são datados, e é a data que diz de qual ciclo
+   eles são — diferente do gasto, que sobrevive ao fechamento por tipo. */
+const noCicloAberto=d=>!d||d>=iso(ultimoFechPassado());
+const entradasDoCiclo=()=>(S.entradas||[]).filter(e=>noCicloAberto(e.data));
+const movDoCiclo=()=>(S.guard||[]).filter(m=>noCicloAberto(m.data));
+const sinalMov=m=>(m.tipo==='saq'?-1:1)*Math.max(+m.valor||0,0);
+/* O cofre tem DOIS bolsos, e o saldo é a soma deles — nunca um menos o outro:
+   o livre (`S.jaTem`, o ponto de partida mais os ciclos já compactados ali) e
+   o que cada objetivo já juntou (`o.tem` mais os depósitos apontados para
+   ele). Somar o total e depois subtrair os objetivos, como a primeira versão
+   fazia, tirava duas vezes o mesmo dinheiro — foi pego na validação.
+
+   Movimento apontado para um objetivo que foi APAGADO volta a ser livre:
+   alguém tem que ficar com o dinheiro, e some-lo do saldo seria pior. */
+const temObjetivo=id=>!!id&&(S.obj||[]).some(o=>mesmoId(o.id,id));
+const livreNoCofre=()=>Math.max((+S.jaTem||0)
+  +(S.guard||[]).filter(m=>!temObjetivo(m.obj)).reduce((t,m)=>t+sinalMov(m),0),0);
+const juntadoDo=o=>Math.max((+o.tem||0)+(S.guard||[]).filter(m=>mesmoId(m.obj,o.id)).reduce((t,m)=>t+sinalMov(m),0),0);
+const saldoGuardado=()=>livreNoCofre()+(S.obj||[]).reduce((t,o)=>t+juntadoDo(o),0);
+const guardadoNoCiclo=()=>movDoCiclo().reduce((t,m)=>t+sinalMov(m),0);
+function nomeObjetivo(id){ const o=(S.obj||[]).find(o=>mesmoId(o.id,id)); return o?o.nome:''; }
+
 function calc(){
-  const renda=(+S.salario||0)+(+S.extra||0);
+  /* `rendaBase` é o que se repete todo mês; `entrou` é o avulso deste ciclo.
+     A meta percentual mora na base de propósito (ver o bloco acima). */
+  const rendaBase=(+S.salario||0)+(+S.extra||0);
+  const entradas=entradasDoCiclo();
+  const entrouGuardar=entradas.reduce((t,e)=>t+parteGuardada(e),0);
+  const entrouGastar=entradas.reduce((t,e)=>t+parteGastavel(e),0);
+  const entrou=entrouGuardar+entrouGastar;
+  const renda=rendaBase+entrou;
   /* A conta do ciclo é só do que está NESTA fatura. O que foi guardado pra
      seguinte é somado à parte, em `prox`, e mostrado como o que já está
      comprometido com a cobrança de depois. */
@@ -781,8 +872,12 @@ function calc(){
     pai+=Math.min(+l.pai||0,l.valor);
     t[l.tier]+=v; porCat[l.cat]=(porCat[l.cat]||0)+v; });
   const gasto=t[1]+t[2]+t[3];
-  const meta=(+S.metaVal>0)?+S.metaVal:renda*((+S.metaPct||0)/100);
-  const disponivel=Math.max(renda-meta,0);
+  const meta=(+S.metaVal>0)?+S.metaVal:rendaBase*((+S.metaPct||0)/100);
+  /* A meta DESTE ciclo sobe com o que a pessoa mandou guardar do extra; o
+     disponível sobe com o que ela mandou gastar. Um extra inteiro para o
+     cofre não muda uma vírgula do quanto se pode gastar — que é o ponto. */
+  const metaMes=meta+entrouGuardar;
+  const disponivel=Math.max(rendaBase-meta,0)+entrouGastar;
   const fixos=Object.entries(S.tetos).filter(([k,v])=>v>0);
   const somaFixos=fixos.reduce((s,[,v])=>s+v,0);
   const pesosLivres=Object.entries(CATS).filter(([k])=>!S.tetos[k]).reduce((s,[,c])=>s+c.peso,0)||1;
@@ -799,7 +894,9 @@ function calc(){
   const fontes={}; itens.forEach(l=>{const f=l.fonte||'Conta'; fontes[f]=(fontes[f]||0)+l.valor;});
   const proxBruto=prox.reduce((s,l)=>s+(+l.valor||0),0);
   const proxMeu=prox.reduce((s,l)=>s+meuValor(l),0);
-  return {renda,gasto,bruto,avista,avistaMeu,pai,t,porCat,meta,disponivel,tetos,excesso,somaExcesso,futuro,fontes,
+  return {renda,rendaBase,entrou,entrouGastar,entrouGuardar,entradas,
+          guardado:guardadoNoCiclo(),cofre:saldoGuardado(),metaMes,
+          gasto,bruto,avista,avistaMeu,pai,t,porCat,meta,disponivel,tetos,excesso,somaExcesso,futuro,fontes,
           proxBruto,proxMeu,proxN:prox.length,
           fatias:fatiasPessoa(itens),sobra:renda-gasto,corte:t[3]};
 }
@@ -827,7 +924,7 @@ function render(){
   $('#topoUltimos').hidden=vazio;
   $('#blocoUltimos').classList.toggle('sem-moldura',vazio);
   renderTopCats(c); renderUltimos(c);
-  renderMeta(c); renderHist(); renderTetos(c); renderPessoas(c); renderLanc(c); renderCortes(c); renderReserva(c); renderObj(c); renderDiv();
+  renderMeta(c); renderHist(); renderTetos(c); renderPessoas(c); renderLanc(c); renderCortes(c); renderReserva(c); renderObj(c); renderDiv(); renderCofre(c); renderEntradas(c);
   renderVenc(c); renderFatura(c); renderAlertas(c); renderChips();
   /* O extrato só é montado quando está na tela. Ele pode varrer o histórico
      inteiro ("tudo"), e render() roda a cada tecla digitada — é o mesmo motivo
@@ -939,11 +1036,11 @@ function renderFatura(c){
 function renderMeta(c){
   pintarChipsMeta();
   $('#cardsMeta').innerHTML=`
-   <div class="card"><div class="l">Guardar por mês</div><div class="v" style="color:var(--verde)">${brl(c.meta)}</div><div class="n">${c.renda>0?pct(c.meta/c.renda)+' da renda':''}</div></div>
+   <div class="card"><div class="l">Guardar por mês</div><div class="v" style="color:var(--verde)">${brl(c.meta)}</div><div class="n">${c.rendaBase>0?pct(c.meta/c.rendaBase)+' da renda fixa':''}${c.entrouGuardar>0?' · +'+brl(c.entrouGuardar)+' de extras':''}</div></div>
    <div class="card"><div class="l">Sobra pra viver</div><div class="v">${brl(c.disponivel)}</div><div class="n">vira teto das categorias</div></div>
    <div class="card"><div class="l">Em 12 meses</div><div class="v">${brl(c.meta*12)}</div></div>`;
-  const n=$('#notaMeta'); if(!c.renda){ n.innerHTML=''; return; }
-  const p=c.meta/c.renda;
+  const n=$('#notaMeta'); if(!c.rendaBase){ n.innerHTML=''; return; }
+  const p=c.meta/c.rendaBase;
   n.innerHTML = p>0.4 ? `<div class="nota aviso">Guardar ${pct(p)} é agressivo demais pra manter no longo prazo. Entre 20% e 30% é o ritmo que se sustenta.</div>`
    : p<0.1 ? `<div class="nota">Guardar menos de 10% faz qualquer imprevisto virar dívida. Se der, vale testar um pouco mais.</div>`
    : `<div class="nota">Ritmo saudável. ${brl(c.meta)} por mês são ${brl(c.meta*12)} em um ano.</div>`;
@@ -1816,7 +1913,9 @@ function renderCortes(c){
 }
 
 function renderReserva(c){
-  const alvo=c.t[1]*(+S.meses||6), falta=Math.max(alvo-(+S.jaTem||0),0);
+  /* O saldo vem do cofre, não do campo cru: `S.jaTem` é o ponto de partida e
+     `saldoGuardado()` é o que existe hoje (v10.16). */
+  const alvo=c.t[1]*(+S.meses||6), falta=Math.max(alvo-saldoGuardado(),0);
   const guarda=Math.max(Math.min(c.sobra,c.meta)||c.meta,0);
   const m=guarda>0?Math.ceil(falta/guarda):null;
   $('#cardsReserva').innerHTML=`
@@ -1830,8 +1929,9 @@ function renderObj(c){
   if(!S.obj.length){ tb.innerHTML='<tr><td colspan="5" class="vazio">Nenhum objetivo ainda. Meta sem destino não dura.</td></tr>'; $('#notaObj').innerHTML=''; return; }
   let soma=0;
   tb.innerHTML=S.obj.map(o=>{
-    const falta=Math.max(o.alvo-(o.tem||0),0), porMes=o.prazo>0?falta/o.prazo:0; soma+=porMes;
-    return `<tr><td>${esc(o.nome)}<div style="font-size:11.5px;color:var(--txt-3)">custa ${brl(o.alvo)} · já tem ${brl(o.tem||0)}</div></td>
+    const tem=juntadoDo(o);
+    const falta=Math.max(o.alvo-tem,0), porMes=o.prazo>0?falta/o.prazo:0; soma+=porMes;
+    return `<tr><td>${esc(o.nome)}<div style="font-size:11.5px;color:var(--txt-3)">custa ${brl(o.alvo)} · já tem ${brl(tem)}</div></td>
      <td class="v">${brl(falta)}</td><td class="v">${o.prazo||'—'} ${o.prazo?'meses':''}</td>
      <td class="v" style="font-weight:700">${porMes?brl(porMes):'—'}</td>
      <td style="text-align:right"><button class="btn-x" data-delo="${o.id}" aria-label="Remover">×</button></td></tr>`;
@@ -1852,6 +1952,160 @@ function renderDiv(){
    <td style="text-align:right"><button class="btn-x" data-deld="${d.id}" aria-label="Remover">×</button></td></tr>`).join('');
   const total=S.div.reduce((s,d)=>s+d.saldo*(d.juros||0)/100,0), p=ord[0];
   $('#notaDiv').innerHTML=`<div class="nota aviso">Só de juros: <b>${brl(total)}</b> por mês, ${brl(total*12)} no ano sem abater saldo. Jogue a sobra em <b>${esc(p.nome)}</b> primeiro.</div>`;
+}
+
+
+/* ══════════════════ AS DUAS TELAS DO DINHEIRO QUE NÃO É GASTO ══════════════════ */
+
+/* O depósito que nasce de uma entrada fica AMARRADO a ela por `de`, e é
+   `sincronizarEntrada` que mantém os dois de acordo — a mesma relação de
+   `divs` com `pai` na v10.8: existe um detalhe e existe um total, e quem
+   escreve num tem de escrever no outro. Sem isso, mudar quanto da venda vai
+   pro cofre deixaria o movimento antigo no saldo e o número apareceria duas
+   vezes. */
+function sincronizarEntrada(e){
+  S.guard=S.guard||[];
+  const g=parteGuardada(e);
+  const i=S.guard.findIndex(m=>m.de&&mesmoId(m.de,e.id));
+  if(g<=0){ if(i>=0) S.guard.splice(i,1); return; }
+  const mov={id:(i>=0?S.guard[i].id:Date.now()+Math.random()),data:e.data,valor:g,tipo:'dep',
+             obj:(i>=0?S.guard[i].obj:'')||'',nota:e.nome,de:e.id};
+  if(i>=0) S.guard[i]=mov; else S.guard.push(mov);
+}
+function removerEntrada(id){
+  const i=(S.entradas||[]).findIndex(x=>mesmoId(x.id,id)); if(i<0) return;
+  const item=S.entradas[i];
+  const mov=(S.guard||[]).find(m=>m.de&&mesmoId(m.de,id));
+  S.entradas.splice(i,1);
+  if(mov) S.guard.splice(S.guard.indexOf(mov),1);
+  render(); salvar(); vibrar(10);
+  snack('Entrada removida.','Desfazer',()=>{
+    S.entradas.splice(Math.min(i,S.entradas.length),0,item);
+    if(mov) S.guard.push(mov);
+    render(); salvar(); toast('Restaurada');
+  });
+}
+const dataCurta=d=>d?dataBR(d).slice(0,5):'—';
+
+function opcoesDestino(sel){
+  const alvo=String(sel||'');
+  return '<option value=""'+(alvo?'':' selected')+'>Reserva (sem destino)</option>'+
+    (S.obj||[]).map(o=>`<option value="${esc(String(o.id))}"${mesmoId(o.id,alvo)?' selected':''}>${esc(o.nome)}</option>`).join('');
+}
+
+function renderCofre(c){
+  const el=$('#cardsCofre'); if(!el) return;
+  const saldo=c.cofre, feito=c.guardado, alvo=c.metaMes;
+  const dias=Math.max(diasRestantes(),1);
+  const alvoRes=c.t[1]*(+S.meses||6);
+  /* A taxa é do CICLO, e o histórico responde pela média — um número só, sem
+     dizer de quando, não diz nada. */
+  const taxa=c.renda>0?feito/c.renda:0;
+  el.innerHTML=`
+   <div class="card"><div class="l">No cofre</div><div class="v">${brl(saldo)}</div>
+     <div class="n">${alvoRes>0?(saldo>=alvoRes?'reserva de emergência completa':pct(Math.min(saldo/alvoRes,1))+' da reserva de '+brl(alvoRes)):'defina a reserva em Metas'}</div></div>
+   <div class="card"><div class="l">Guardado neste ciclo</div><div class="v"${feito<0?' style="color:var(--vermelho)"':''}>${brl(feito)}</div>
+     <div class="n">de ${brl(alvo)} que você quer guardar</div></div>
+   <div class="card"><div class="l">Taxa deste ciclo</div><div class="v">${pct(Math.max(taxa,0))}</div>
+     <div class="n">do que entrou no mês</div></div>`;
+
+  const p=alvo>0?Math.max(Math.min(feito/alvo,1),0):0;
+  const falta=Math.max(alvo-feito,0);
+  $('#progressoCofre').innerHTML=alvo>0?`
+    <div class="trilho"><i style="--p:${p.toFixed(4)};background:${feito>=alvo?'var(--verde)':'var(--azul)'}"></i></div>
+    <div class="nota${feito>=alvo?'':' info'}" style="margin-top:10px">${feito>=alvo
+      ? `Meta deste ciclo cumprida: <b>${brl(feito)}</b> guardados.`
+      : `Faltam <b>${brl(falta)}</b> para a meta deste ciclo — ${brl(falta/dias)} por dia nos ${dias} dia${dias===1?'':'s'} que faltam.`}</div>`:'';
+
+  const sel=$('#gObj'); if(sel) sel.innerHTML=opcoesDestino(sel.value);
+
+  const movs=movDoCiclo().slice().sort((a,b)=>String(b.data).localeCompare(String(a.data)));
+  $('#tbGuard').innerHTML=movs.length?movs.map(m=>{
+    const dest=nomeObjetivo(m.obj), v=sinalMov(m);
+    return `<tr><td class="num" style="color:var(--txt-3)">${dataCurta(m.data)}</td>
+      <td>${esc(m.nota||(m.tipo==='saq'?'Saque':'Depósito'))}
+        <div style="font-size:11.5px;color:var(--txt-3)">${dest?'para '+esc(dest):'reserva'}${m.de?' · veio de uma entrada':''}</div></td>
+      <td class="v" style="color:${v<0?'var(--vermelho)':'var(--verde-txt)'}">${v<0?'−':'+'}${brl(Math.abs(v))}</td>
+      <td style="text-align:right"><button class="btn-x" data-delg="${esc(String(m.id))}" aria-label="Remover">×</button></td></tr>`;
+  }).join(''):'<tr><td colspan="4" class="vazio">Nada guardado neste ciclo ainda. Guardar R$ 50 vale mais que planejar R$ 500.</td></tr>';
+
+  /* Onde o cofre está dividido. Dinheiro sem destino não é defeito — é a
+     reserva —, mas ver quanto já tem dono é o que faz guardar virar hábito. */
+  const livre=livreNoCofre();
+  const linhas=[{nome:'Reserva de emergência',tem:livre,alvo:alvoRes}]
+    .concat((S.obj||[]).map(o=>({nome:o.nome,tem:juntadoDo(o),alvo:+o.alvo||0})));
+  $('#cofreDestinos').innerHTML=linhas.map(l=>{
+    const q=l.alvo>0?Math.min(l.tem/l.alvo,1):0;
+    return `<div style="padding:9px 0">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+        <span style="font-size:14.5px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(l.nome)}</span>
+        <span class="num" style="font-size:13px;color:var(--txt-2);font-weight:600;white-space:nowrap">${brl(l.tem)}${l.alvo>0?' <span style="color:var(--txt-3);font-weight:500">/ '+brl(l.alvo)+'</span>':''}</span></div>
+      <div class="trilho" style="margin-top:7px"><i style="--p:${q.toFixed(4)};background:${q>=1?'var(--verde)':'var(--azul)'}"></i></div>
+    </div>`;
+  }).join('');
+
+  /* A série de quanto foi guardado por mês. Ela sai do histórico, que é o
+     único lugar que sabe o que já fechou — o ciclo aberto tem o cartão acima
+     e ainda vai mudar. */
+  const serie=S.hist.slice(0,6).filter(h=>h.guardado!==undefined);
+  const topo=Math.max(...serie.map(h=>Math.abs(+h.guardado||0)),1);
+  $('#cofreHist').innerHTML=serie.length?serie.map(h=>{
+    const v=+h.guardado||0;
+    return `<div style="padding:9px 0">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+        <span style="font-size:14.5px;font-weight:600">${mesDoCiclo(h.data)}</span>
+        <span class="num" style="font-size:13px;color:var(--txt-2);font-weight:600">${brl(v)}${h.entrou?' <span style="color:var(--txt-3);font-weight:500">· entrou '+brl(h.entrou)+'</span>':''}</span></div>
+      <div class="trilho" style="margin-top:7px"><i style="--p:${(Math.max(v,0)/topo).toFixed(4)};background:var(--verde)"></i></div></div>`;
+  }).join(''):'<div class="nota">Ainda não fechou nenhum ciclo com movimento no cofre. A partir do próximo fechamento esta lista responde "quanto eu guardei por mês".</div>';
+}
+
+/* A fatura que fecha em 05/08 é o mês de julho/agosto; na série mensal o que
+   importa é o MÊS, não o dia em que o cartão fechou. */
+const mesDoCiclo=d=>{const [y,m]=String(d).split('-').map(Number);return MES_CURTO[(m||1)-1]+'/'+String(y).slice(2);};
+
+function renderEntradas(c){
+  const el=$('#cardsEntrou'); if(!el) return;
+  el.innerHTML=`
+   <div class="card"><div class="l">Entrou neste ciclo</div><div class="v">${brl(c.entrou)}</div>
+     <div class="n">fora do salário</div></div>
+   <div class="card"><div class="l">Foi pro cofre</div><div class="v">${brl(c.entrouGuardar)}</div>
+     <div class="n">subiu a meta deste ciclo</div></div>
+   <div class="card"><div class="l">Deu pra gastar</div><div class="v">${brl(c.entrouGastar)}</div>
+     <div class="n">somou no quanto cabe no mês</div></div>`;
+
+  const lista=c.entradas.slice().sort((a,b)=>String(b.data).localeCompare(String(a.data)));
+  $('#tbEntrada').innerHTML=lista.length?lista.map(e=>{
+    const g=parteGuardada(e);
+    return `<tr><td class="num" style="color:var(--txt-3)">${dataCurta(e.data)}</td>
+      <td>${esc(e.nome||'Entrada')}
+        <div style="font-size:11.5px;color:var(--txt-3)">${g<=0?'tudo pra gastar':(g>=(+e.valor||0)?'tudo pro cofre':brl(parteGastavel(e))+' pra gastar')}</div></td>
+      <td class="v">${brl(+e.valor||0)}</td>
+      <td class="v"><input type="number" inputmode="decimal" min="0" step="0.01" data-eguard="${esc(String(e.id))}"
+        value="${g?g.toFixed(2):''}" placeholder="0,00" aria-label="Quanto vai pro cofre"
+        style="width:96px;padding:5px 7px;text-align:right;font-size:13px"></td>
+      <td style="text-align:right"><button class="btn-x" data-dele="${esc(String(e.id))}" aria-label="Remover">×</button></td></tr>`;
+  }).join(''):'<tr><td colspan="5" class="vazio">Nenhuma entrada neste ciclo.</td></tr>';
+
+  ecoEntrada();   // a folha e a lista falam do mesmo número, sempre
+  $('#notaEntrada').innerHTML=`<div class="nota">
+    <b>Reembolso não é entrada.</b> Se alguém te pagou a parte dela num gasto dividido, use <i>já me pagou</i> no próprio gasto — aquele dinheiro nunca foi seu, e lançá-lo aqui contaria o mesmo dinheiro duas vezes.
+    <br>Renda extra que se repete <b>todo mês</b> (aluguel que você recebe, pensão, um freela fixo) é campo de <button class="link" data-ir="plano:renda">Renda e meta</button> — aqui é o avulso.</div>`;
+}
+
+/* O eco da folha de entrada: a frase em reais, antes de lançar. É o mesmo
+   recurso do lançamento rápido e da divisão — quem vê o número não precisa
+   confiar no rótulo. */
+function ecoEntrada(){
+  const el=$('#ecoEntrada'); if(!el) return;
+  const v=+$('#eValor').value||0, g=Math.min(Math.max(+$('#eGuardar').value||0,0),v);
+  el.innerHTML=v>0
+    ? `<span class="pt" style="background:var(--verde)"></span><span>${brl(v)}: <b>${brl(g)}</b> pro cofre · <b>${brl(v-g)}</b> sobem o quanto você pode gastar</span>`
+    : '<span class="aviso">Escreva o valor que entrou e escolha o destino.</span>';
+  document.querySelectorAll('#chipsDestino [data-dest]').forEach(b=>{
+    const d=b.dataset.dest;
+    const on=v>0&&((d==='gastar'&&g===0)||(d==='guardar'&&g===v)||(d==='meio'&&g>0&&g<v));
+    b.setAttribute('aria-pressed',on?'true':'false');
+  });
 }
 
 /* ---------- eventos ---------- */
@@ -2175,15 +2429,76 @@ function removerCom(lista,id,rotulo){
     S[lista].splice(Math.min(i,S[lista].length),0,item); render(); salvar(); toast('Restaurado');
   });
 }
+
+/* ---------- cofre e entradas ---------- */
+$('#addGuard').onclick=()=>guardarMovimento('dep');
+$('#addSaque').onclick=()=>guardarMovimento('saq');
+function guardarMovimento(tipo){
+  const valor=+$('#gValor').value;
+  if(!(valor>0)){ $('#gValor').focus(); return; }
+  const obj=$('#gObj').value||'';
+  /* Tirar mais do que há no cofre não é um número negativo escondido: é um
+     engano de digitação, e deixá-lo passar faria o saldo mentir para sempre. */
+  if(tipo==='saq'&&valor>saldoGuardado()+0.005){
+    toast('Você tem '+brl(saldoGuardado())+' no cofre',true); $('#gValor').focus(); return;
+  }
+  S.guard=S.guard||[];
+  S.guard.push({id:Date.now()+Math.random(),data:iso(hojeD()),valor,tipo,obj,
+                nota:$('#gNota').value.trim()});
+  ['gValor','gNota'].forEach(i=>$('#'+i).value='');
+  const c=calc();
+  render(); salvar(); vibrar(12);
+  if(tipo==='saq'){
+    const alvo=c.t[1]*(+S.meses||6), saldo=saldoGuardado();
+    toast('Saque anotado');
+    if(alvo>0&&saldo<alvo) snack('O cofre ficou em '+brl(saldo)+', abaixo da reserva de '+brl(alvo)+'.','Ver metas',()=>irPara('plano:objetivos'));
+  }else{
+    toast(obj?'Guardado para '+nomeObjetivo(obj):'Guardado');
+  }
+}
+$('#addEntrada').onclick=()=>{
+  const nome=$('#eNome').value.trim(), valor=+$('#eValor').value;
+  if(!(valor>0)){ $('#eValor').focus(); return; }
+  const e={id:Date.now()+Math.random(),data:$('#eData').value||iso(hojeD()),
+           nome:nome||'Entrada',valor,guardar:Math.min(Math.max(+$('#eGuardar').value||0,0),valor)};
+  S.entradas=S.entradas||[];
+  S.entradas.push(e); sincronizarEntrada(e);
+  ['eNome','eValor','eGuardar'].forEach(i=>$('#'+i).value='');
+  $('#eData').value=iso(hojeD());
+  render(); salvar(); vibrar(12); ecoEntrada();
+  const g=parteGuardada(e);
+  toast(g>=valor?'Entrada guardada inteira no cofre'
+       :g>0?'Entrada lançada — '+brl(g)+' pro cofre'
+            :'Entrada lançada — subiu o quanto você pode gastar');
+};
+/* Os três atalhos escrevem no campo, e o campo continua editável: é a mesma
+   forma da divisão da v10.7, onde "Metade" resolve o caso comum e o número
+   fica para a divisão torta. */
+document.querySelectorAll('#chipsDestino [data-dest]').forEach(b=>b.onclick=()=>{
+  const v=+$('#eValor').value||0, d=b.dataset.dest;
+  $('#eGuardar').value=d==='guardar'?v.toFixed(2):d==='meio'?(v/2).toFixed(2):'';
+  ecoEntrada(); vibrar(8);
+});
+['eValor','eGuardar'].forEach(i=>{ const el=$('#'+i); if(el) el.oninput=ecoEntrada; });
+document.addEventListener('input',e=>{
+  const g=e.target.closest('[data-eguard]'); if(!g) return;
+  const it=(S.entradas||[]).find(x=>mesmoId(x.id,g.dataset.eguard)); if(!it) return;
+  it.guardar=Math.min(Math.max(+g.value||0,0),+it.valor||0);
+  sincronizarEntrada(it); salvar();
+  renderCofre(calc()); renderEntradas(calc()); renderHero(calc());
+});
 document.addEventListener('click',e=>{
   const b=e.target.closest('[data-del]'), d=e.target.closest('[data-deld]'), o=e.target.closest('[data-delo]');
+  const g=e.target.closest('[data-delg]'), en=e.target.closest('[data-dele]');
   if(b) removerCom('lanc',b.dataset.del,'Lançamento');
   if(d) removerCom('div',d.dataset.deld,'Dívida');
   if(o) removerCom('obj',o.dataset.delo,'Objetivo');
+  if(g) removerCom('guard',g.dataset.delg,'Movimento');
+  if(en) removerEntrada(en.dataset.dele);
 });
 $('#zerar').onclick=()=>{ if(confirm('Apagar tudo e recomeçar do zero?')){
   S=Object.assign({},S,{salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:12,
-     ultimoFech:iso(ultimoFechPassado()),hist:[],tetos:{},lanc:[],div:[],obj:[],pessoas:[],meses:6,jaTem:0,notifLog:{},agendaLog:{},retroVista:null,orcaOculto:null,orcaEm:null});
+     ultimoFech:iso(ultimoFechPassado()),hist:[],tetos:{},lanc:[],div:[],obj:[],pessoas:[],meses:6,jaTem:0,entradas:[],guard:[],notifLog:{},agendaLog:{},retroVista:null,orcaOculto:null,orcaEm:null});
   ['salario','extra','jaTem','metaVal'].forEach(i=>$('#'+i).value=''); $('#metaPct').value=20; $('#meses').value=6;
   avisoCiclo=''; render(); salvar();
   Auth.apagarEstadoNaNuvem().catch(()=>{});
@@ -3925,7 +4240,7 @@ document.addEventListener('visibilitychange',()=>{
    ========================================================================== */
 const AREAS={
   hoje:    {titulo:'Hoje',        subs:[]},
-  plano:   {titulo:'Planejamento',subs:['renda','tetos','objetivos']},
+  plano:   {titulo:'Planejamento',subs:['renda','tetos','objetivos','guardar','entrou']},
   analise: {titulo:'Análises',    subs:['graficos','cortes','hist','extratos']},
   ajustes: {titulo:'Ajustes',     subs:['alertas','conta','assinatura','extrato','dados']}
 };
@@ -4022,7 +4337,10 @@ function renderHero(c){
   $('#hoje-pista').style.setProperty('--p', ((total-dias)/total).toFixed(4));
   $('#hoje-sobra').textContent=brl(c.sobra);
   $('#hoje-sobra').style.color=c.sobra<0?'var(--vermelho)':'';
-  $('#hoje-meta').textContent=brl(c.meta);
+  /* O cartão diz a meta DESTE ciclo: com uma venda mandada pro cofre, a
+     intenção do mês é maior que a meta base, e mostrar a base faria o app
+     parecer não ter registrado o que a pessoa acabou de guardar. */
+  $('#hoje-meta').textContent=brl(c.metaMes);
   $('#hoje-dias').textContent=dias+(dias===1?' dia':' dias');
 }
 
@@ -4198,6 +4516,21 @@ function montarInsights(c){
     if(m&&m>50&&hoje<m*0.8&&hoje>0)
       out.push({t:'bom',e:'descendo',txt:`<b>${catDe(k).n}</b> caiu ${pct(1-hoje/m)} em relação à sua média: ${brl(m-hoje)} a menos este mês.`});
   });
+  /* O extra que entrou e ainda não tem destino. Vem cedo na lista porque é
+     dinheiro parado esperando uma decisão — e dinheiro sem dono vira gasto
+     sem querer, que é a mesma razão do botão de sobra dos tetos. */
+  if(c.entrou>0&&c.entrouGastar>0&&c.entrouGuardar===0)
+    out.push({t:'atencao',e:'nota',txt:`Entraram <b>${brl(c.entrou)}</b> fora do salário neste ciclo, e tudo foi para o disponível. Guardar metade seriam <b>${brl(c.entrou/2)}</b> no cofre sem mudar o seu padrão. `
+      +`<button class="link" data-ir="plano:entrou">Rever o destino</button>`});
+  else if(c.entrou>0)
+    out.push({t:'bom',e:'certo',txt:`Entraram <b>${brl(c.entrou)}</b> fora do salário${c.entrouGuardar>0?` e <b>${brl(c.entrouGuardar)}</b> foram pro cofre`:''}.`});
+  /* O progresso de guardar só fala perto do fim do ciclo: no dia 3 dizer que
+     falta a meta inteira é informação de calendário, não de dinheiro. */
+  if(c.metaMes>0&&dias<=10&&c.guardado<c.metaMes)
+    out.push({t:'atencao',e:'alvo',txt:`Você guardou <b>${brl(c.guardado)}</b> dos ${brl(c.metaMes)} deste ciclo e faltam ${dias} dia${dias===1?'':'s'}. `
+      +`<button class="link" data-ir="plano:guardar">Anotar o que guardei</button>`});
+  else if(c.guardado>0&&c.guardado>=c.metaMes&&c.metaMes>0)
+    out.push({t:'bom',e:'certo',txt:`Meta de guardar cumprida: <b>${brl(c.guardado)}</b> no cofre neste ciclo. Total guardado: ${brl(c.cofre)}.`});
   // o maior cortável
   const corta=doCiclo().filter(l=>l.tier===3&&meuValor(l)>0).sort((a,b)=>meuValor(b)-meuValor(a))[0];
   if(corta&&c.sobra<c.meta)
@@ -4971,6 +5304,8 @@ function preencherCampos(){
   p('meses',S.meses||6); p('jaTem',S.jaTem); p('diaFech',S.diaFech||5);
   p('diaVenc',S.diaVenc||S.diaFech||5);
   p('aTetoPct',S.aTetoPct||85); p('aDiasFech',S.aDiasFech||3); p('aDiasVenc',S.aDiasVenc||2);
+  p('eData',iso(hojeD()));
+  if(typeof ecoEntrada==='function') ecoEntrada();
 }
 
 /* ==========================================================================
