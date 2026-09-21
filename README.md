@@ -370,10 +370,26 @@ cada uma respondeu — o rodapé mostra o resultado em *Diagnóstico do salvamen
 Ao ler, o app compara as camadas e usa a cópia mais recente pelo carimbo de
 tempo. Além disso guarda **uma cópia de segurança automática por dia** no
 IndexedDB (as 7 últimas ficam), e o rodapé tem *Baixar backup* (JSON),
-*Restaurar backup* e *Exportar CSV*.
+*Restaurar backup*, *Exportar CSV* e **Recuperar uma cópia**.
 
-> Os dados são **deste aparelho e deste navegador**. Para levar pra outro,
-> use Baixar backup → Restaurar backup.
+*Recuperar uma cópia* mostra as cópias automáticas guardadas neste navegador —
+data, quantos lançamentos, quanto somam — e deixa baixar ou voltar para
+qualquer uma delas. **Recuperar não apaga o que está na nuvem: as duas versões
+são juntadas.**
+
+### Dois aparelhos na mesma conta não se apagam
+
+Entrando com a mesma conta, o estado sobe e desce sozinho — e quando os dois
+lados mexeram em coisas diferentes, **as duas versões são JUNTADAS, item por
+item**, não substituídas uma pela outra. Um gasto lançado no celular e outro no
+computador sobrevivem os dois; só quando o MESMO gasto foi mexido nos dois
+lugares é que vale o mais recente. A gravação na nuvem é condicional: o servidor
+recusa quem tentar gravar por cima de algo mais novo, e o app relê, junta e
+grava de novo.
+
+> Sem conta, os dados são **deste aparelho e deste navegador**. Para levar pra
+> outro, use Baixar backup → Restaurar backup, ou entre com a mesma conta nos
+> dois.
 
 ### Atualizar o app não apaga nada
 
@@ -439,6 +455,10 @@ Cada versão passa por uma bateria que roda num navegador real, com dois
 | Sair e entrar | cópia local apagada ao sair, dados de volta ao entrar |
 | Outro aparelho | mesmo login, dados chegam da nuvem |
 | Dois aparelhos | gasto lançado num aparece no outro |
+| Dois aparelhos, os dois lançando | as duas versões são juntadas item por item; nenhum lado perde o que lançou |
+| Aparelho parado há dias | abrir não sobrescreve a nuvem: ele lê antes de gravar, e a fatura que fechou no meio-tempo não o faz "ganhar" o conflito |
+| Gravação simultânea | o servidor recusa quem grava por cima de algo mais novo; o app relê, junta e grava de novo |
+| Recuperar uma cópia | as cópias automáticas do navegador aparecem na tela, com baixar e restaurar |
 | Isolamento | conta nova começa vazia, não vê nada da outra |
 | Funções | 4 áreas, 10 seções, gráficos, desfazer, alertas, agenda, retrospectiva, tema |
 | Offline | lança sem internet, avisa o estado, sobe sozinho quando volta |

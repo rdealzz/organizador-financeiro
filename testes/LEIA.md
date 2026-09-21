@@ -54,6 +54,15 @@ falhar.
   (v10.17): ele muda o disponível na mesma medida, não encosta em `metaPct`
   nem em `metaVal`, deixa o extra somar por cima e expira sozinho pela data.
 
+* **`valida-sinc.js`** — **a sincronização entre dois aparelhos**, que é de onde
+  veio uma perda de dados real (v10.18). Reproduz o cenário inteiro com uma
+  nuvem falsa: aparelho parado há três dias, fatura fechando no meio-tempo,
+  abrindo e sincronizando. Prova que os gastos dos DOIS lados sobrevivem, que
+  um envio agendado antes da primeira leitura não toca na nuvem, que apagar de
+  propósito continua apagando mas uma edição vence um apagamento, que
+  `pai`/`com`/`divs`/`acerto` vêm sempre do mesmo lado, que a gravação com
+  versão velha é recusada e que depois do conflito nada se perde. Cobre também a
+  tela de recuperar uma cópia automática.
 * **`valida-conta.js`** — duplicidade de e-mail e recuperação por código, com o
   Firebase **emulado na rede da página**: apelidos do Gmail caindo numa conta
   só, a segunda conta recusada com caminho para recuperar, entrar por qualquer

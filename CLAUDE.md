@@ -1689,3 +1689,156 @@ Se fosse ligado:
 Por isso o código por e-mail continua sendo o caminho: chega na mesma caixa, não
 custa por mensagem, não pede script de terceiro e já está inteiro — inclusive
 com a tela de colar o código, que é a parte que faltava.
+
+## Três dias de lançamentos apagados por abrir o app em outro aparelho (v10.18)
+
+A queixa, nas palavras de quem usa: *"todas as mudanças que eu fiz ontem, as
+coisas que eu lancei, perdi simplesmente tudo — abri o app em outra máquina e
+todas as informações que coloquei há 3 dias foram perdidas"*. É a pior classe de
+defeito que este app pode ter, e eram **três causas empilhadas**, todas na
+sincronização.
+
+### 1. A gravação sobrescrevia o documento sem perguntar nada
+
+`enviarParaNuvem()` mandava o estado inteiro por cima do que estivesse em
+`estado/<uid>`. A `revisao` existia desde a migração para o Firebase e só servia
+de contador: **nunca foi usada como pré-condição**. Qualquer gravação de um
+aparelho apagava tudo que o outro tivesse gravado desde então.
+
+Agora `Auth.enviarEstado(dados, marca)` manda `currentDocument` no `:commit`, e
+`marca` é o `updateTime` do documento que este aparelho leu por último —
+`null` quando ele ainda não existe, e aí a pré-condição é `exists:false`.
+Medido contra o projeto real (conta de teste criada e **apagada depois**):
+
+| gravação | resposta do Firestore |
+|---|---|
+| `exists:false`, documento não existe | 200, e devolve o `updateTime` novo |
+| `exists:false`, documento já existe | **409 `ALREADY_EXISTS`** — não gravou |
+| `updateTime` igual ao de lá | 200, revisão sobe |
+| `updateTime` velho (o outro aparelho gravou no meio) | **400 `FAILED_PRECONDITION`**, "the stored version does not match the required base version" — **não gravou** |
+
+`ehConflito()` reconhece as duas formas e as traduz para `erro('conflito')`, que
+**não é para repetir com o mesmo corpo** — o corpo é que está velho.
+
+### 2. Havia um envio agendado ANTES da primeira leitura da nuvem
+
+`carregar()` termina em `salvar()`, que agenda o envio para 1,2 s depois;
+`puxarDaNuvem()` é disparada em seguida, sem `await`. Numa rede lenta, ou com a
+pessoa tocando em qualquer coisa antes de a leitura voltar, **o estado velho do
+aparelho subia primeiro e virava a verdade da conta** — sem nunca ter olhado o
+que estava lá.
+
+`nuvemLida` é a trava: enquanto a leitura desta sessão não tiver voltado,
+`enviarParaNuvem()` não grava — marca `pendente` e chama a leitura. Ela é zerada
+em `usarChaveDe()`, senão uma conta herdaria a permissão de gravar da anterior.
+
+### 3. Abrir o app carimbava `_ts` — e o aparelho PARADO ganhava o conflito
+
+Esta é a que fecha o círculo e explica o "perdi dos dois lados".
+`carregar()` fixava `ultimoConteudo` **antes** de `rodarCiclos()` e das
+migrações. Se a fatura fechou naqueles três dias, o conteúdo mudava e o
+`salvar()` do fim carimbava `_ts = agora`. Daí:
+
+* o aparelho parado passava a ter o carimbo **mais novo**;
+* `puxarDaNuvem` concluía `tRemoto > tLocal == false`, não adotava o remoto e
+  **empurrava o velho por cima**;
+* na volta, o aparelho onde a pessoa realmente lançou via o remoto "mais novo",
+  adotava-o e **apagava os três dias localmente também**.
+
+Agora `ultimoConteudo` é fixado **depois** das migrações, do `rodarCiclos()` e da
+normalização — que virou `normalizarEstado()`, um lugar só, chamado de dentro do
+`carregar()`. Completar `S.alertas` com `Object.assign` reordena as chaves do
+JSON e contava como "mudou", o que carimbava `_ts` sem ninguém ter tocado em
+nada. **Quem grava `_ts` ganha o desempate: abrir o app não pode gravá-lo.**
+
+### A correção de fundo: mesclar em três vias, nunca escolher um lado
+
+As duas primeiras são trava e pré-condição. A terceira é o que obriga a mudar o
+desenho: **último-a-gravar-leva-tudo, num documento que é um JSON só, sempre
+perde o trabalho de um dos lados.** Mesmo com todos os carimbos certos, quem
+lança no celular e depois no computador perdia um dos dois — não por defeito,
+mas porque comparar um carimbo por DOCUMENTO não sabe que os dois lados mexeram
+em coisas diferentes.
+
+`mesclarEstado(base, local, remoto)` compara **três** versões. A `base` é o
+estado do último acordo entre este aparelho e a nuvem, gravada no IndexedDB em
+`base:<chave da conta>` a cada envio ou leitura bem-sucedida. Com ela as regras
+ficam óbvias:
+
+* item que só um lado mexeu → vale a versão desse lado;
+* item que os dois mexeram → vale a do carimbo mais novo. É aqui, e **só** aqui,
+  que alguém perde algo — e é um item, nunca três dias;
+* item que **não está na base** → é novo, de quem o tem: entra sempre. É esta
+  linha que devolve os gastos dos dois aparelhos em vez de escolher um;
+* item que está na base e sumiu de um lado → **foi apagado ali**, e apagar vale —
+  a não ser que o outro lado o tenha EDITADO depois. Entre ressuscitar um gasto e
+  sumir com uma edição de dinheiro, ressuscitar é o erro barato.
+
+**Sem base (a primeira sincronização depois desta versão) a mesclagem é união**:
+nada na base significa que nada pode ser dado por apagado. O caso sem informação
+cai de propósito no lado que não perde nada.
+
+Quatro detalhes que custaram decisão:
+
+1. **O item é mesclado campo a campo**, porque as duas mãos costumam mexer em
+   campos diferentes do mesmo gasto: um marcou "já paguei" no celular, o outro
+   corrigiu o valor no computador, e os dois têm razão.
+2. **`pai`, `com`, `divs` e `acerto` viajam juntos** (`GRUPO_DIVISAO`). São
+   quatro vistas do mesmo fato, como manda a nota da v10.11; pegar `pai` de um
+   lado e `divs` do outro produziria um lançamento que se contradiz.
+3. **`hist` é mesclado por `data`**, não por `id` — fatura arquivada não tem id,
+   e a data do fechamento é única. E volta ordenada, porque `S.hist[0]` é lido
+   por posição em todo o app.
+4. **A mesclagem não é edição**: ela atualiza `ultimoConteudo` e carimba `_ts`
+   com o maior dos dois lados, senão o terceiro aparelho não veria este estado
+   como o mais recente — ele contém os dois.
+
+`juntarComRemoto()` guarda uma foto do que estava aqui ANTES de juntar, em
+`copia:antes-da-nuvem`: se a mesclagem algum dia errar, existe para onde voltar.
+
+### As cópias de segurança existiam e ninguém as alcançava
+
+A rede de segurança diária entrou na v10.14 e as sete últimas ficam no
+IndexedDB — só que **nada no app as mostrava**. Quem precisasse delas teria que
+abrir o console do navegador. Guardar uma rede que a pessoa não alcança é o mesmo
+que não tê-la, e foi disso que se precisou aqui.
+
+*Meus dados → **Recuperar uma cópia*** lista as cópias deste navegador (as
+diárias, as de versão e a de antes da última mesclagem) com data, número de
+lançamentos, soma e quantas faturas há no histórico, com **Baixar** e
+**Recuperar** em cada uma.
+
+**Recuperar não apaga o que estiver na nuvem: junta.** `adotarEstado()` zera a
+base antes de gravar, e sem base a mesclagem é união — então o que está sendo
+recuperado entra e o que o outro aparelho lançou depois continua lá. Depois do
+que aconteceu, o padrão de um caminho de recuperação tem que ser "não perde
+nada"; o preço é ver reaparecer algo apagado de propósito, e apagar de novo
+custa um toque. `restaurarBackup` passou pela mesma função.
+
+Duas armadilhas que apareceram ao fazer isso:
+
+* **A limpeza das sete cópias diárias passou a filtrar só `copia:<data>`.** Com
+  `copia:versao-*` e `copia:antes-da-nuvem` na mesma contagem, elas ocupariam as
+  vagas e as cópias por dia seriam apagadas antes da hora — justamente as que se
+  procura quando algo se perde.
+* **`limparDadosLocais` apaga também a `base:`** — ela é uma CÓPIA do estado, e
+  sair da conta não pode deixar os dados de quem saiu num canto do aparelho. O
+  texto do aviso de sair passou a dizer que as cópias automáticas vão junto: quem
+  está tentando recuperar algo precisa saber disso antes, não depois.
+
+### A gravação idêntica que não acontece
+
+`textoEstavel()` existe por um detalhe que quase passou: a mesclagem monta cada
+objeto a partir da UNIÃO das chaves dos três lados, então a ordem das chaves sai
+diferente da do original. Comparando com `JSON.stringify` cru, dois estados
+idênticos pareceriam diferentes — e o app gravaria na nuvem a cada leitura, de
+graça, **mexendo na versão do documento e criando conflito no outro aparelho sem
+ninguém ter tocado em nada**. A ordem dos ARRAYS é preservada de propósito: em
+`hist` ela é informação.
+
+Junto disso, `enviarParaNuvem` compara o estado com a base antes de gravar e
+não grava o que a nuvem já tem, palavra por palavra.
+
+`testes/valida-sinc.js` (26 verificações) reproduz o cenário da perda inteiro
+com uma nuvem falsa — aparelho parado há três dias, fatura fechando no meio — e
+guarda cada uma das regras acima.

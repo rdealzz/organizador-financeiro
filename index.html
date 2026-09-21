@@ -696,8 +696,10 @@ html[data-tema="escuro"] #splash{background:#000}
       <button class="btn sec" id="btnCSV">Exportar CSV</button>
       <button class="btn sec" id="btnRestaurar">Restaurar backup</button>
       <input type="file" id="arqBackup" accept=".json,application/json" hidden>
+      <button class="btn sec" id="btnCopias">Recuperar uma cópia</button>
       <button class="btn sec" id="zerar" style="color:var(--vermelho)">Apagar tudo</button>
     </div>
+    <div id="copias" hidden></div>
     <details style="margin-top:18px">
       <summary style="cursor:pointer;font-size:14px;font-weight:600;color:var(--txt-2)">Diagnóstico do salvamento</summary>
       <div id="diag"></div>

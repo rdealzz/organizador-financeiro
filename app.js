@@ -316,7 +316,15 @@ function migrarCategorias(){
 }
 const KEY_ANTIGA='sobra-do-mes:novo';   // dados de antes do login, neste aparelho
 let KEY=KEY_ANTIGA;
-function usarChaveDe(uid){ KEY = uid ? ('sobra-do-mes:u:'+uid) : KEY_ANTIGA; }
+function usarChaveDe(uid){
+  KEY = uid ? ('sobra-do-mes:u:'+uid) : KEY_ANTIGA;
+  /* Trocar de conta zera o que este aparelho sabe da nuvem: a versão lida, a
+     base do último acordo e — principalmente — a permissão de gravar. Sem isto
+     a conta nova herdaria a leitura da anterior e poderia gravar sem nunca ter
+     lido o documento dela. `nuvemLida` e companhia são declaradas mais abaixo,
+     junto da mesclagem. */
+  zerarSinc();
+}
 
 /* Estado da cena de fundo — declarado AQUI, no topo, de propósito.
 
@@ -372,6 +380,12 @@ let S={versao:2,tema:'auto',avatar:'',salario:0,extra:0,metaPct:20,metaVal:0,dia
        alertas:{teto:true,gasto:true,meta:true,fechamento:true,vencimento:true,contas:true,variavel:true,parcela:false},
        aTetoPct:85,aDiasFech:3,aDiasVenc:2,notifLog:{},_ultimoSalvo:0};
 let prev=[], avisoCiclo='';
+/* O que este aparelho sabe da nuvem: a base do último acordo, a versão do
+   documento que ele leu, se ele JÁ leu (sem isso não pode gravar) e quantos
+   conflitos seguidos levou. Declaradas aqui no topo pelo mesmo motivo que
+   `cena`, `retroPendente` e `viz3d`: `usarChaveDe()` roda na partida, antes do
+   fim do arquivo, e um `let` lá embaixo estaria na zona morta temporal. */
+let baseMem=null, baseTexto=null, marcaNuvem=null, nuvemLida=false, conflitos=0;
 let saindo=false;   // logout em andamento: nada mais pode gravar em disco
 
 const $=s=>document.querySelector(s);
@@ -718,7 +732,11 @@ async function copiaDeSeguranca(txt){
     const db=await idbAbrir();
     const chaves=await new Promise((res,rej)=>{ const t=db.transaction('kv','readonly');
       const q=t.objectStore('kv').getAllKeys(); q.onsuccess=()=>res(q.result||[]); q.onerror=()=>rej(q.error); });
-    const velhas=chaves.filter(k=>String(k).startsWith('copia:')).sort().slice(0,-7);
+    /* Só as cópias DIÁRIAS entram na conta das sete. `copia:versao-*` e
+       `copia:antes-da-nuvem` são outra rede de segurança, com outra vida: se
+       entrassem aqui, ocupariam as vagas e as cópias por dia seriam apagadas
+       antes da hora — justamente as que se procura quando algo se perde. */
+    const velhas=chaves.filter(k=>/^copia:\d{4}-\d{2}-\d{2}$/.test(String(k))).sort().slice(0,-7);
     if(velhas.length){ const t=db.transaction('kv','readwrite');
       velhas.forEach(k=>t.objectStore('kv').delete(k)); }
   }catch(e){}
@@ -740,7 +758,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v10.17';
+const VERSAO_APP='v10.18';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -751,10 +769,27 @@ async function copiaDeVersao(){
     S._versaoApp=VERSAO_APP;
   }catch(e){}
 }
+/* Os padrões que faltam no estado guardado. Isto é NORMALIZAÇÃO, não edição:
+   preencher um campo que a versão anterior não escrevia, ou reordenar as
+   chaves de `alertas` ao completá-las, muda o JSON sem ninguém ter tocado em
+   nada. Mora numa função só, chamada antes de `ultimoConteudo` ser fixado,
+   porque enquanto rodava DEPOIS o simples ato de abrir o app carimbava `_ts` —
+   e o aparelho parado ganhava o conflito contra o aparelho onde a pessoa
+   realmente lançou os gastos. */
+function normalizarEstado(){
+  S.alertas=Object.assign({teto:true,gasto:true,meta:true,fechamento:true,vencimento:true,
+    contas:true,variavel:true,parcela:false},S.alertas||{});
+  S.notifLog=S.notifLog||{}; S.agendaLog=S.agendaLog||{};
+  if(!Array.isArray(S.agenda)) S.agenda=AGENDA_PADRAO.map(h=>Object.assign({},h));
+}
 async function carregar(){
   try{ const v=await storeGet(KEY); if(v) S=Object.assign(S,JSON.parse(v)); }catch(e){}
+  migrarPessoas(); migrarCategorias(); rodarCiclos(); aplicarTema(); normalizarEstado();
+  /* Fixado DEPOIS de tudo o que a abertura muda sozinha: `salvar()` só carimba
+     `_ts` quando o conteúdo difere DESTE ponto, ou seja, só quando a pessoa
+     mexeu em algo de verdade. Quem grava `_ts` ganha o desempate da
+     mesclagem — então abrir o app não pode gravá-lo. */
   ultimoConteudo=conteudoDe(S);
-  migrarPessoas(); migrarCategorias(); rodarCiclos(); aplicarTema();
   $('#salario').value=S.salario||''; $('#extra').value=S.extra||'';
   $('#metaPct').value=S.metaPct||''; $('#metaVal').value=S.metaVal||'';
   $('#meses').value=S.meses||6; $('#jaTem').value=S.jaTem||'';
@@ -776,23 +811,107 @@ function baixarBackup(){
   setTimeout(()=>URL.revokeObjectURL(a.href),2000);
   $('#status').textContent='Backup baixado: '+nome;
 }
+/* Adotar um estado vindo de fora (arquivo de backup ou cópia automática).
+
+   **Recuperar não apaga o que estiver na nuvem: junta.** A base do último
+   acordo é zerada antes de gravar, e sem base a mesclagem é união — então o que
+   está sendo recuperado entra, e o que o outro aparelho lançou depois continua
+   lá. Depois do que aconteceu, o padrão de um caminho de recuperação tem que
+   ser "não perde nada"; o preço é ver reaparecer algo que a pessoa tenha
+   apagado de propósito, e apagar de novo custa um toque. */
+async function adotarEstado(dados){
+  if(!dados||typeof dados!=='object'||!('lanc' in dados)) throw new Error('formato');
+  const META_FORA=['_revisao','_ts','_ultimoSalvo'];
+  const limpo={}; Object.keys(dados).forEach(k=>{ if(!META_FORA.includes(k)) limpo[k]=dados[k]; });
+  S=Object.assign(S,limpo);
+  baseMem=null; try{ await idbDel(chaveBase()); }catch(e){}
+  migrarPessoas(); migrarCategorias(); rodarCiclos(); aplicarTema(); normalizarEstado();
+  preencherCampos(); render();
+  await salvar();                                  // carimba `_ts` de agora: isto É uma edição
+  return (S.lanc||[]).length;
+}
 function restaurarBackup(file){
   const fr=new FileReader();
-  fr.onload=()=>{
+  fr.onload=async()=>{
     try{
-      const dados=JSON.parse(fr.result);
-      if(!dados||typeof dados!=='object'||!('lanc' in dados)) throw new Error('formato');
-      S=Object.assign(S,dados);
-      migrarPessoas(); migrarCategorias(); rodarCiclos(); aplicarTema();
-      $('#salario').value=S.salario||''; $('#extra').value=S.extra||'';
-      $('#metaPct').value=S.metaPct||''; $('#metaVal').value=S.metaVal||'';
-      $('#meses').value=S.meses||6; $('#jaTem').value=S.jaTem||''; $('#diaFech').value=S.diaFech||5;
-      render(); salvar();
-      $('#status').textContent='Backup restaurado: '+S.lanc.length+' lançamentos.';
+      const n=await adotarEstado(JSON.parse(fr.result));
+      $('#status').textContent='Backup restaurado: '+n+' lançamentos.';
     }catch(e){ $('#status').innerHTML='<b style="color:var(--vermelho)">Esse arquivo não é um backup válido.</b>'; }
   };
   fr.readAsText(file);
 }
+
+/* ---------- recuperar uma cópia automática ----------
+
+   As cópias diárias existem desde a v10.14 e as de versão desde então também,
+   mas NADA no app as mostrava: quem precisasse delas teria que abrir o
+   IndexedDB pelo console do navegador. Guardar uma rede de segurança que a
+   pessoa não alcança é o mesmo que não tê-la — e foi exatamente disso que se
+   precisou quando três dias de lançamentos se perderam. */
+function rotuloDaCopia(k){
+  if(k==='copia:antes-da-nuvem') return 'Antes da última vez que juntou com a nuvem';
+  if(k.startsWith('copia:versao-')) return 'Antes de atualizar para depois da '+k.slice(13);
+  const d=k.slice(6);
+  return /^\d{4}-\d{2}-\d{2}$/.test(d)?('Cópia do dia '+dataBR(d)):k;
+}
+async function lerCopias(){
+  const fora=[];
+  try{
+    const db=await idbAbrir();
+    const chaves=await new Promise((res,rej)=>{ const t=db.transaction('kv','readonly');
+      const q=t.objectStore('kv').getAllKeys(); q.onsuccess=()=>res(q.result||[]); q.onerror=()=>rej(q.error); });
+    for(const k of chaves.filter(k=>String(k).startsWith('copia:')).sort().reverse()){
+      try{
+        const txt=await idbGet(k); if(!txt) continue;
+        const o=JSON.parse(txt);
+        fora.push({chave:String(k),dados:o,
+          lanc:(o.lanc||[]).length, faturas:(o.hist||[]).length,
+          soma:(o.lanc||[]).reduce((a,l)=>a+(+l.valor||0),0),
+          quando:+o._ts||0});
+      }catch(e){}
+    }
+  }catch(e){}
+  return fora;
+}
+let copiasAbertas=null;
+async function pintarCopias(){
+  const c=$('#copias'); if(!c) return;
+  c.hidden=false;
+  c.innerHTML='<p class="ajuda">Lendo as cópias deste aparelho…</p>';
+  copiasAbertas=await lerCopias();
+  if(!copiasAbertas.length){
+    c.innerHTML='<div class="nota aviso" style="margin:12px 0 0"><b>Não há cópia automática neste aparelho.</b> Elas são guardadas no navegador em que o app é usado — se os dados foram lançados em outro aparelho, é lá que a cópia está. Sair da conta também apaga as cópias.</div>';
+    return;
+  }
+  c.innerHTML='<p class="ajuda" style="margin-top:14px">Cópias guardadas <b>neste navegador</b> (as 7 últimas, uma por dia). Recuperar <b>não apaga</b> o que estiver na nuvem: as duas versões são juntadas, então nada se perde.</p>'
+    +copiasAbertas.map((x,i)=>`<div class="alerta-linha" style="border-top:1px solid var(--sep);padding-top:10px;margin-top:10px">
+        <div class="at"><div class="an">${esc(rotuloDaCopia(x.chave))}</div>
+          <div class="ad">${x.lanc} lançamento${x.lanc===1?'':'s'} · ${brl(x.soma)} · ${x.faturas} fatura${x.faturas===1?'':'s'} no histórico${x.quando?' · gravada '+new Date(x.quando).toLocaleString('pt-BR'):''}</div></div>
+        <button class="btn sec" data-baixar-copia="${i}">Baixar</button>
+        <button class="btn" data-usar-copia="${i}">Recuperar</button>
+      </div>`).join('');
+}
+$('#btnCopias').onclick=()=>{ const c=$('#copias'); if(c&&!c.hidden){ c.hidden=true; c.innerHTML=''; } else pintarCopias(); };
+document.addEventListener('click',async e=>{
+  const b=e.target.closest&&e.target.closest('[data-usar-copia],[data-baixar-copia]');
+  if(!b||!copiasAbertas) return;
+  const baixar=b.hasAttribute('data-baixar-copia');
+  const x=copiasAbertas[+(baixar?b.dataset.baixarCopia:b.dataset.usarCopia)];
+  if(!x) return;
+  if(baixar){
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(x.dados,null,1)],{type:'application/json'}));
+    a.download='copia-'+x.chave.slice(6)+'.json'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    return;
+  }
+  if(!confirm('Recuperar '+rotuloDaCopia(x.chave).toLowerCase()+'?\n\n'+x.lanc+' lançamentos entram no lugar dos de agora. O que estiver na nuvem é JUNTADO, não apagado — nada se perde. Se quiser, baixe primeiro um backup do estado atual.')) return;
+  try{
+    const n=await adotarEstado(x.dados);
+    toast('Cópia recuperada: '+n+' lançamentos');
+    pintarCopias();
+  }catch(err){ toast('Não consegui ler essa cópia',true); }
+});
 
 /* ---------- cálculo ---------- */
 /* ══════════ O QUE ENTRA FORA DO SALÁRIO, E O COFRE (v10.16) ══════════
@@ -5296,53 +5415,282 @@ function agendarRetentativa(){
   envioT=setTimeout(()=>{ sincProxima=0; enviarParaNuvem(); },espera);
   pintarSinc();
 }
+/* ══════════ DUAS VERSÕES DO MESMO ESTADO SE JUNTAM, NÃO SE APAGAM (v10.18)
+
+   Este bloco existe por causa de uma perda de dados real: a pessoa lançou três
+   dias de gastos num aparelho, abriu o app em outro, e os três dias sumiram —
+   dos dois lados. Eram três defeitos empilhados, e o terceiro é o de fundo:
+
+   1. **`enviarParaNuvem` gravava o documento inteiro por cima, sem perguntar
+      nada.** A `revisao` existia e só servia de contador: nunca foi usada como
+      pré-condição. Qualquer gravação de um aparelho apagava o que o outro
+      tivesse gravado desde então.
+   2. **Havia um envio agendado ANTES da primeira leitura da nuvem.**
+      `carregar()` termina em `salvar()`, que agenda o envio para 1,2 s depois;
+      `puxarDaNuvem()` é disparada em seguida e sem `await`. Numa rede lenta —
+      ou com a pessoa tocando em qualquer coisa antes de a leitura voltar — o
+      estado velho do aparelho subia primeiro e virava a verdade da conta.
+   3. **Abrir o app carimbava `_ts`.** `carregar()` fixava `ultimoConteudo`
+      ANTES de `rodarCiclos()` e das migrações; se a fatura fechou nesses três
+      dias, o conteúdo mudava e o `salvar()` do fim carimbava `_ts = agora`. O
+      aparelho PARADO passava a ter o carimbo mais novo: ganhava o conflito,
+      subia o estado velho e, na volta, o aparelho onde a pessoa realmente
+      lançou adotava o velho e apagava os três dias localmente também.
+
+   Os dois primeiros são trava e pré-condição. O terceiro é o que obriga a
+   existir isto aqui: **último-a-gravar-leva-tudo, num documento que é um JSON
+   só, sempre perde o trabalho de um dos lados.** Mesmo com todos os carimbos
+   certos, quem lança no celular e depois no computador perde um dos dois — não
+   por defeito, mas porque comparar um carimbo por DOCUMENTO não sabe que os
+   dois lados mexeram em coisas diferentes.
+
+   `mesclarEstado(base, local, remoto)` compara três versões, não duas: a
+   **base** é o estado do último acordo entre este aparelho e a nuvem (gravado
+   a cada envio ou leitura bem-sucedida). Com ela dá para saber quem mexeu em
+   quê, e as regras ficam óbvias:
+
+   * item que só um lado mexeu → vale a versão desse lado;
+   * item que os dois mexeram → vale a do carimbo mais novo (é aqui, e só aqui,
+     que alguém perde algo — e é um item, nunca três dias);
+   * item que não está na base → é NOVO, de quem o tem: entra sempre. É esta
+     linha que devolve os gastos dos dois aparelhos em vez de escolher um;
+   * item que está na base e não está num dos lados → **foi apagado ali**, e
+     apagar vale — a não ser que o outro lado o tenha EDITADO depois. Entre
+     ressuscitar um gasto e sumir com uma edição de dinheiro, ressuscitar é o
+     erro barato: aparece na lista e a pessoa apaga de novo.
+
+   **Sem base (primeira sincronização depois desta versão) a mesclagem é
+   união**: nada na base significa que nada pode ser considerado apagado. É de
+   propósito que o caso sem informação caia no lado que não perde nada.        */
+
+/* Listas de itens com identidade própria, e o campo que as identifica. A
+   fatura arquivada não tem `id` — a data do fechamento é única e é a chave
+   natural dela. */
+const LISTAS_ID={lanc:'id',div:'id',obj:'id',pessoas:'id',entradas:'id',guard:'id',agenda:'id',hist:'data'};
+/* Mapas de chave livre: a chave é o dado (a categoria em `tetos`, o alerta já
+   mostrado em `notifLog`). Mesclam-se chave por chave, como as listas. */
+const MAPAS_LIVRES=['tetos','notifLog','agendaLog','alertas'];
+/* `pai`, `com`, `divs` e `acerto` são quatro vistas do MESMO fato (v10.11), e
+   por isso viajam juntos: pegar `pai` de um lado e `divs` do outro produziria
+   um lançamento que se contradiz — exatamente o defeito que a nota da v10.11
+   mandou não repetir. Ou o bloco todo de um lado, ou o todo do outro. */
+const GRUPO_DIVISAO=['pai','com','divs','acerto'];
+
+/* Texto ESTÁVEL: mesmo conteúdo dá sempre a mesma string, independente da ordem
+   em que as chaves foram escritas. Necessário porque a mesclagem monta os
+   objetos a partir da união das chaves dos três lados e a ordem sai diferente
+   da do original — comparando com `JSON.stringify` cru, dois estados idênticos
+   pareceriam diferentes e o app gravaria na nuvem a cada leitura, de graça.
+   A ordem dos ARRAYS é preservada: em `hist` ela é informação. */
+function textoEstavel(v){
+  if(v===null||typeof v!=='object') return JSON.stringify(v===undefined?null:v);
+  if(Array.isArray(v)) return '['+v.map(textoEstavel).join(',')+']';
+  return '{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+textoEstavel(v[k])).join(',')+'}';
+}
+const conteudoEstavel=o=>{ const c={}; Object.keys(o||{}).forEach(k=>{ if(!META.includes(k)) c[k]=o[k]; }); return textoEstavel(c); };
+const mesmo=(a,b)=>textoEstavel(a)===textoEstavel(b);
+const temChave=(o,k)=>!!o&&Object.prototype.hasOwnProperty.call(o,k);
+
+/* A regra de três vias para um valor só. `localNovo` é o desempate: vale
+   quando — e só quando — os dois lados mexeram no mesmo lugar. */
+function escolher(b,l,r,localNovo){
+  if(mesmo(l,r)) return l;
+  if(mesmo(l,b)) return r;
+  if(mesmo(r,b)) return l;
+  return localNovo?l:r;
+}
+function mesclarMapa(b,l,r,localNovo){
+  b=b||{}; l=l||{}; r=r||{};
+  const saida={};
+  new Set([...Object.keys(b),...Object.keys(l),...Object.keys(r)]).forEach(k=>{
+    const temL=temChave(l,k), temR=temChave(r,k), temB=temChave(b,k);
+    if(temL&&temR){ saida[k]=escolher(b[k],l[k],r[k],localNovo); return; }
+    // Sumiu de um lado: se está na base e o outro lado não mexeu, foi apagado
+    // de propósito e fica apagado. Se mexeu, a edição vale mais.
+    if(temL){ if(!temB||!mesmo(l[k],b[k])) saida[k]=l[k]; return; }
+    if(temR){ if(!temB||!mesmo(r[k],b[k])) saida[k]=r[k]; }
+  });
+  return saida;
+}
+/* Item de lista: mesclado CAMPO A CAMPO, porque as duas mãos costumam mexer em
+   campos diferentes do mesmo gasto — um marcou "já paguei" no celular, o outro
+   corrigiu o valor no computador, e os dois têm razão. */
+function mesclarItem(b,l,r,localNovo){
+  const saida={};
+  const grupo=GRUPO_DIVISAO.some(k=>temChave(l,k)||temChave(r,k));
+  const divisaoLocal=grupo?!mesmo(GRUPO_DIVISAO.map(k=>l[k]),GRUPO_DIVISAO.map(k=>b?b[k]:undefined)):false;
+  const divisaoRemota=grupo?!mesmo(GRUPO_DIVISAO.map(k=>r[k]),GRUPO_DIVISAO.map(k=>b?b[k]:undefined)):false;
+  // Qual lado manda no bloco da divisão: quem mexeu nele; os dois, o mais novo.
+  const ladoDivisao=(divisaoLocal&&divisaoRemota)?(localNovo?l:r):divisaoLocal?l:divisaoRemota?r:(localNovo?l:r);
+  new Set([...Object.keys(b||{}),...Object.keys(l||{}),...Object.keys(r||{})]).forEach(k=>{
+    if(GRUPO_DIVISAO.includes(k)){ if(temChave(ladoDivisao,k)) saida[k]=ladoDivisao[k]; return; }
+    const temL=temChave(l,k), temR=temChave(r,k);
+    if(temL&&temR){ saida[k]=escolher(b?b[k]:undefined,l[k],r[k],localNovo); return; }
+    if(temL) saida[k]=l[k]; else if(temR) saida[k]=r[k];
+  });
+  return saida;
+}
+function mesclarLista(campo,b,l,r,localNovo){
+  const lista=v=>Array.isArray(v)?v:[];
+  /* Item sem a chave (estado editado à mão, semente antiga) entra pelo próprio
+     conteúdo: dois iguais viram um, dois diferentes sobrevivem os dois. */
+  const chaveDe=it=>(it&&it[campo]!=null&&it[campo]!=='')?'k'+it[campo]:'j'+JSON.stringify(it);
+  const indexar=v=>{ const m=new Map(); lista(v).forEach(it=>m.set(chaveDe(it),it)); return m; };
+  const mb=indexar(b), ml=indexar(l), mr=indexar(r);
+  const saida=[], vistas=new Set();
+  const juntar=k=>{
+    if(vistas.has(k)) return; vistas.add(k);
+    const ib=mb.get(k), il=ml.get(k), ir=mr.get(k);
+    if(il&&ir){ saida.push(mesclarItem(ib,il,ir,localNovo)); return; }
+    // Só de um lado: novo (não está na base) entra; apagado sai, a não ser que
+    // o lado que ficou com ele o tenha editado depois.
+    const so=il||ir;
+    if(!ib||!mesmo(so,ib)) saida.push(so);
+  };
+  lista(l).forEach(it=>juntar(chaveDe(it)));
+  lista(r).forEach(it=>juntar(chaveDe(it)));
+  /* A fatura arquivada é lida por posição em todo o app (`S.hist[0]` é a última
+     que fechou, e a retrospectiva e a fatura a pagar contam com isso), então a
+     ordem aqui não é enfeite. */
+  if(campo==='data') saida.sort((a,b2)=>String(b2.data||'').localeCompare(String(a.data||'')));
+  return saida;
+}
+function mesclarEstado(base,local,remoto){
+  base=base||{}; local=local||{}; remoto=remoto||{};
+  const tL=+local._ts||0, tR=+remoto._ts||0;
+  const localNovo=tL>=tR;
+  const saida={};
+  new Set([...Object.keys(base),...Object.keys(local),...Object.keys(remoto)]).forEach(k=>{
+    if(META.includes(k)) return;
+    if(LISTAS_ID[k]){ saida[k]=mesclarLista(LISTAS_ID[k],base[k],local[k],remoto[k],localNovo); return; }
+    if(MAPAS_LIVRES.includes(k)){ saida[k]=mesclarMapa(base[k],local[k],remoto[k],localNovo); return; }
+    const temL=temChave(local,k), temR=temChave(remoto,k);
+    if(temL&&temR){ saida[k]=escolher(base[k],local[k],remoto[k],localNovo); return; }
+    if(temL) saida[k]=local[k]; else if(temR) saida[k]=remoto[k];
+  });
+  /* O carimbo da mesclagem é o mais novo dos dois: o terceiro aparelho tem que
+     ver este estado como o mais recente, porque ele contém os dois. */
+  saida._ts=Math.max(tL,tR)||Date.now();
+  return saida;
+}
+
+/* ---------- a base do último acordo ----------
+   Guardada por conta, no IndexedDB, para sobreviver a fechar o app: sem ela a
+   mesclagem seguinte não sabe distinguir "apagado" de "ainda não chegou" e cai
+   na união — que é seguro, mas ressuscita o que a pessoa apagou. */
+const chaveBase=()=>'base:'+KEY;
+function zerarSinc(){ baseMem=null; baseTexto=null; marcaNuvem=null; nuvemLida=false; conflitos=0; }
+async function baseDoAcordo(){
+  if(baseMem) return baseMem;
+  try{ const v=await idbGet(chaveBase()); if(v){ baseMem=JSON.parse(v); baseTexto=conteudoEstavel(baseMem); } }catch(e){}
+  return baseMem;
+}
+async function gravarBase(estado){
+  try{
+    const foto=JSON.parse(conteudoDe(estado));
+    baseMem=foto; baseTexto=conteudoEstavel(foto);
+    await idbSet(chaveBase(),JSON.stringify(foto));
+  }catch(e){}
+}
+/* Junta o que veio da nuvem com o que está aqui e devolve se a tela mudou.
+   Grava uma foto do que estava neste aparelho ANTES de juntar: se a mesclagem
+   algum dia errar, existe para onde voltar sem depender de backup manual. */
+async function juntarComRemoto(remoto,silencioso){
+  const base=await baseDoAcordo();
+  const antesTexto=conteudoEstavel(S);
+  try{ await idbSet('copia:antes-da-nuvem',JSON.stringify(S)); }catch(e){}
+  const junto=mesclarEstado(base,S,remoto);
+  const juntoTexto=conteudoEstavel(junto);
+  const mudouAqui=juntoTexto!==antesTexto;
+  const faltaLa=juntoTexto!==conteudoEstavel(remoto);
+  if(mudouAqui){
+    S=Object.assign(S,junto);
+    ultimoConteudo=conteudoDe(S);      // a mesclagem não é edição: não carimba de novo
+    migrarPessoas(); migrarCategorias(); rodarCiclos(); aplicarTema(); preencherCampos(); render();
+    await storeSet(KEY,JSON.stringify(S));
+    if(!silencioso) toast('Dados atualizados desta conta');
+  }
+  if(faltaLa){
+    /* A nuvem não tem tudo o que este aparelho tem: sobe o resultado da
+       mesclagem, com a pré-condição da versão que acabamos de ler. */
+    await enviarParaNuvem();
+  }else{
+    await gravarBase(S);
+    marcarSinc('ok');
+  }
+  return mudouAqui;
+}
+
 async function enviarParaNuvem(){
   if(!Auth.logado()) return;
   if(enviando){ pendente=true; return; }
   if(!navigator.onLine){ marcarSinc('offline'); pendente=true; agendarRetentativa(); return; }
+  /* NUNCA gravar antes de ter lido, nesta sessão. Esta é a trava que faltava:
+     o `salvar()` do fim de `carregar()` agenda um envio para 1,2 s depois da
+     abertura, e sem esta linha esse envio subia o estado deste aparelho por
+     cima do que o outro tinha gravado — sem nunca ter olhado a nuvem. */
+  if(!nuvemLida){ pendente=true; await puxarDaNuvem(true); return; }
   if(estaVazio(S) && S._revisao){ marcarSinc('ok'); return; }
+  /* A nuvem já tem exatamente isto: o envio seria uma gravação idêntica. Além
+     de cobrar à toa, gravar de novo mexe na versão do documento e cria
+     conflito para o outro aparelho sem nenhuma razão. */
+  if(baseTexto && conteudoEstavel(S)===baseTexto){ pendente=false; conflitos=0; marcarSinc('ok'); return; }
   enviando=true; marcarSinc('enviando');
+  let reler=false;
   try{
-    const r=await Auth.enviarEstado(S);
-    if(r) S._revisao=r.revisao;
+    /* `marcaNuvem` é a versão do documento que este aparelho leu por último. O
+       servidor recusa a gravação se ela não for mais a versão de lá — é assim
+       que dois aparelhos gravando junto deixam de apagar um ao outro. */
+    const r=await Auth.enviarEstado(S,marcaNuvem);
+    if(r){ S._revisao=r.revisao; marcaNuvem=r.marca; }
+    await gravarBase(S);
+    conflitos=0;
     marcarSinc('ok');
   }catch(e){
     const cru=String(e.codigo||e.message||'').toUpperCase();
-    sincFatal=ERRO_SEM_VOLTA.test(cru);
-    sincMotivo=Auth.mensagemDeErro(e);
-    if(cru.includes('SEM_REDE')||!navigator.onLine){ marcarSinc('offline'); agendarRetentativa(); }
-    else if(sincFatal){ sincTentativa=0; sincProxima=0; marcarSinc('erro'); }   // repetir não resolve: precisa de ação
-    else { marcarSinc('erro'); agendarRetentativa(); }
+    if(cru.includes('CONFLITO')){ reler=true; }
+    else{
+      sincFatal=ERRO_SEM_VOLTA.test(cru);
+      sincMotivo=Auth.mensagemDeErro(e);
+      if(cru.includes('SEM_REDE')||!navigator.onLine){ marcarSinc('offline'); agendarRetentativa(); }
+      else if(sincFatal){ sincTentativa=0; sincProxima=0; marcarSinc('erro'); }   // repetir não resolve: precisa de ação
+      else { marcarSinc('erro'); agendarRetentativa(); }
+    }
   }finally{
     enviando=false;
-    if(pendente){ pendente=false; agendarEnvio(); }
   }
+  /* Conflito não se resolve repetindo o mesmo corpo — o corpo é que está
+     velho. Relê, mescla e a própria mesclagem grava de novo. O limite existe
+     para dois aparelhos ligados ao mesmo tempo não ficarem se revezando para
+     sempre; a retentativa com espera crescente assume daí. */
+  if(reler){
+    if(conflitos++<4){ await puxarDaNuvem(true); return; }
+    sincFatal=false; sincMotivo='Outro aparelho está gravando ao mesmo tempo.';
+    marcarSinc('erro'); agendarRetentativa(); return;
+  }
+  if(pendente){ pendente=false; agendarEnvio(); }
 }
-/* Puxa o que está na nuvem e resolve conflito pelo carimbo de tempo:
-   quem gravou por último ganha, e o outro lado é sobrescrito só se for mais velho. */
+/* Puxa o que está na nuvem e JUNTA com o que está aqui. Não escolhe um lado:
+   o carimbo de tempo do documento só desempata item por item, dentro da
+   mesclagem — ver o bloco grande acima. */
 async function puxarDaNuvem(silencioso){
   if(!Auth.logado()) return;
   if(!navigator.onLine){ marcarSinc('offline'); return; }
   if(!silencioso) marcarSinc('enviando');
   try{
     const linha=await Auth.puxarEstado();
-    if(!linha){ await enviarParaNuvem(); return; }
-    const remoto=linha.dados||{};
-    const tRemoto=+remoto._ts||0, tLocal=+S._ts||0;
-    // Rede de segurança: aparelho sem nada não apaga conta com dados.
-    const adotarRemoto = (!estaVazio(remoto) && estaVazio(S)) || tRemoto>tLocal;
-    if(adotarRemoto){
-      S=Object.assign(S,remoto);
-      S._revisao=linha.revisao;
-      migrarPessoas(); migrarCategorias(); rodarCiclos(); aplicarTema(); preencherCampos(); render();
-      await storeSet(KEY,JSON.stringify(S));
-      marcarSinc('ok');
-      if(!silencioso) toast('Dados atualizados desta conta');
-    }else if(tLocal>tRemoto && !estaVazio(S)){
+    nuvemLida=true;
+    if(!linha){
+      /* Não existe documento nesta conta ainda. `marcaNuvem=null` faz a
+         gravação seguinte exigir que ele continue não existindo: se outro
+         aparelho criar primeiro, o envio é recusado e a gente relê em vez de
+         apagar o que ele acabou de criar. */
+      marcaNuvem=null;
       await enviarParaNuvem();
-    }else{
-      S._revisao=linha.revisao; marcarSinc('ok');
+      return;
     }
+    marcaNuvem=linha.marca; S._revisao=linha.revisao;
+    await juntarComRemoto(linha.dados||{},silencioso);
   }catch(e){
     const cru=String(e.codigo||e.message||'').toUpperCase();
     sincFatal=ERRO_SEM_VOLTA.test(cru);
@@ -5687,10 +6035,7 @@ async function abrirApp(recemLogado, contaNova){
     }catch(e){}
   }
 
-  S.alertas=Object.assign({teto:true,gasto:true,meta:true,fechamento:true,vencimento:true,
-    contas:true,variavel:true,parcela:false},S.alertas||{});
-  S.notifLog=S.notifLog||{}; S.agendaLog=S.agendaLog||{};
-  if(!Array.isArray(S.agenda)) S.agenda=AGENDA_PADRAO.map(h=>Object.assign({},h));
+  normalizarEstado();
   preencherCampos();
 
   pintarSaudacao();
@@ -5791,6 +6136,11 @@ async function limparDadosLocais(uid){
   try{ await idbDel(chave); }catch(e){}
   try{ document.cookie=chave+'=;max-age=0;path=/'; }catch(e){}
   try{ delete memoria[chave]; }catch(e){}
+  /* A base do último acordo é uma CÓPIA do estado — sai junto, senão sair da
+     conta deixaria os dados de quem saiu num canto do aparelho. */
+  try{ await idbDel('base:'+chave); }catch(e){}
+  try{ await idbDel('copia:antes-da-nuvem'); }catch(e){}
+  zerarSinc();
   try{
     const db=await idbAbrir();
     const chaves=await new Promise((res,rej)=>{ const t=db.transaction('kv','readonly');
@@ -5801,7 +6151,7 @@ async function limparDadosLocais(uid){
   }catch(e){}
 }
 async function sairDaConta(){
-  if(!confirm('Sair da conta?\n\nSeus dados continuam salvos na nuvem e voltam quando você entrar de novo. A cópia guardada neste aparelho será apagada.')) return;
+  if(!confirm('Sair da conta?\n\nSeus dados continuam salvos na nuvem e voltam quando você entrar de novo. A cópia guardada neste aparelho é apagada — inclusive as cópias automáticas dos últimos dias, que são o caminho de “Recuperar uma cópia”. Se você está tentando recuperar algo, baixe um backup antes de sair.')) return;
   const u=Auth.usuario();
   const b=$('#btnSair'); b.disabled=true; b.textContent='Saindo…';
   try{ await enviarParaNuvem(); }catch(e){}

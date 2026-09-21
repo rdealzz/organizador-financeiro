@@ -449,7 +449,10 @@ async function puxarEstado(){
   const f = doc.fields || {};
   const dados = (f.dados && typeof f.dados.stringValue === 'string') ? JSON.parse(f.dados.stringValue) : {};
   const revisao = (f.revisao && f.revisao.integerValue != null) ? +f.revisao.integerValue : 1;
-  return {dados, revisao};
+  /* `marca` e o updateTime do documento: a versao exata que acabamos de ler.
+     Ela volta na gravacao como pre-condicao, e e o que faz o SERVIDOR recusar
+     um envio que sobrescreveria algo gravado depois desta leitura. */
+  return {dados, revisao, marca: doc.updateTime || null};
 }
 /* O Firestore recusa documentos acima de 1 MiB; a gente barra bem antes
    disso (o mesmo teto de sempre) e avisa com uma frase que se entende, em
@@ -457,22 +460,43 @@ async function puxarEstado(){
    e de forma atômica: `increment` é uma transformação do próprio Firestore,
    não uma leitura-e-escrita feita daqui. */
 const TETO_ESTADO = 512 * 1024;
-async function enviarEstado(dados){
+/* Precondicao recusada: entre a nossa leitura e esta gravacao alguem gravou
+   naquele documento — o outro aparelho da pessoa. NAO e erro de rede nem de
+   permissao, e sobretudo nao e para tentar de novo com o mesmo corpo: o corpo
+   e que esta velho. Quem chama tem que reler, mesclar e gravar de novo. */
+const PRECONDICAO = /FAILED_PRECONDITION|does not match|already exists|stored version/i;
+function ehConflito(e){
+  const m = String((e && (e.codigo || e.message)) || '');
+  return (e && (e.status === 400 || e.status === 409 || e.status === 412)) && PRECONDICAO.test(m);
+}
+/* `marca` e a versao do documento que quem chama leu por ultimo:
+     string  → grava so se o documento ainda estiver nessa versao;
+     null    → grava so se o documento AINDA NAO EXISTIR (primeira gravacao);
+     undefined → sem pre-condicao. E a porta de tras do "substituir mesmo":
+                 usar sem ter lido a nuvem antes e exatamente o defeito que
+                 apagava os dados do outro aparelho. */
+async function enviarEstado(dados, marca){
   const u = usuario(); if(!u) throw erro('sem_sessao');
   const texto = JSON.stringify(dados);
   const tamanho = new Blob([texto]).size;
   if(tamanho > TETO_ESTADO) throw erro('estado_grande');
-  const r = await chamarFirestore(':commit', {method:'POST', limite: 45000, body:{
-    writes: [{
-      update: {name: nomeDoDocumento(u.id), fields: {dados: {stringValue: texto}}},
-      updateMask: {fieldPaths: ['dados']},
-      updateTransforms: [{fieldPath: 'revisao', increment: {integerValue: '1'}}]
-    }]
-  }});
+  const escrita = {
+    update: {name: nomeDoDocumento(u.id), fields: {dados: {stringValue: texto}}},
+    updateMask: {fieldPaths: ['dados']},
+    updateTransforms: [{fieldPath: 'revisao', increment: {integerValue: '1'}}]
+  };
+  if(marca !== undefined) escrita.currentDocument = marca ? {updateTime: marca} : {exists: false};
+  let r;
+  try{
+    r = await chamarFirestore(':commit', {method:'POST', limite: 45000, body:{writes: [escrita]}});
+  }catch(e){
+    if(ehConflito(e)) throw erro('conflito');
+    throw e;
+  }
   const resultado = r && r.writeResults && r.writeResults[0];
   const transformado = resultado && resultado.transformResults && resultado.transformResults[0];
   const revisao = transformado && transformado.integerValue != null ? +transformado.integerValue : 1;
-  return {dados, revisao};
+  return {dados, revisao, marca: (resultado && resultado.updateTime) || (r && r.commitTime) || null};
 }
 async function apagarEstadoNaNuvem(){
   const u = usuario(); if(!u) throw erro('sem_sessao');
@@ -492,6 +516,7 @@ function mensagemDeErro(e){
   }
   if(cru.includes('ESTADO_GRANDE'))       return 'Seus dados passaram do tamanho que a nuvem aceita. Arquive meses antigos ou baixe um backup.';
   if(cru.includes('PERMISSION_DENIED'))   return 'O servidor recusou essa gravação. Se continuar, entre de novo.';
+  if(cru.includes('CONFLITO'))            return 'Outro aparelho seu gravou primeiro. Juntando as duas versões…';
   if(cru.includes('INVALID_LOGIN_CREDENTIALS')||cru.includes('INVALID_PASSWORD')||cru.includes('EMAIL_NOT_FOUND'))
                                           return 'E-mail ou senha não conferem. Confira e tente de novo.';
   if(cru.includes('EMAIL_EXISTS')||cru.includes('EMAIL_ALREADY'))
