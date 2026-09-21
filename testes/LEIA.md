@@ -50,7 +50,9 @@ falhar.
   (gastar / guardar / meio a meio) cai onde promete, o depósito de uma entrada
   não se duplica quando o valor muda, o objetivo anda sozinho com o depósito e
   **o fechamento do ciclo não cria nem some dinheiro** — o saldo antes e depois
-  da compactação é o mesmo número.
+  da compactação é o mesmo número. Cobre também o ajuste da meta de um ciclo
+  (v10.17): ele muda o disponível na mesma medida, não encosta em `metaPct`
+  nem em `metaVal`, deixa o extra somar por cima e expira sozinho pela data.
 
 * **`valida-conta.js`** — duplicidade de e-mail e recuperação por código, com o
   Firebase **emulado na rede da página**: apelidos do Gmail caindo numa conta

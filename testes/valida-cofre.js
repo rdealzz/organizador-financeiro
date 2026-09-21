@@ -75,15 +75,29 @@ const eh=(n,v,d)=>{(v?ok:bad).push(n+(v?'':'  →  '+JSON.stringify(d)));};
   // 9. fechamento: arquiva, compacta e o saldo NÃO muda
   base(); S.obj=[{id:'viagem',nome:'Viagem',alvo:3000,tem:0,prazo:10}];
   entrada('freela',900,400,'2020-01-02'); mov(250,'dep','viagem','2020-01-03');
+  S.metaCiclo={ate:iso(proximoFech()),valor:700};
   const saldoAntes=saldoGuardado();
   fecharCiclo('2020-02-05');
   R.fech={saldoIgual:Math.abs(saldoGuardado()-saldoAntes)<0.01, saldo:saldoGuardado(),
           entrou:S.hist[0].entrou, entrouGuardar:S.hist[0].entrouGuardar, guardado:S.hist[0].guardado,
           nEntradasHist:(S.hist[0].entradas||[]).length,
           sobrouGuard:S.guard.length, sobrouEntradas:S.entradas.length,
-          objTem:S.obj[0].tem, jaTem:S.jaTem};
+          objTem:S.obj[0].tem, jaTem:S.jaTem, ajusteLimpo:!S.metaCiclo};
 
-  // 10. depois do fechamento o ciclo novo começa zerado
+  // 10. ajuste da meta de UM ciclo
+  base(); const semAjuste=calc();
+  S.metaCiclo={ate:iso(proximoFech()),valor:400};
+  const cAj=calc();
+  R.ajuste={meta:cAj.meta,padrao:cAj.metaPadrao,disp:cAj.disponivel,ajustada:cAj.ajustada,
+            dispAntes:semAjuste.disponivel,metaAntes:semAjuste.meta,
+            pctIntacto:S.metaPct,valIntacto:S.metaVal};
+  // o extra mandado pro cofre continua somando POR CIMA do ajuste
+  entrada('venda',600,600); R.ajusteComExtra={metaMes:calc().metaMes,disp:calc().disponivel};
+  // e ele morre sozinho quando a data passa
+  S.entradas=[]; S.guard=[]; S.metaCiclo={ate:'2020-01-01',valor:400};
+  R.ajusteVelho={meta:calc().meta,ajustada:calc().ajustada};
+
+  // 11. depois do fechamento o ciclo novo começa zerado
   R.aposFech=(()=>{const c=calc();return {entrou:c.entrou,guardado:c.guardado,metaMes:c.metaMes,meta:c.meta};})();
   return R;
  });
@@ -139,6 +153,18 @@ const eh=(n,v,d)=>{(v?ok:bad).push(n+(v?'':'  →  '+JSON.stringify(d)));};
  cmp('as entradas saem da lista viva',r.fech.sobrouEntradas,0);
  cmp('o depósito com destino virou saldo do objetivo',r.fech.objTem,250);
  cmp('o resto virou ponto de partida do cofre',r.fech.jaTem,1400);
+ eh('o fechamento apaga o ajuste daquele mês',r.fech.ajusteLimpo,r.fech);
+
+ cmp('ajustar o mês muda a meta só dele',r.ajuste.meta,400);
+ cmp('a regra permanente continua onde estava',r.ajuste.padrao,1000);
+ cmp('guardar R$ 600 a menos libera R$ 600 pra gastar',r.ajuste.disp-r.ajuste.dispAntes,600);
+ eh('o app sabe que o mês está ajustado',r.ajuste.ajustada,r.ajuste);
+ cmp('o percentual configurado não é tocado',r.ajuste.pctIntacto,20);
+ cmp('nem o valor fixo',r.ajuste.valIntacto,0);
+ cmp('o extra pro cofre soma POR CIMA do ajuste',r.ajusteComExtra.metaMes,1000);
+ cmp('e não mexe no disponível ajustado',r.ajusteComExtra.disp,4600);
+ cmp('ajuste de ciclo passado não vale mais',r.ajusteVelho.meta,1000);
+ eh('e o app volta a dizer que o mês é normal',!r.ajusteVelho.ajustada,r.ajusteVelho);
 
  cmp('o ciclo novo começa sem entradas',r.aposFech.entrou,0);
  cmp('o ciclo novo começa sem nada guardado',r.aposFech.guardado,0);

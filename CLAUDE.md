@@ -1300,6 +1300,50 @@ tem os campos, e zero é a verdade para elas.
 * **Rendimento do que está guardado.** Precisaria de índice e data por
   aplicação — outro app, não este.
 
+## A meta é fixa, o MÊS não é (v10.17)
+
+A queixa, nas palavras de quem usa: *"a reserva é um valor fixo, porém tem mês
+que vou ter que diminuir e mês que vou aumentar — e se eu ganho uma grana a
+mais, seria legal poder gastar R$ 100 a mais"*.
+
+Baixar o percentual em *Renda e meta* resolveria dezembro e estragaria março:
+aquele campo é a **regra permanente**, e quem troca 20% por 10% num aperto
+continua guardando 10% seis meses depois sem perceber. Ajuste de mês tem que
+morrer com o mês.
+
+**`S.metaCiclo = {ate, valor}`** é o ajuste de UM ciclo, e a data é o que o
+mata: `ate` guarda o fechamento a que ele pertence, e `ajusteDoCiclo()`
+devolve `null` assim que essa data passa. É a ideia do `l.pagoAte` da v9.3 —
+guardar a DATA a que a marca se refere em vez de um `true` que alguém teria
+que limpar à mão todo mês, porque ninguém limpa. `fecharCiclo` ainda apaga o
+campo, mas isso é higiene: o cálculo já estaria certo sem ela.
+
+Daí saíram duas leituras que o `calc()` devolve separadas, e misturá-las é o
+defeito que isto evita:
+
+* **`metaPadrao`** — a regra permanente (o % ou o valor fixo). É ela que
+  aparece no cartão *Guardar por mês*, na nota de "ritmo saudável" e nos
+  R$ ×12 do ano: são afirmações sobre o hábito, não sobre setembro.
+* **`meta`** — o que vale NESTE ciclo. É ela que entra no `disponivel`, no
+  teto das categorias e no *quanto posso gastar hoje*.
+
+**O ajuste diz o efeito em dinheiro do DIA**, e é isso que responde ao pedido:
+"guardar R$ 200 a menos este mês sobram R$ 200 pra gastar — R$ 14,29 por dia
+até a fatura fechar". Número sem consequência ninguém usa; a pergunta por trás
+de mexer na meta é sempre quanto isso me dá por dia. O mesmo bloco soma a
+linha do extra: *"os R$ 1.200 que entraram e você deixou pra gastar são
+R$ 85,71 por dia a mais"*.
+
+Dois cuidados que custaram teste:
+
+1. **`S.metaCiclo.valor` substitui a parte FIXA da meta, e o que veio de
+   entrada extra continua somando por cima** (`metaMes = meta + entrouGuardar`).
+   Se o ajuste sobrescrevesse o total, ajustar o mês apagaria em silêncio o
+   que a pessoa acabou de mandar pro cofre na aba *Entrou*.
+2. **`S.metaPct` e `S.metaVal` não são tocados** — há asserção para os dois.
+   O dia em que o ajuste escrever na regra permanente, o defeito volta a ser
+   o que esta versão veio consertar.
+
 ## Detalhes da implementação que importam
 
 - `auth.js` fala com as APIs REST do Firebase por `fetch` puro — **sem SDK, sem

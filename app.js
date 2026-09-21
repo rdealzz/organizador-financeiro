@@ -542,6 +542,9 @@ function fecharCiclo(dataStr){
     if(o) o.tem=Math.max((+o.tem||0)+sinalMov(m),0);
     else S.jaTem=Math.max((+S.jaTem||0)+sinalMov(m),0);
   });
+  /* O ajuste era só daquele mês: some junto com ele. `ajusteDoCiclo()` já o
+     ignoraria pela data, mas deixá-lo no estado é sujeira que um dia confunde. */
+  delete S.metaCiclo;
   S.guard=(S.guard||[]).filter(m=>!antes(m.data));
   S.entradas=(S.entradas||[]).filter(e=>!antes(e.data));
   S.hist=S.hist.slice(0,24);
@@ -737,7 +740,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v10.16';
+const VERSAO_APP='v10.17';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -824,6 +827,27 @@ function restaurarBackup(file){
    `calc().gasto`: guardar dinheiro não é gastá-lo, e tirar do cofre não é
    ganhar de novo — é a mesma regra do reembolso da v10.14, que existe para o
    mesmo dinheiro não ser contado duas vezes. */
+/* ── A meta é fixa, o MÊS não é (v10.17) ─────────────────────────────────
+   "Tem mês que vou ter que guardar menos, e mês que dá pra guardar mais."
+
+   Mexer no percentual de *Renda e meta* resolveria o mês e estragaria os
+   outros: aquele campo é a regra permanente, e quem baixa de 20% para 10%
+   num aperto de dezembro continua guardando 10% em março sem perceber. Por
+   isso o ajuste é de UM CICLO e **morre sozinho** — `S.metaCiclo` guarda o
+   valor junto da data do fechamento a que ele pertence (`ate`), e assim que
+   essa data passa a meta volta ao normal sem ninguém precisar desfazer.
+
+   É a mesma ideia do `l.pagoAte` da v9.3: guardar a DATA a que a marca se
+   refere, em vez de um `true` que alguém teria que limpar à mão todo mês —
+   e ninguém limpa. */
+const metaBase=()=>(+S.metaVal>0)?+S.metaVal:((+S.salario||0)+(+S.extra||0))*((+S.metaPct||0)/100);
+function ajusteDoCiclo(){
+  const a=S.metaCiclo;
+  if(!a||!(a.valor>=0)) return null;
+  return (a.ate&&a.ate>iso(hojeD()))?a:null;   // fechou o ciclo, acabou o ajuste
+}
+const metaEmVigor=()=>{ const a=ajusteDoCiclo(); return a?Math.max(+a.valor||0,0):metaBase(); };
+
 const mesmoId=(a,b)=>String(a)===String(b);
 const parteGuardada=e=>{ const v=Math.max(+e.valor||0,0); return Math.min(Math.max(+e.guardar||0,0),v); };
 const parteGastavel=e=>Math.max(+e.valor||0,0)-parteGuardada(e);
@@ -872,7 +896,10 @@ function calc(){
     pai+=Math.min(+l.pai||0,l.valor);
     t[l.tier]+=v; porCat[l.cat]=(porCat[l.cat]||0)+v; });
   const gasto=t[1]+t[2]+t[3];
-  const meta=(+S.metaVal>0)?+S.metaVal:rendaBase*((+S.metaPct||0)/100);
+  /* `metaPadrao` é a regra permanente; `meta` é o que vale NESTE ciclo — as
+     duas são iguais enquanto ninguém ajustar o mês. */
+  const metaPadrao=metaBase();
+  const meta=metaEmVigor();
   /* A meta DESTE ciclo sobe com o que a pessoa mandou guardar do extra; o
      disponível sobe com o que ela mandou gastar. Um extra inteiro para o
      cofre não muda uma vírgula do quanto se pode gastar — que é o ponto. */
@@ -895,6 +922,7 @@ function calc(){
   const proxBruto=prox.reduce((s,l)=>s+(+l.valor||0),0);
   const proxMeu=prox.reduce((s,l)=>s+meuValor(l),0);
   return {renda,rendaBase,entrou,entrouGastar,entrouGuardar,entradas,
+          metaPadrao,ajustada:!!ajusteDoCiclo(),
           guardado:guardadoNoCiclo(),cofre:saldoGuardado(),metaMes,
           gasto,bruto,avista,avistaMeu,pai,t,porCat,meta,disponivel,tetos,excesso,somaExcesso,futuro,fontes,
           proxBruto,proxMeu,proxN:prox.length,
@@ -1036,14 +1064,16 @@ function renderFatura(c){
 function renderMeta(c){
   pintarChipsMeta();
   $('#cardsMeta').innerHTML=`
-   <div class="card"><div class="l">Guardar por mês</div><div class="v" style="color:var(--verde)">${brl(c.meta)}</div><div class="n">${c.rendaBase>0?pct(c.meta/c.rendaBase)+' da renda fixa':''}${c.entrouGuardar>0?' · +'+brl(c.entrouGuardar)+' de extras':''}</div></div>
+   <div class="card"><div class="l">Guardar por mês</div><div class="v" style="color:var(--verde)">${brl(c.metaPadrao)}</div><div class="n">${c.rendaBase>0?pct(c.metaPadrao/c.rendaBase)+' da renda fixa':''}${c.entrouGuardar>0?' · +'+brl(c.entrouGuardar)+' de extras':''}</div></div>
    <div class="card"><div class="l">Sobra pra viver</div><div class="v">${brl(c.disponivel)}</div><div class="n">vira teto das categorias</div></div>
    <div class="card"><div class="l">Em 12 meses</div><div class="v">${brl(c.meta*12)}</div></div>`;
   const n=$('#notaMeta'); if(!c.rendaBase){ n.innerHTML=''; return; }
-  const p=c.meta/c.rendaBase;
-  n.innerHTML = p>0.4 ? `<div class="nota aviso">Guardar ${pct(p)} é agressivo demais pra manter no longo prazo. Entre 20% e 30% é o ritmo que se sustenta.</div>`
+  const p=c.metaPadrao/c.rendaBase;
+  const aj=ajusteDoCiclo();
+  const avisoCiclo2=aj?`<div class="nota info">Só neste ciclo a meta está em <b>${brl(+aj.valor||0)}</b>, ajustada por você — ela volta sozinha para ${brl(c.metaPadrao)} quando a fatura fechar. <button class="link" data-ir="plano:guardar">Ver o ajuste</button></div>`:'';
+  n.innerHTML = avisoCiclo2 + (p>0.4 ? `<div class="nota aviso">Guardar ${pct(p)} é agressivo demais pra manter no longo prazo. Entre 20% e 30% é o ritmo que se sustenta.</div>`
    : p<0.1 ? `<div class="nota">Guardar menos de 10% faz qualquer imprevisto virar dívida. Se der, vale testar um pouco mais.</div>`
-   : `<div class="nota">Ritmo saudável. ${brl(c.meta)} por mês são ${brl(c.meta*12)} em um ano.</div>`;
+   : `<div class="nota">Ritmo saudável. ${brl(c.metaPadrao)} por mês são ${brl(c.metaPadrao*12)} em um ano.</div>`);
 }
 
 let histSel=0;
@@ -2017,6 +2047,28 @@ function renderCofre(c){
       ? `Meta deste ciclo cumprida: <b>${brl(feito)}</b> guardados.`
       : `Faltam <b>${brl(falta)}</b> para a meta deste ciclo — ${brl(falta/dias)} por dia nos ${dias} dia${dias===1?'':'s'} que faltam.`}</div>`:'';
 
+  /* O ajuste do mês, com o efeito escrito em dinheiro do DIA — que é a
+     pergunta real por trás de "guardar R$ 100 a menos": quanto isso me dá
+     por dia até a fatura fechar. Número sem consequência ninguém usa. */
+  const passo=v=>`<button class="tecla tecla-chip" type="button" data-metamais="${v}"><span class="tecla-face">${v>0?'+':'−'}R$ ${Math.abs(v)}</span></button>`;
+  const dif=alvo-c.metaPadrao;
+  $('#metaCiclo').innerHTML=`
+    <div class="metas-rapidas" role="group" aria-label="Ajustar a meta deste ciclo">
+      ${passo(-200)}${passo(-100)}${passo(100)}${passo(200)}
+      ${c.ajustada?'<button class="tecla tecla-chip" type="button" data-metavolta><span class="tecla-face">Voltar ao normal</span></button>':''}
+    </div>
+    <div class="grade g2" style="margin-top:10px">
+      <div><label for="mCiclo">Ou um valor exato só deste mês</label>
+        <input type="number" inputmode="decimal" id="mCiclo" min="0" step="0.01" placeholder="${c.metaPadrao.toFixed(2)}" value="${c.ajustada?(alvo-c.entrouGuardar).toFixed(2):''}"></div>
+      <div><button class="btn sec" id="aplicaMetaCiclo">Valer só neste ciclo</button></div>
+    </div>
+    <div class="nota${c.ajustada?' info':''}" style="margin-top:12px">${c.ajustada
+      ? `Só neste ciclo você quer guardar <b>${brl(alvo-c.entrouGuardar)}</b>, e não os ${brl(c.metaPadrao)} de sempre —
+         ${dif<0?`sobra <b>${brl(-dif)}</b> a mais pra gastar, ${brl(-dif/dias)} por dia`:dif>0?`são <b>${brl(dif)}</b> a menos pra gastar, ${brl(dif/dias)} por dia`:'sem mudança no que dá pra gastar'}.
+         <b>No próximo ciclo volta sozinho</b> para ${brl(c.metaPadrao)} — a regra permanente não foi tocada.`
+      : `Guardando <b>${brl(c.metaPadrao)}</b>, que é o seu normal. Cada ${brl(100)} a menos aqui viram <b>${brl(100/dias)} por dia</b> pra gastar até a fatura fechar, e valem só neste ciclo.`}
+      ${c.entrouGastar>0?`<br>Os <b>${brl(c.entrouGastar)}</b> que entraram e você deixou pra gastar já estão somados: são ${brl(c.entrouGastar/dias)} por dia a mais.`:''}</div>`;
+
   const sel=$('#gObj'); if(sel) sel.innerHTML=opcoesDestino(sel.value);
 
   const movs=movDoCiclo().slice().sort((a,b)=>String(b.data).localeCompare(String(a.data)));
@@ -2431,6 +2483,24 @@ function removerCom(lista,id,rotulo){
 }
 
 /* ---------- cofre e entradas ---------- */
+/* Ajustar a meta de UM ciclo. O valor guardado é a parte fixa (o que vem do
+   salário); o que veio de entrada extra continua somando por cima, senão
+   ajustar o mês apagaria o que a pessoa acabou de mandar pro cofre. */
+function ajustarMetaCiclo(valor){
+  const v=Math.max(+valor||0,0);
+  if(Math.abs(v-metaBase())<0.005){ delete S.metaCiclo; }
+  else S.metaCiclo={ate:iso(proximoFech()),valor:v};
+  render(); salvar(); vibrar(10);
+  toast(S.metaCiclo?'Só neste ciclo: guardar '+brl(v):'Meta de volta ao normal');
+}
+document.addEventListener('click',e=>{
+  const mais=e.target.closest('[data-metamais]');
+  if(mais) ajustarMetaCiclo(metaEmVigor()+(+mais.dataset.metamais||0));
+  if(e.target.closest('[data-metavolta]')) ajustarMetaCiclo(metaBase());
+  if(e.target.closest('#aplicaMetaCiclo')){
+    const el=$('#mCiclo'); ajustarMetaCiclo(el&&el.value!==''?+el.value:metaBase());
+  }
+});
 $('#addGuard').onclick=()=>guardarMovimento('dep');
 $('#addSaque').onclick=()=>guardarMovimento('saq');
 function guardarMovimento(tipo){
@@ -2498,7 +2568,7 @@ document.addEventListener('click',e=>{
 });
 $('#zerar').onclick=()=>{ if(confirm('Apagar tudo e recomeçar do zero?')){
   S=Object.assign({},S,{salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:12,
-     ultimoFech:iso(ultimoFechPassado()),hist:[],tetos:{},lanc:[],div:[],obj:[],pessoas:[],meses:6,jaTem:0,entradas:[],guard:[],notifLog:{},agendaLog:{},retroVista:null,orcaOculto:null,orcaEm:null});
+     ultimoFech:iso(ultimoFechPassado()),hist:[],tetos:{},lanc:[],div:[],obj:[],pessoas:[],meses:6,jaTem:0,entradas:[],guard:[],metaCiclo:null,notifLog:{},agendaLog:{},retroVista:null,orcaOculto:null,orcaEm:null});
   ['salario','extra','jaTem','metaVal'].forEach(i=>$('#'+i).value=''); $('#metaPct').value=20; $('#meses').value=6;
   avisoCiclo=''; render(); salvar();
   Auth.apagarEstadoNaNuvem().catch(()=>{});
