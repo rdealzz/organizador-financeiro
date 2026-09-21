@@ -49,7 +49,7 @@ const cmp=(n,a,b)=>eh(n,JSON.stringify(a)===JSON.stringify(b),[a,b]);
  }
  await p.evaluate(()=>{irPara('gastos');render();});
  await p.evaluate(()=>{document.querySelectorAll('.bloco[hidden]').forEach(e=>e.hidden=false);
-                       const t=document.querySelector('#blocoTodos'); if(t)t.hidden=false;});
+                       abrirTodosOsGastos();});
 
  // ── 2. a tabela de lançamentos
  const tab=await p.evaluate(()=>({
@@ -61,6 +61,7 @@ const cmp=(n,a,b)=>eh(n,JSON.stringify(a)===JSON.stringify(b),[a,b]);
  eh('cada gasto tem botão editar',tab.editar>=5,tab);
  eh('cada gasto tem select de categoria',tab.cats>=5,tab);
  eh('gasto rachado vira botão, não select',tab.pags===4&&tab.editar>=6,tab);
+ await p.evaluate(()=>fecharTodosOsGastos());   // camada aberta esconderia o resto do teste
 
  await semErro('trocar categoria na linha', ()=>p.evaluate(()=>{
    const s=document.querySelector('#tbLanc [data-cat="mercado"]'); s.value='comida';
@@ -198,6 +199,59 @@ const cmp=(n,a,b)=>eh(n,JSON.stringify(a)===JSON.stringify(b),[a,b]);
    try{baixarBackup();}catch(e){return{erro:String(e)};}URL.createObjectURL=old;return{tam:t?t.size:0};});
  eh('backup gera arquivo',bkp.tam>200,bkp);
 
+ // ── 7b. a lista completa é uma CAMADA: abre por cima, não rola a página
+ /* Fecha o que as seções anteriores deixaram aberto: com a folha de edição na
+    tela o Esc é dela, e com razão — é ela que está por cima. */
+ const antesY=await p.evaluate(()=>{
+   if(typeof folhaAberta!=='undefined'&&folhaAberta) fecharFolha();
+   fecharTodosOsGastos(); window.scrollTo(0,0); return window.scrollY;});
+ await p.waitForTimeout(150);
+ await p.evaluate(()=>abrirTodosOsGastos()); await p.waitForTimeout(120);
+ const cam=await p.evaluate(()=>({
+   aberta:!document.querySelector('#blocoTodos').hidden,
+   fixa:getComputedStyle(document.querySelector('#blocoTodos')).position,
+   rolou:window.scrollY,
+   dialogo:document.querySelector('#blocoTodos').getAttribute('role'),
+   linhas:document.querySelectorAll('#tbLanc tr').length}));
+ eh('ver todos abre a camada',cam.aberta&&cam.fixa==='fixed',cam);
+ eh('e a página não sai do lugar',cam.rolou===antesY,cam);
+ eh('a camada se anuncia como diálogo',cam.dialogo==='dialog',cam);
+ eh('com as linhas dentro dela',cam.linhas>2,cam);
+
+ // a busca filtra E o rodapé para de somar o ciclo inteiro
+ const bus=await p.evaluate(()=>{
+   const l=S.lanc[0]; const alvo=l.nome;
+   const campo=document.querySelector('#todosBusca');
+   campo.value=alvo; campo.dispatchEvent(new Event('input',{bubbles:true}));
+   const html=document.querySelector('#tbLanc').innerHTML;
+   return {alvo,linhas:document.querySelectorAll('#tbLanc tr').length,
+     somaHonesta:/Soma do que está sendo mostrado/.test(html),
+     semTotalDoCiclo:!/Total desta fatura|Total do ciclo/.test(html),
+     resumoEscondido:getComputedStyle(document.querySelector('#cards2')).display==='none',
+     sub:document.querySelector('#todosSub').textContent};
+ });
+ eh('a busca filtra a lista',bus.linhas>0&&bus.linhas<40,bus);
+ eh('e o rodapé soma só o que está na tela',bus.somaHonesta&&bus.semTotalDoCiclo,bus);
+ eh('o resumo do ciclo some enquanto filtra',bus.resumoEscondido,bus);
+ eh('o subtítulo diz quantos de quantos',/de \d+ gastos/.test(bus.sub),bus);
+ const vazio=await p.evaluate(()=>{
+   const campo=document.querySelector('#todosBusca');
+   campo.value='zzzznaoexiste'; campo.dispatchEvent(new Event('input',{bubbles:true}));
+   return document.querySelector('#tbLanc').textContent;});
+ eh('busca sem resultado diz isso',/Nenhum gasto/.test(vazio),vazio);
+ // Esc fecha e limpa a busca: reabrir filtrado, sem lembrar do filtro, é a
+ // lista mentindo sobre quantos gastos existem.
+ const guarda=await p.evaluate(()=>({cal:document.querySelector('#cal').hidden,
+   recibo:document.querySelector('#recibo').hidden,folha:folhaAberta}));
+ eh('nenhuma outra camada está por cima na hora do Esc',guarda.cal&&guarda.recibo&&!guarda.folha,guarda);
+ await p.keyboard.press('Escape'); await p.waitForTimeout(120);
+ const fim=await p.evaluate(()=>({fechada:document.querySelector('#blocoTodos').hidden,
+   busca:document.querySelector('#todosBusca').value,
+   corpoLivre:document.body.style.overflow}));
+ eh('Esc fecha a camada',fim.fechada,fim);
+ eh('e a busca não sobrevive ao fechamento',fim.busca==='',fim);
+ eh('a página volta a rolar',fim.corpoLivre!=='hidden',fim);
+
  // ── 8. nenhuma tela ficou transparente com a esfera ligada
  await p.evaluate(()=>{document.body.classList.add('fundo-vivo');});
  for(const tema of ['claro','escuro']){
@@ -206,6 +260,13 @@ const cmp=(n,a,b)=>eh(n,JSON.stringify(a)===JSON.stringify(b),[a,b]);
    const fundo=await p.evaluate(()=>getComputedStyle(document.querySelector('#cal')).backgroundColor);
    eh(`calendário opaco no tema ${tema}`,!/rgba\(0, 0, 0, 0\)|transparent/.test(fundo),fundo);
    await p.evaluate(()=>fecharCalendario());
+   /* Tela cheia nova entra na mesma conferência: a lista completa usa as
+      variáveis do tema, então escuro fixo a quebraria no claro — lição da
+      v10.6, que nasceu exatamente assim no calendário. */
+   await p.evaluate(()=>abrirTodosOsGastos()); await p.waitForTimeout(80);
+   const ft=await p.evaluate(()=>getComputedStyle(document.querySelector('#blocoTodos')).backgroundColor);
+   eh(`lista completa opaca no tema ${tema}`,!/rgba\(0, 0, 0, 0\)|transparent/.test(ft),ft);
+   await p.evaluate(()=>fecharTodosOsGastos());
  }
  await p.evaluate(()=>{document.body.classList.remove('fundo-vivo');});
 

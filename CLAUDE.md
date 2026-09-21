@@ -1842,3 +1842,76 @@ não grava o que a nuvem já tem, palavra por palavra.
 `testes/valida-sinc.js` (26 verificações) reproduz o cenário da perda inteiro
 com uma nuvem falsa — aparelho parado há três dias, fatura fechando no meio — e
 guarda cada uma das regras acima.
+
+## "Ver todos" jogava a pessoa no rodapé da página (v10.19)
+
+A queixa: *"esta aba deverá aparecer melhor ao clicar, me leva pra baixo do
+site, e muito confusa a visualização"*.
+
+Os dois defeitos eram um só, visto de dois lados. `Todos os gastos do ciclo`
+era uma `<section hidden>` no **fim da área Hoje**, e `ver todos` fazia
+`hidden=false` + `scrollIntoView`. Quem clicava era levado ao rodapé de uma
+página comprida — longe de onde estava, sem título à vista depois da rolagem,
+e com o caminho de volta sendo rolar para cima. A lista chegava sem contexto.
+
+**Ela virou uma CAMADA**, como o calendário (v10.5) e o extrato (v10.14), e
+pelo mesmo motivo escrito lá: isto serve a qualquer momento, não é uma tela de
+Hoje. Abre por cima de onde a pessoa está, fecha no × ou no `Esc`, e **a página
+não se mexe** — fechar devolve exatamente a tela que estava antes.
+
+Três coisas que a mudança exigiu:
+
+1. **O cabeçalho não rola com a lista.** A camada não rola; quem rola é o
+   corpo. Com a página inteira rolando, na vigésima linha o × e a busca já
+   teriam subido para fora da tela.
+2. **`Esc` só fecha se esta for a camada de CIMA.** O calendário, o extrato e a
+   folha de edição abrem por cima desta, e o ouvinte está na captura, antes dos
+   outros — sem o guarda, `Esc` fechava a lista de baixo e deixava na tela a
+   camada que a pessoa estava olhando. **Foi o teste que pegou**, e não por
+   sorte: a suíte deixava a folha aberta, que é exatamente o caso real.
+3. **Opaca com a cor do TEMA**, não com o `#08131F` fixo da lista de
+   superfícies flutuantes — a lição da v10.6, que nasceu assim no calendário.
+   Tela cheia cujo conteúdo usa as variáveis do tema não aceita escuro fixo.
+   `valida-ui` confere as duas telas cheias, nos dois temas, com a esfera ligada.
+
+### A visualização: no celular a tabela vira CARTÃO
+
+Sete colunas em 430px só cabiam com rolagem horizontal — e rolar de lado para
+ler um valor é a definição de confuso, porque **some a Descrição**, que é a
+coluna que diz de qual gasto se trata. Abaixo de 820px cada linha vira um bloco
+com o nome em cima e os campos embaixo, cada um com seu rótulo.
+
+**O rótulo vem de um `data-r` na própria célula**, não de uma segunda lista de
+nomes: um `<td>` sem `data-r` simplesmente não ganha rótulo, e não existe o
+risco de o rótulo do cartão discordar do `<th>` da tabela. É o mesmo raciocínio
+do `catDe()` da v10.10 — uma fonte só.
+
+Duas medidas que vieram de olhar a tela, não de imaginá-la:
+
+* **O resumo em cartões empurrava o primeiro gasto para fora da tela.** Sete
+  cartões com legenda ocupavam 850px antes da primeira linha — quem tocou em
+  "ver todos" quer a LISTA. Dentro da camada eles ficam compactos, e no celular
+  a legenda de cada um some: ela repete o que as colunas do cartão já dizem.
+* **O aviso "esta é a fatura em formação" repetia as datas** que o subtítulo da
+  camada passou a dizer. Sobrou dele o que o subtítulo não diz: que o que se
+  lança hoje não cai na fatura que já fechou.
+
+### A busca, e o total que não mente
+
+Com vinte gastos, achar "aquele lanche" era varrer a lista com o olho. A busca
+casa nome, categoria e conta, sem acento e sem caixa.
+
+**Ligada, ela apaga da tela tudo que fala do ciclo inteiro**: as linhas de total
+e os cartões de resumo. Eles somam o ciclo; deixá-los embaixo de uma lista de
+dois gastos seria o app afirmando que aqueles dois custaram R$ 2.717,90 — o
+mesmo defeito de leitura da v10.7, pela porta nova. No lugar entra uma linha
+só: *Soma do que está sendo mostrado*. E o subtítulo passa a dizer "2 de 14
+gastos", senão a lista filtrada mente sobre quantos gastos existem.
+
+**A busca não sobrevive ao fechamento.** Reabrir e ver três de vinte e um, sem
+lembrar que havia um filtro, é a mesma mentira por esquecimento.
+
+`ligarControlesLanc()` nasceu aqui: `renderLanc` passou a ter duas saídas — a
+lista inteira e a filtrada — e o `return` da saída curta deixaria os selects da
+lista filtrada mortos. Ligação de controle em função, nunca solta no fim de uma
+função com mais de um `return`.

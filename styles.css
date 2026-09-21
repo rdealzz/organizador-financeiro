@@ -1776,6 +1776,9 @@ body.fundo-vivo .retro,body.fundo-vivo .cal,body.fundo-vivo .recibo{border:none}
    que o tema pede. */
 [data-tema="claro"] body.fundo-vivo .cal{background:#FFFFFF}
 [data-tema="escuro"] body.fundo-vivo .cal{background:#08131F}
+/* A lista completa dos gastos é outra TELA INTEIRA e entra pela mesma porta. */
+[data-tema="claro"] body.fundo-vivo .todos{background:#FFFFFF}
+[data-tema="escuro"] body.fundo-vivo .todos{background:#08131F}
 /* O extrato é outra TELA INTEIRA, e entra pela mesma porta — opaco nos dois
    temas, com a cor que o tema pede. A folha de dentro é branca sempre: ela é
    papel, e o que se vê na tela tem que ser o que sai no PDF. */
@@ -3182,4 +3185,89 @@ body.recibo-aberto .tema-flutua{display:none}
   .rec-folha table{page-break-inside:auto}
   .rec-folha tr{page-break-inside:avoid}
   .rec-folha h2{page-break-after:avoid}
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TODOS OS GASTOS DO CICLO — tela inteira (v10.19)
+
+   Era uma seção escondida no fim da área Hoje, e "ver todos" rolava a página
+   até lá: a pessoa era jogada para o rodapé de uma página comprida, longe de
+   onde estava, e a lista chegava sem contexto. Agora é camada, como o
+   calendário — abre por cima, fecha no × ou no Esc, e a página não se mexe.
+
+   Pela regra da v10.6: tela cheia é opaca COM A COR DO TEMA, nunca com o
+   `#08131F` fixo da lista de superfícies flutuantes. O conteúdo aqui usa as
+   variáveis do tema, e escuro fixo no tema claro dá texto escuro sobre fundo
+   escuro — foi exatamente o que aconteceu com o calendário.
+   ══════════════════════════════════════════════════════════════════════════ */
+.todos{position:fixed;inset:0;z-index:140;background:var(--card);color:var(--txt);
+  display:flex;flex-direction:column;overflow:hidden;
+  animation:calAbre .22s var(--suave) both}
+.todos-cab{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  padding:14px clamp(12px,3vw,28px) 12px;border-bottom:1px solid var(--sep);background:var(--card)}
+.todos-tit h2{margin:2px 0 0}
+.todos-sub{margin:4px 0 0;font-size:13px;color:var(--txt-2);max-width:62ch}
+.todos-nav{display:flex;align-items:center;gap:10px}
+.todos-busca{min-width:min(280px,52vw);padding:9px 13px;font-size:14px;
+  border:1px solid var(--sep);border-radius:var(--r-full);background:var(--fill);color:var(--txt)}
+.todos-busca:focus{outline:2px solid var(--azul);outline-offset:1px;border-color:transparent}
+/* O corpo é o que rola — a camada em si não rola, senão o cabeçalho sobe junto
+   e a pessoa perde o × e a busca no meio de uma lista de vinte linhas. */
+.todos-corpo{flex:1;overflow-y:auto;overscroll-behavior:contain;
+  padding:14px clamp(12px,3vw,28px) 40px}
+.todos-tab{margin-top:6px}
+/* O resumo em números é contexto, não o assunto: quem toca em "ver todos"
+   quer a LISTA. Compacto, ele cabe acima dela sem empurrar o primeiro gasto
+   para fora da tela — que era o defeito de origem desta tela. */
+.todos #cards2 .cards{grid-template-columns:repeat(auto-fit,minmax(136px,1fr));gap:8px;margin:10px 0 2px}
+.todos #cards2 .card{padding:9px 11px}
+.todos #cards2 .card .v{font-size:18px}
+.todos #cards2 .card .n{font-size:11px;margin-top:2px}
+.todos .nota{margin:0 0 10px;padding:10px 13px;font-size:13.5px}
+/* O ponto da cor e o select da categoria são uma coisa só: sem isto o ponto
+   fica numa linha sozinho, acima do select, parecendo sujeira. */
+@media (min-width:821px){ .todos-tab td[data-r="Categoria"]{display:flex;align-items:center;gap:7px} }
+.todos.filtrando #cards2,.todos.filtrando #faturaAviso{display:none}
+/* Cabeçalho grudado: rolando a vigésima linha, "Na fatura" e "Meu" ainda
+   precisam ter nome — duas colunas de números sem rótulo são um enigma. */
+.todos-tab thead th{position:sticky;top:0;z-index:2;background:var(--card)}
+body.todos-aberto .tema-flutua{display:none}
+
+/* ---- No celular a tabela vira CARTÃO, um por gasto ----
+
+   Sete colunas em 430px só cabiam com rolagem horizontal, e rolar de lado para
+   ler o valor de um gasto é a definição de confuso: some a descrição, que é a
+   coluna que diz de qual gasto se trata. Aqui cada linha vira um bloco com o
+   nome em cima e os campos embaixo, cada um com seu rótulo — que vem do
+   `data-r` posto na própria célula, para o rótulo nunca discordar do <th>. */
+@media (max-width:820px){
+  .todos-tab thead{display:none}
+  .todos-tab table,.todos-tab tbody,.todos-tab tr,.todos-tab td{display:block;width:auto}
+  .todos-tab tr{position:relative;border:1px solid var(--sep);border-radius:var(--r-md);
+    background:var(--card-2);padding:12px 14px;margin-bottom:10px}
+  .todos-tab td{border:none;padding:5px 0;display:flex;align-items:center;
+    justify-content:space-between;gap:12px;text-align:right}
+  .todos-tab td[data-r]::before{content:attr(data-r);font-size:12px;font-weight:600;
+    color:var(--txt-3);text-align:left;flex:0 0 auto}
+  .todos-tab td:first-child{display:block;text-align:left;padding:0 30px 9px 0;
+    border-bottom:1px solid var(--sep);margin-bottom:5px}
+  .todos-tab td:last-child{position:absolute;top:9px;right:11px;padding:0;display:block}
+  .todos-tab td:empty{display:none}
+  .todos-tab td input,.todos-tab td select{width:auto;max-width:56vw}
+  .todos-tab tr.total{background:var(--fill);border-color:transparent}
+  .todos-tab tr.total td{padding:3px 0}
+  .todos-tab tr.total td[colspan]{font-size:14px;border-bottom:none;margin-bottom:2px;padding-right:0}
+  .todos-tab tr.sep-prox{background:transparent;border:none;padding:14px 0 0}
+  .todos-tab tr.sep-prox td{display:block;text-align:left;border:none;padding:0}
+  /* Num celular a legenda de cada cartão é o que empurra o primeiro gasto para
+     fora da tela — e ela repete o que as colunas do cartão do gasto já dizem. */
+  .todos #cards2 .card .n{display:none}
+  /* O ponto da cor da categoria fica boiando entre o rótulo e o select no
+     modo cartão — e a cor já está no nome que o select mostra. */
+  .todos-tab td .pt{display:none}
+  .todos #cards2 .cards{grid-template-columns:repeat(auto-fit,minmax(118px,1fr))}
+  .todos #cards2 .card .v{font-size:16px}
+  .todos-cab{padding-bottom:10px}
+  .todos-nav{width:100%}
+  .todos-busca{flex:1;min-width:0}
 }

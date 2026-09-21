@@ -758,7 +758,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v10.18';
+const VERSAO_APP='v10.19';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -1116,10 +1116,12 @@ function renderFatura(c){
   }
 
   const av=$('#faturaAviso');
-  if(av) av.innerHTML=`<div class="nota info" style="margin:0 0 14px">
-    <b>Esta é a fatura em formação.</b> Ela fecha em ${fecha} e só é cobrada no vencimento de <b>${vence}</b> —
-    o que você lança hoje não entra na fatura que vence antes disso, que já fechou.
-    ${c.proxN?`<br>Há ${c.proxN} gasto${c.proxN===1?'':'s'} guardado${c.proxN===1?'':'s'} pra fatura seguinte, somando ${brl(c.proxBruto)}. ${c.proxN===1?'Ele não entra':'Eles não entram'} nos totais acima.`:''}</div>`;
+  /* As datas moram no subtítulo da camada, logo acima — repeti-las aqui era
+     um parágrafo inteiro antes do primeiro gasto, no celular. Sobra o que o
+     subtítulo NÃO diz: que o que se lança hoje não cai na fatura já fechada. */
+  if(av) av.innerHTML=`<div class="nota info" style="margin:0 0 10px">
+    O que você lança hoje entra <b>nesta</b> fatura — a que vence antes dela já fechou.
+    ${c.proxN?` Há ${c.proxN} gasto${c.proxN===1?'':'s'} guardado${c.proxN===1?'':'s'} pra seguinte, somando ${brl(c.proxBruto)}: ${c.proxN===1?'ele não entra':'eles não entram'} nos totais abaixo.`:''}</div>`;
 
   const nf=$('#notaFatura');
   /* Fechamento e vencimento iguais quase sempre são a mesma data digitada duas
@@ -1845,44 +1847,91 @@ function renderLanc(c){
       <div class="lin-acoes">
         <button class="acao-mini forte" data-editar="${l.id}">✎ editar</button>
       </div></td>
-    <td><span class="pt" style="background:${catDe(l.cat).c}"></span><select data-cat="${l.id}" aria-label="Categoria de ${esc(l.nome)}"
+    <td data-r="Categoria"><span class="pt" style="background:${catDe(l.cat).c}"></span><select data-cat="${l.id}" aria-label="Categoria de ${esc(l.nome)}"
         style="padding:5px 6px;font-size:12.5px;min-width:104px">${opcoesCat(l.cat)}</select></td>
-    <td>${nDivisoes(l)>1
+    <td data-r="Quem paga">${nDivisoes(l)>1
       ? /* O select representa UMA pessoa. Com a conta rachada entre várias, usá-lo
            colapsaria a divisão em silêncio — então ali vira um botão que leva pra
            folha de edição, onde a lista inteira cabe. */
         `<button class="link mini" data-editar="${l.id}">${nDivisoes(l)} pessoas · editar</button>`
       : `<select data-pag="${l.id}" style="padding:5px 6px;font-size:12.5px;min-width:102px">${opcoesPagador(l,true)}</select>`}</td>
-    <td class="v"><input type="number" min="0" step="0.01" data-val="${l.id}" value="${l.valor||''}" placeholder="0,00"
+    <td class="v" data-r="${naFatura(l)?'Na fatura':'Valor (fora da fatura)'}"><input type="number" min="0" step="0.01" data-val="${l.id}" value="${l.valor||''}" placeholder="0,00"
         style="width:100px;padding:5px 7px;text-align:right;font-size:13px">
         ${(!l.valor&&l.ref)?`<div style="font-size:11px;color:var(--txt-3)">mês passado ${brl(l.ref)}</div>`:''}</td>
-    <td class="v">${nDivisoes(l)>1
+    <td class="v" data-r="De outro">${nDivisoes(l)>1
       ? `<span title="${esc(divisoes(l).map(d=>nomePessoa(d.id)+' '+brl(d.valor)).join(' · '))}">${brl(+l.pai||0)}</span>`
       : `<input type="number" min="0" step="0.01" data-pai="${l.id}" value="${l.pai||''}" placeholder="0,00"
         style="width:96px;padding:5px 7px;text-align:right;font-size:13px"
         aria-label="Quanto ${+l.pai>0?esc(nomePessoa(l.com)):'a outra pessoa'} cobre em ${esc(l.nome)}">`}</td>
-    <td class="v" style="font-weight:700;color:${meuValor(l)===0?'var(--pai)':'inherit'}">${brl(meuValor(l))}</td>
+    <td class="v" data-r="Meu" style="font-weight:700;color:${meuValor(l)===0?'var(--pai)':'inherit'}">${brl(meuValor(l))}</td>
     <td style="text-align:right"><button class="btn-x" data-del="${l.id}" aria-label="Remover">×</button></td></tr>`;
   const prox=daProxima(), fab=faturaAberta();
+
+  /* ── A busca ──────────────────────────────────────────────────────────────
+     Com vinte gastos na tela, achar "aquele lanche" é rolar a lista inteira
+     com o olho. O filtro casa NOME e CATEGORIA, sem acento e sem caixa, que é
+     como a pessoa digita.
+
+     E quando ele está ligado, **as linhas de total somem**. Elas somam o ciclo
+     inteiro; deixá-las embaixo de uma lista filtrada seria o app afirmando que
+     aqueles três gastos custaram R$ 2.400. No lugar entra a soma do que está
+     sendo mostrado, dito como tal. */
+  const filtrando=!!filtroTodos;
+  /* Com a busca ligada, o resumo em cartões some junto com as linhas de total:
+     ele soma o CICLO, e ficar sobre uma lista de dois gastos seria o app
+     afirmando que aqueles dois custaram R$ 2.717,90. */
+  const camada=$('#blocoTodos'); if(camada) camada.classList.toggle('filtrando',filtrando);
+  const alvo=l=>semAcento(l.nome+' '+catDe(l.cat).n+' '+(l.fonte||''));
+  const peneira=ls=>filtrando?ls.filter(l=>alvo(l).includes(semAcento(filtroTodos))):ls;
+  const noCiclo=peneira(doCiclo()), naFila=peneira(prox);
+  const sub=$('#todosSub');
+  if(sub) sub.textContent=filtrando
+    ? `${noCiclo.length+naFila.length} de ${doCiclo().length+prox.length} gastos`
+    : `${doCiclo().length} gasto${doCiclo().length===1?'':'s'} nesta fatura, que fecha em ${dataBR(iso(fab.fecha))} e é cobrada em ${dataBR(iso(fab.vence))}`
+      +(prox.length?` · ${prox.length} guardado${prox.length===1?'':'s'} para a seguinte`:'');
+
+  if(filtrando&&!noCiclo.length&&!naFila.length){
+    tb.innerHTML=`<tr><td colspan="7" class="vazio">Nenhum gasto com “${esc(filtroTodos)}”.</td></tr>`;
+    return;
+  }
+  const somaFiltro=ls=>ls.reduce((a,l)=>a+meuValor(l),0);
+  if(filtrando){
+    tb.innerHTML=noCiclo.sort((a,b)=>b.valor-a.valor).map(linha).join('')
+      +(naFila.length?`<tr class="sep-prox"><td colspan="7">Guardados para a fatura seguinte</td></tr>`
+        +naFila.sort((a,b)=>b.valor-a.valor).map(linha).join(''):'')
+      +`<tr class="total"><td colspan="3">Soma do que está sendo mostrado</td>
+         <td class="v" data-r="Na fatura">${brl([...noCiclo,...naFila].reduce((a,l)=>a+(+l.valor||0),0))}</td><td></td>
+         <td class="v" data-r="Meu">${brl(somaFiltro([...noCiclo,...naFila]))}</td><td></td></tr>`;
+    ligarControlesLanc();
+    return;
+  }
   tb.innerHTML=doCiclo().sort((a,b)=>b.valor-a.valor).map(linha).join('')
     /* Com gasto à vista no meio, uma linha de total só mentiria: a coluna
        "Na fatura" e a coluna "Meu" passam a somar coisas diferentes. Três
        linhas dizem a verdade inteira — o que vence no cartão, o que já saiu, e
        o que o ciclo custou ao todo. */
     +(c.avista>0
-      ? `<tr class="total"><td colspan="3">Na fatura do cartão</td><td class="v">${brl(c.bruto)}</td><td></td><td></td><td></td></tr>`
+      ? `<tr class="total"><td colspan="3">Na fatura do cartão</td><td class="v" data-r="Na fatura">${brl(c.bruto)}</td><td></td><td></td><td></td></tr>`
        +`<tr class="total"><td colspan="3" style="font-weight:500;color:var(--txt-3)">Fora dela — Pix, débito ou dinheiro</td>
-         <td class="v" style="color:var(--teal)">${brl(c.avista)}</td><td></td><td></td><td></td></tr>`
-       +`<tr class="total"><td colspan="3">Total do ciclo</td><td class="v">${brl(c.bruto+c.avista)}</td>
-         <td class="v" style="color:var(--pai)">${brl(c.pai)}</td><td class="v">${brl(c.gasto)}</td><td></td></tr>`
-      : `<tr class="total"><td colspan="3">Total desta fatura</td><td class="v">${brl(c.bruto)}</td>
-         <td class="v" style="color:var(--pai)">${brl(c.pai)}</td><td class="v">${brl(c.gasto)}</td><td></td></tr>`)
+         <td class="v" data-r="Fora da fatura" style="color:var(--teal)">${brl(c.avista)}</td><td></td><td></td><td></td></tr>`
+       +`<tr class="total"><td colspan="3">Total do ciclo</td><td class="v" data-r="Na fatura">${brl(c.bruto+c.avista)}</td>
+         <td class="v" data-r="De outro" style="color:var(--pai)">${brl(c.pai)}</td><td class="v" data-r="Meu">${brl(c.gasto)}</td><td></td></tr>`
+      : `<tr class="total"><td colspan="3">Total desta fatura</td><td class="v" data-r="Na fatura">${brl(c.bruto)}</td>
+         <td class="v" data-r="De outro" style="color:var(--pai)">${brl(c.pai)}</td><td class="v" data-r="Meu">${brl(c.gasto)}</td><td></td></tr>`)
     +(prox.length?`<tr class="sep-prox"><td colspan="7">Guardado para a fatura seguinte — cobrada só em
         ${dataBR(iso(vencDaFatura(new Date(fab.fecha.getFullYear(),fab.fecha.getMonth()+1,fab.fecha.getDate()))))}.
         Não entra nos totais acima nem nos tetos deste ciclo.</td></tr>`
       +prox.sort((a,b)=>b.valor-a.valor).map(linha).join('')
-      +`<tr class="total"><td colspan="3">Total da próxima</td><td class="v">${brl(c.proxBruto)}</td>
-        <td class="v" style="color:var(--pai)">${brl(c.proxBruto-c.proxMeu)}</td><td class="v">${brl(c.proxMeu)}</td><td></td></tr>`:'');
+      +`<tr class="total"><td colspan="3">Total da próxima</td><td class="v" data-r="Na fatura">${brl(c.proxBruto)}</td>
+        <td class="v" data-r="De outro" style="color:var(--pai)">${brl(c.proxBruto-c.proxMeu)}</td><td class="v" data-r="Meu">${brl(c.proxMeu)}</td><td></td></tr>`:'');
+  ligarControlesLanc();
+}
+
+/* Liga os controles da linha da tabela. Fica numa função porque `renderLanc`
+   tem duas saídas — a lista inteira e a lista filtrada pela busca — e um
+   `return` antes daqui deixaria os selects da lista filtrada mortos. */
+function ligarControlesLanc(){
+  const tb=$('#tbLanc'); if(!tb) return;
   /* Trocar a CATEGORIA na própria linha.
 
      Até aqui o palpite do nome era a única forma de categorizar: se ele errasse
@@ -1916,6 +1965,7 @@ function renderLanc(c){
     } else aplicarPagador(l,e.target.value);
     render(); salvar();});
 }
+
 
 
 /* ---------- as barras 3D de onde cortar ----------
@@ -5298,15 +5348,52 @@ document.addEventListener('click',e=>{
 $('#rapido').addEventListener('input',renderEco);
 $('#rapido').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); salvarRapido(); } });
 $('#rapidoOk').onclick=salvarRapido;
+/* A lista completa é uma CAMADA, não um pedaço do fim da página.
+
+   Antes `ver todos` revelava uma seção no rodapé da área Hoje e rolava até
+   lá: quem clicava era jogado para o fim de uma página comprida, longe de
+   onde estava, e a lista chegava sem contexto nenhum. Como camada ela abre
+   por cima, fecha no × ou no Esc, e a página continua exatamente onde estava
+   — é a mesma decisão do calendário (v10.5), e pelo mesmo motivo: isto serve
+   a qualquer momento, não é uma tela de Hoje.
+
+   `filtroTodos` mora aqui fora porque `renderLanc` roda a cada `render()` e
+   precisa saber o que está escrito na busca. */
+let filtroTodos='';
 function abrirTodosOsGastos(){
   $('#blocoTodos').hidden=false;
-  $('#blocoTodos').scrollIntoView({behavior:'smooth',block:'start'});
+  document.body.classList.add('todos-aberto');
+  document.body.style.overflow='hidden';
+  const corpo=$('#todosCorpo'); if(corpo) corpo.scrollTop=0;
+  renderLanc(calc());
+  setTimeout(()=>{ const b=$('#fecharTodos'); if(b) b.focus(); },40);
+}
+function fecharTodosOsGastos(){
+  $('#blocoTodos').hidden=true;
+  document.body.classList.remove('todos-aberto');
+  document.body.style.overflow='';
+  /* A busca não sobrevive ao fechamento: reabrir e ver três de vinte e um
+     gastos, sem lembrar que havia um filtro, é a lista mentindo. */
+  filtroTodos=''; const b=$('#todosBusca'); if(b) b.value='';
 }
 $('#verTodos').onclick=abrirTodosOsGastos;
 // O "ver os gastos" do bloco Dividido com leva pra mesma tabela: é lá que se
 // marca quem paga cada linha.
 document.querySelectorAll('[data-ver-todos]').forEach(b=>b.onclick=abrirTodosOsGastos);
-$('#fecharTodos').onclick=()=>{ $('#blocoTodos').hidden=true; };
+$('#fecharTodos').onclick=fecharTodosOsGastos;
+$('#todosBusca').oninput=e=>{ filtroTodos=e.target.value.trim(); renderLanc(calc()); };
+/* Esc fecha — mas só quando esta é a camada de CIMA.
+
+   O calendário e o extrato abrem por cima desta (mesmo z-index, e quem vem
+   depois no documento ganha), então com um deles na tela o Esc é deles: fechar
+   a camada de baixo deixaria a de cima na tela sem nada ter acontecido onde a
+   pessoa está olhando. Pego na captura, antes dos outros ouvintes de Esc, que
+   vivem todos neste mesmo `document`. */
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape'||$('#blocoTodos').hidden) return;
+  if(!$('#cal').hidden||!$('#recibo').hidden||folhaAberta) return;
+  e.stopImmediatePropagation(); fecharTodosOsGastos();
+},true);
 $('#addHorario').onclick=()=>{
   S.agenda=S.agenda||[];
   if(S.agenda.length>=6){ toast('Seis horários já é bastante.',true); return; }

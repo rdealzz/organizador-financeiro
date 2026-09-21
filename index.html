@@ -288,16 +288,6 @@ html[data-tema="escuro"] #splash{background:#000}
     <div id="pessoas"></div>
   </section>
 
-  <section class="bloco" id="blocoTodos" hidden>
-    <div class="bloco-topo"><h2>Todos os gastos do ciclo</h2>
-      <button class="link" id="fecharTodos">recolher</button></div>
-    <div id="faturaAviso"></div>
-    <div id="cards2"></div>
-    <div style="overflow-x:auto">
-    <table><thead><tr><th>Descrição</th><th>Categoria</th><th>Quem paga</th><th style="text-align:right">Na fatura</th><th style="text-align:right">De outro</th><th style="text-align:right">Meu</th><th></th></tr></thead>
-    <tbody id="tbLanc"></tbody></table></div>
-  </section>
-
 </div>
 
 <!-- ══════════════════════ PLANEJAMENTO ══════════════════════ -->
@@ -873,6 +863,36 @@ html[data-tema="escuro"] #splash{background:#000}
      Tela quase inteira de propósito: um calendário pequeno não deixa ver o mês.
      Quem projeta as ocorrências é o app.js — parcela sabe onde termina, conta
      fixa segue até alguém dizer que não. -->
+<!-- Todos os gastos do ciclo: TELA INTEIRA, como o calendário.
+
+     Era uma seção escondida no fim da área Hoje, e "ver todos" rolava a página
+     até lá. Quem clicava era levado para o rodapé de uma página comprida, longe
+     de onde estava, e voltava rolando — a lista chegava sem contexto nenhum.
+     Como camada ela abre por cima de onde a pessoa está, fecha no × ou no Esc,
+     e a página fica exatamente onde estava. -->
+<div class="todos" id="blocoTodos" role="dialog" aria-modal="true" aria-labelledby="todosTit" hidden>
+  <div class="todos-cab">
+    <div class="todos-tit">
+      <span class="rot">Fatura em formação</span>
+      <h2 id="todosTit">Todos os gastos do ciclo</h2>
+      <p class="todos-sub" id="todosSub"></p>
+    </div>
+    <div class="todos-nav">
+      <input type="search" id="todosBusca" class="todos-busca" placeholder="Buscar gasto ou categoria"
+             aria-label="Buscar por nome ou categoria" autocomplete="off">
+      <button class="btn-x" id="fecharTodos" aria-label="Fechar a lista de gastos">×</button>
+    </div>
+  </div>
+  <div class="todos-corpo" id="todosCorpo">
+    <div id="faturaAviso"></div>
+    <div id="cards2"></div>
+    <div class="todos-tab">
+      <table><thead><tr><th>Descrição</th><th>Categoria</th><th>Quem paga</th><th style="text-align:right">Na fatura</th><th style="text-align:right">De outro</th><th style="text-align:right">Meu</th><th></th></tr></thead>
+      <tbody id="tbLanc"></tbody></table>
+    </div>
+  </div>
+</div>
+
 <div class="cal" id="cal" role="dialog" aria-modal="true" aria-labelledby="calTit" hidden>
   <div class="cal-cab">
     <div>

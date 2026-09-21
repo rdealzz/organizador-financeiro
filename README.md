@@ -459,6 +459,7 @@ Cada versão passa por uma bateria que roda num navegador real, com dois
 | Aparelho parado há dias | abrir não sobrescreve a nuvem: ele lê antes de gravar, e a fatura que fechou no meio-tempo não o faz "ganhar" o conflito |
 | Gravação simultânea | o servidor recusa quem grava por cima de algo mais novo; o app relê, junta e grava de novo |
 | Recuperar uma cópia | as cópias automáticas do navegador aparecem na tela, com baixar e restaurar |
+| Todos os gastos | abre como camada por cima, não rola a página; Esc fecha; busca filtra e o rodapé soma só o que está na tela |
 | Isolamento | conta nova começa vazia, não vê nada da outra |
 | Funções | 4 áreas, 10 seções, gráficos, desfazer, alertas, agenda, retrospectiva, tema |
 | Offline | lança sem internet, avisa o estado, sobe sozinho quando volta |
