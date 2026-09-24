@@ -1915,3 +1915,34 @@ lembrar que havia um filtro, é a mesma mentira por esquecimento.
 lista inteira e a filtrada — e o `return` da saída curta deixaria os selects da
 lista filtrada mortos. Ligação de controle em função, nunca solta no fim de uma
 função com mais de um `return`.
+
+## O login fica salvo — inclusive depois de atualizar (v10.20)
+
+A queixa: *"quero que o login fique salvo, por mais que atualize o app"*. A
+sessão sempre morou em `localStorage` (`sobra:sessao`), e atualizar o app não
+toca nela — o service worker só troca a casca. O que deslogava eram outras
+duas coisas:
+
+1. **Um 401 apagava a sessão mesmo com o refresh token bom.** `pedir()`
+   tratava `401`/`INVALID_ID_TOKEN`/`TOKEN_EXPIRED` como credencial morta. Só
+   que o caso comum é o token de UMA hora ter vencido com o app dormindo (o
+   relógio local ainda achava que valia), e o refresh token continua servindo.
+   Agora o erro sai marcado `tokenRecusado` e **`comToken()`** renova à força
+   (`tokenValido(true)`) e repete UMA vez; só a segunda recusa, ou o refresh
+   recusado, apagam a sessão. `USER_NOT_FOUND`/`USER_DISABLED` continuam
+   definitivos. Medido: no código antigo o teste termina com a sessão `null`.
+2. **O navegador pode esvaziar o armazenamento do site** (falta de espaço; o
+   Safari apaga o de quem passa dias sem abrir). `navigator.storage.persist()`
+   é pedido assim que existe sessão.
+
+**E-mail e senha salvos — pelo navegador, nunca pelo app.** A senha não vai
+para `localStorage` (legível por qualquer script): o app pede ao gerenciador
+de senhas do navegador que a guarde (`PasswordCredential`, no Chrome/Android;
+no iPhone quem faz isso é o `autocomplete` dos campos) e, na tela de entrada,
+pede de volta — com ela, entra sozinho. O último e-mail
+(`sobra:ultimo-email`) fica no aparelho mesmo depois de sair e preenche a
+tela de entrada. **Logo depois de *Sair* o app não entra sozinho de novo**
+(`sessionStorage['sobra:saiu']` + `preventSilentAccess()`): a pessoa acabou de
+pedir para sair.
+
+`testes/valida-sessao.js` guarda isto.

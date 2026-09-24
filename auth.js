@@ -33,6 +33,29 @@ function guardarSessao(s){
     if(s) localStorage.setItem(CHAVE_SESSAO, JSON.stringify(s));
     else localStorage.removeItem(CHAVE_SESSAO);
   }catch(e){}
+  if(s){
+    pedirArmazenamentoPersistente();
+    try{ if(s.user && s.user.email) localStorage.setItem(CHAVE_EMAIL, s.user.email); }catch(e){}
+  }
+}
+/* Sem este pedido o navegador pode esvaziar o armazenamento do site quando
+   falta espaço — e o Safari apaga sozinho o de quem passa uns dias sem abrir.
+   A sessão some junto, e a pessoa tem que entrar de novo "do nada". */
+let persistenciaPedida = false;
+function pedirArmazenamentoPersistente(){
+  if(persistenciaPedida) return;
+  persistenciaPedida = true;
+  try{
+    if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+  }catch(e){}
+}
+/* O último e-mail que entrou NESTE aparelho. Sobrevive a sair da conta de
+   propósito: é o que preenche a tela de entrada na volta. Não é segredo —
+   a senha nunca é guardada pelo app; quem guarda senha é o gerenciador de
+   senhas do navegador (ver guardarCredencial no app.js). */
+const CHAVE_EMAIL = 'sobra:ultimo-email';
+function ultimoEmail(){
+  try{ return localStorage.getItem(CHAVE_EMAIL) || ''; }catch(e){ return ''; }
 }
 function lerSessaoSalva(){
   try{
@@ -133,9 +156,15 @@ async function pedir(url, o, freio){
        app dizia "Falha ao sincronizar" com um token que estava perfeito.
        401 e as mensagens que falam do token, sim: essas são o servidor
        afirmando que a credencial acabou. */
-    if(o.encerraSessaoSeInvalido && (r.status === 401 ||
-       /INVALID_ID_TOKEN|TOKEN_EXPIRED|USER_NOT_FOUND|USER_DISABLED/.test(msg))){
-      guardarSessao(null);
+    /* Conta apagada ou desativada é definitivo. Token recusado (401,
+       INVALID_ID_TOKEN, TOKEN_EXPIRED) NÃO é: quase sempre é o token de uma
+       hora que venceu com o app dormindo, e o refresh token guardado ainda
+       serve. Apagar a sessão ali deslogava a pessoa sem motivo — quem chamou
+       tenta renovar e repetir (comToken), e só desiste se o refresh também
+       for recusado. */
+    if(o.encerraSessaoSeInvalido){
+      if(/USER_NOT_FOUND|USER_DISABLED/.test(msg)) guardarSessao(null);
+      else if(r.status === 401 || /INVALID_ID_TOKEN|TOKEN_EXPIRED/.test(msg)) e.tokenRecusado = true;
     }
     throw e;
   }
@@ -151,23 +180,36 @@ function chamarIdentidade(caminho, opcoes){
   const headers = {'Content-Type': o.form ? 'application/x-www-form-urlencoded' : 'application/json'};
   return chamar(AUTH_BASE + caminho + '?key=' + FB.apiKey, Object.assign({}, o, {headers}));
 }
-async function chamarComToken(caminho, corpoExtra){
+/* Pede com o token; se o servidor recusar o token, renova à força e tenta
+   UMA vez mais. Só a segunda recusa apaga a sessão. */
+async function comToken(fazer){
   const t = await tokenValido();
   if(!t) throw erro('sessao_expirada');
-  return chamarIdentidade(caminho, {
+  try{ return await fazer(t); }
+  catch(e){
+    if(!e.tokenRecusado) throw e;
+    const novo = await tokenValido(true);
+    if(!novo) throw erro('sessao_expirada');
+    try{ return await fazer(novo); }
+    catch(e2){
+      if(e2.tokenRecusado){ guardarSessao(null); throw erro('sessao_expirada'); }
+      throw e2;
+    }
+  }
+}
+async function chamarComToken(caminho, corpoExtra){
+  return comToken(t => chamarIdentidade(caminho, {
     method:'POST', body: Object.assign({idToken:t}, corpoExtra||{}),
     encerraSessaoSeInvalido: true
-  });
+  }));
 }
 /* Chamadas ao Firestore: aqui sim é cabeçalho Authorization: Bearer. */
 async function chamarFirestore(caminho, opcoes){
   const o = opcoes || {};
-  const t = await tokenValido();
-  if(!t) throw erro('sessao_expirada');
-  return chamar(DB_BASE + caminho, Object.assign({}, o, {
+  return comToken(t => chamar(DB_BASE + caminho, Object.assign({}, o, {
     headers: Object.assign({'Content-Type':'application/json', 'Authorization':'Bearer '+t}, o.headers||{}),
     encerraSessaoSeInvalido: true
-  }));
+  })));
 }
 
 /* Renova o token sozinho um minuto antes de vencer. O endpoint de refresh é
@@ -191,9 +233,9 @@ function sessaoMorta(e){
   return st === 400 || st === 401;
 }
 let renovando = null;
-async function tokenValido(){
+async function tokenValido(forcar){
   if(!sessao) return null;
-  if(Date.now() < expiraEm() - 60000) return sessao.access_token;
+  if(!forcar && Date.now() < expiraEm() - 60000) return sessao.access_token;
   if(!sessao.refresh_token){ guardarSessao(null); return null; }
   if(!renovando){
     renovando = (async()=>{
@@ -211,7 +253,10 @@ async function tokenValido(){
         return nova.access_token;
       }catch(e){
         // Sem rede a sessão continua válida localmente: o app segue offline.
-        if(e.codigo === 'sem_rede') return sessao ? sessao.access_token : null;
+        if(e.codigo === 'sem_rede'){
+          if(forcar) throw e;   // o token já foi recusado: devolvê-lo seria um laço
+          return sessao ? sessao.access_token : null;
+        }
         /* Só apaga a sessão quando o servidor DIZ que ela morreu. Um 500 do
            Google, um 429 de excesso de pedidos ou uma resposta que veio pela
            metade não provam nada — e apagar a sessão neles desloga a pessoa do
@@ -585,6 +630,7 @@ function forcaDaSenha(v){
 
 /* recupera a sessão salva assim que o arquivo carrega */
 sessao = lerSessaoSalva();
+if(sessao) pedirArmazenamentoPersistente();
 
 window.Auth = {
   entrar, cadastrar, recuperarSenha, trocarSenhaComCodigo, definirNovaSenha, sair,
@@ -592,5 +638,5 @@ window.Auth = {
   puxarEstado, enviarEstado, apagarEstadoNaNuvem,
   usuario, logado, tokenValido, guardarSessao, montarSessao,
   mensagemDeErro, validarEmail, validarSenha, validarNome, forcaDaSenha,
-  canonizarEmail
+  canonizarEmail, ultimoEmail
 };

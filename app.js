@@ -758,7 +758,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v10.19';
+const VERSAO_APP='v10.20';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -5945,6 +5945,7 @@ async function enviarAuth(ev){
   try{
     if(modoAuth==='entrar'){
       await Auth.entrar(email,senha);
+      guardarCredencial(email,senha,nome);
       await abrirApp(true,false);
     }else if(modoAuth==='cadastrar'){
       await Auth.cadastrar(email,senha,nome);
@@ -5953,10 +5954,12 @@ async function enviarAuth(ev){
       if(nome && !(Auth.usuario()||{}).nome){
         try{ await Auth.definirNome(nome); }catch(e2){}
       }
+      guardarCredencial((Auth.usuario()||{}).email||email,senha,nome);
       await abrirApp(true,true);
     }else if(modoAuth==='codigo'){
       await Auth.trocarSenhaComCodigo(codigoColado($a('authCodigo').value),senha);
       $a('authCodigo').value='';
+      guardarCredencial((Auth.usuario()||{}).email||email,senha,'');
       await abrirApp(true,false);
       toast('Senha trocada. Você já está com a conta aberta.');
     }else if(modoAuth==='novaSenha'){
@@ -6059,7 +6062,42 @@ function mostrarAuth(){
   $('#fab').hidden=true;
   sairFoco();                      // sair da conta desfaz qualquer área em foco
   pintarModo();
+  // Quem já entrou neste aparelho não digita o e-mail de novo.
+  const em=$a('authEmail');
+  if(em && !em.value && modoAuth==='entrar') em.value=Auth.ultimoEmail();
   focarEntrada();
+  oferecerCredencial();
+}
+
+/* E-mail e senha salvos — mas pelo NAVEGADOR, não pelo app.
+   O app nunca grava a senha: em localStorage ela ficaria legível para
+   qualquer script e para quem abrir as ferramentas do navegador. O cofre
+   de senhas do Chrome/Android (e do iCloud no iPhone, pelo autocomplete dos
+   campos) é cifrado e é o lugar certo. Aqui só pedimos que ele guarde, e na
+   volta que ele devolva — aí a entrada é um toque, ou nenhum. */
+function guardarCredencial(email,senha,nome){
+  try{
+    if(!window.PasswordCredential||!navigator.credentials||!email||!senha) return;
+    const c=new PasswordCredential({id:email,password:senha,name:nome||email});
+    navigator.credentials.store(c).catch(()=>{});
+  }catch(e){}
+}
+let credencialOferecida=false;
+async function oferecerCredencial(){
+  if(credencialOferecida||modoAuth!=='entrar') return;
+  credencialOferecida=true;
+  /* Logo depois de "Sair" não entra sozinho de novo — a pessoa acabou de
+     pedir para sair. */
+  let acabouDeSair=false;
+  try{ acabouDeSair=sessionStorage.getItem('sobra:saiu')==='1'; sessionStorage.removeItem('sobra:saiu'); }catch(e){}
+  if(acabouDeSair) return;
+  try{
+    if(!window.PasswordCredential||!navigator.credentials) return;
+    const c=await navigator.credentials.get({password:true,mediation:'optional'});
+    if(!c||!c.password||Auth.logado()||$('#auth').hidden||modoAuth!=='entrar') return;
+    $a('authEmail').value=c.id; $a('authSenha').value=c.password;
+    enviarAuth();
+  }catch(e){}
 }
 
 /* Coloca o cursor no primeiro campo — mas nunca por trás da capa, senão o
@@ -6245,6 +6283,8 @@ async function sairDaConta(){
   saindo=true;
   if(u) await limparDadosLocais(u.id);
   await Auth.sair();
+  try{ sessionStorage.setItem('sobra:saiu','1'); }catch(e){}
+  try{ if(navigator.credentials&&navigator.credentials.preventSilentAccess) await navigator.credentials.preventSilentAccess(); }catch(e){}
   location.replace('/');
 }
 
