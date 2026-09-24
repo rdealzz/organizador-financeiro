@@ -1931,6 +1931,10 @@ duas coisas:
    (`tokenValido(true)`) e repete UMA vez; só a segunda recusa, ou o refresh
    recusado, apagam a sessão. `USER_NOT_FOUND`/`USER_DISABLED` continuam
    definitivos. Medido: no código antigo o teste termina com a sessão `null`.
+   **E o Firestore real responde 403, não 401, a token inválido** (medido por
+   `curl` em 24/09/2026: "Missing or insufficient permissions", o mesmo texto
+   da recusa das regras). Por isso o 403 também renova e repete uma vez
+   (`talvezToken`) — mas continua sem nunca apagar a sessão, como manda a v9.5.
 2. **O navegador pode esvaziar o armazenamento do site** (falta de espaço; o
    Safari apaga o de quem passa dias sem abrir). `navigator.storage.persist()`
    é pedido assim que existe sessão.

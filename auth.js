@@ -165,6 +165,10 @@ async function pedir(url, o, freio){
     if(o.encerraSessaoSeInvalido){
       if(/USER_NOT_FOUND|USER_DISABLED/.test(msg)) guardarSessao(null);
       else if(r.status === 401 || /INVALID_ID_TOKEN|TOKEN_EXPIRED/.test(msg)) e.tokenRecusado = true;
+      /* Medido no projeto real: token inválido no Firestore volta 403
+         "Missing or insufficient permissions", igual a uma recusa das regras.
+         Vale renovar e tentar de novo — mas 403 nunca apaga a sessão (v9.5). */
+      else if(r.status === 403) e.talvezToken = true;
     }
     throw e;
   }
@@ -187,8 +191,11 @@ async function comToken(fazer){
   if(!t) throw erro('sessao_expirada');
   try{ return await fazer(t); }
   catch(e){
-    if(!e.tokenRecusado) throw e;
-    const novo = await tokenValido(true);
+    if(!e.tokenRecusado && !e.talvezToken) throw e;
+    let novo;
+    try{ novo = await tokenValido(true); }
+    catch(e3){ if(e.talvezToken) throw e; throw e3; }
+    if(!novo && e.talvezToken) throw e;
     if(!novo) throw erro('sessao_expirada');
     try{ return await fazer(novo); }
     catch(e2){
