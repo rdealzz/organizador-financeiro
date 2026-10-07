@@ -536,16 +536,16 @@ html[data-tema="escuro"] #splash{background:#000}
 <!-- ══════════════════════ AJUSTES ══════════════════════ -->
 <div class="area" id="a-ajustes" hidden>
   <div class="subnav" role="tablist">
-    <button class="sub" role="tab" aria-selected="true" data-s="alertas">Alertas</button>
+    <button class="sub" role="tab" aria-selected="true" data-s="conta">Conta</button>
+    <button class="sub" role="tab" aria-selected="false" data-s="alertas">Alertas</button>
     <button class="sub" role="tab" aria-selected="false" data-s="extrato">Importar</button>
-    <button class="sub" role="tab" aria-selected="false" data-s="conta">Conta</button>
     <!-- v10.21: Assinatura saiu da barra (abre pelo menu do perfil). Uma aba
          sobre uma versão paga que não existe era ruído entre as que servem. -->
     <button class="sub" role="tab" aria-selected="false" data-s="assinatura" hidden>Assinatura</button>
     <button class="sub" role="tab" aria-selected="false" data-s="dados">Dados</button>
   </div>
 
-  <section class="bloco" id="t-alertas">
+  <section class="bloco" id="t-alertas" hidden>
     <h2>Alertas no celular</h2>
     <p class="ajuda">O app avisa quando o gasto foge do plano. Funciona melhor <b>instalado na tela inicial</b>.</p>
 
@@ -622,7 +622,7 @@ html[data-tema="escuro"] #splash{background:#000}
     <div id="prev"></div>
   </section>
 
-  <section class="bloco" id="t-conta" hidden>
+  <section class="bloco" id="t-conta">
     <h2>Sua conta</h2>
     <div class="conta-topo">
       <div class="avatar" id="contaAvatar" aria-hidden="true">?</div>
@@ -651,6 +651,16 @@ html[data-tema="escuro"] #splash{background:#000}
       <button class="btn sec" id="btnTrocarSenha">Trocar a senha</button>
       <button class="btn sec" id="btnSair" style="color:var(--vermelho)">Sair da conta</button>
     </div>
+    <!-- v10.22: o app nasce no modo simples. Este é o único caminho para as
+         funções avançadas — e ele fica aqui, no alto da Conta, para não ser
+         preciso procurar. -->
+    <div class="alerta-linha" style="border-top:1px solid var(--sep);margin-top:var(--e4);padding-top:var(--e4)">
+      <div class="ai"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><path d="M16.5 13.5v6M13.5 16.5h6"/></svg></div>
+      <div class="at"><div class="an">Mostrar todas as funções</div>
+        <div class="ad">Tetos por categoria, objetivos, cofre, dinheiro extra, o que cortar, extrato em PDF e importar do banco. Desligado, o app mostra só o básico.</div></div>
+      <button class="sw" role="switch" id="swCompleto" aria-checked="false" aria-label="Mostrar todas as funções"></button>
+    </div>
+
     <div class="alerta-linha" style="border-top:1px solid var(--sep);margin-top:var(--e4);padding-top:var(--e4)">
       <div class="ai"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.4"/><circle cx="12" cy="12" r="8.6"/></svg></div>
       <div class="at"><div class="an">Abertura animada</div>
@@ -958,6 +968,7 @@ html[data-tema="escuro"] #splash{background:#000}
       <label class="novo-rot" for="lValor">Quanto foi?</label>
       <div class="novo-valor"><span aria-hidden="true">R$</span>
         <input id="lValor" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done" placeholder="0,00"></div>
+      <p class="novo-dica" id="lValorDica" hidden></p>
 
       <!-- Como pagou muda quem cobra, não quanto custa: no cartão entra na
            fatura e vence junto; no Pix já saiu da conta. Nos dois casos o

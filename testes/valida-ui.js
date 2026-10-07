@@ -163,6 +163,43 @@ const cmp=(n,a,b)=>eh(n,JSON.stringify(a)===JSON.stringify(b),[a,b]);
  eh('o campo Repetição volta a compra única depois de lançar',
     await p.evaluate(()=>document.querySelector('#lTipo').value==='unico'));
 
+ // ── 4b. o gasto de sempre já vem preenchido (v10.22)
+ await p.evaluate(()=>{fecharFolha(); S.lanc.push({id:'cafe1',criadoEm:Date.now(),nome:'Café',valor:7.5,cat:'comida',tier:3,
+   tipo:'unico',fonte:'Pix',pRest:0,pai:0,com:'',ref:0,venc:0,prox:0,meio:'avista'}); abrirFolha();});
+ const pre=await p.evaluate(()=>{
+   const chips=[...document.querySelectorAll('#chips [data-chip]')];
+   const temValor=chips.length>0&&chips.every(b=>!!ultimoDoNome(b.dataset.chip)===!!b.querySelector('small'))
+     &&chips.some(b=>b.querySelector('small'));
+   document.querySelector('#lNome').value='café';
+   document.querySelector('#lNome').dispatchEvent(new Event('change'));
+   return {temValor,valor:document.querySelector('#lValor').value,meio:meioForm,
+     dica:!document.querySelector('#lValorDica').hidden};});
+ cmp('nome conhecido traz valor e Pix da última vez',[pre.valor,pre.meio,pre.dica],['7,50','avista',true]);
+ eh('o atalho mostra o valor da última vez',pre.temValor,pre);
+ eh('valor escrito à mão nunca é trocado',await p.evaluate(()=>{
+   document.querySelector('#lValor').value='9'; preencherDoHistorico(); return document.querySelector('#lValor').value==='9';}));
+ await p.evaluate(()=>{fecharFolha(); S.lanc=S.lanc.filter(l=>l.id!=='cafe1');});
+
+ // ── 4c. modo simples: só o básico na barra
+ const simp=await p.evaluate(()=>{
+   localStorage.removeItem('sobra:completo'); irPara('plano');
+   const plano={nav:document.querySelector('#a-plano .subnav').hidden, sub:SUB.plano};
+   irPara('ajustes');
+   const aj=[...document.querySelectorAll('#a-ajustes .sub')].filter(b=>!b.hidden).map(b=>b.dataset.s);
+   irPara('plano:tetos');
+   const link=!document.querySelector('#t-tetos').hidden;
+   irPara('plano');
+   const volta=SUB.plano;
+   localStorage.setItem('sobra:completo','1'); irPara('plano');
+   const todas=[...document.querySelectorAll('#a-plano .sub')].filter(b=>!b.hidden).length;
+   localStorage.removeItem('sobra:completo');
+   return {plano,aj,link,volta,todas};});
+ cmp('simples: Planejamento é só Renda, sem barra',[simp.plano.nav,simp.plano.sub],[true,'renda']);
+ cmp('simples: Ajustes mostra Conta, Alertas e Dados',simp.aj,['conta','alertas','dados']);
+ eh('link direto para uma aba escondida abre ela mesmo assim',simp.link);
+ cmp('voltando sem destino, cai de novo no básico',simp.volta,'renda');
+ cmp('completo: as cinco abas de Planejamento',simp.todas,5);
+
  // ── 5. calendário, pelas três portas
  for(const porta of ['#abrirCal','#btnCalTopo']){
    await semErro('calendário abre por '+porta, async()=>{

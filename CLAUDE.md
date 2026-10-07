@@ -2027,3 +2027,46 @@ jeito antigo num campo só, `valorDe` e "sem valor não salva".
 **Nota sobre `valida-motor.js`:** a verificação "dia 31 guardado não pula mês
 nenhum: 7 fechamentos" já falhava antes desta versão — ela conta fechamentos
 até HOJE e foi escrita em setembro; em outubro são 8. Não é regressão.
+
+## Modo simples e o gasto que já vem preenchido (v10.22)
+
+O pedido seguinte: *"menos funções, o mais básico; as funções têm que aparecer
+preenchidas, com mais rapidez"*.
+
+### O app nasce no modo simples
+
+Nada foi apagado — o avançado só sai da barra de sub-abas até a pessoa pedir,
+em **Ajustes → Conta → Mostrar todas as funções** (`sobra:completo`, por
+aparelho: a mãe no simples, o filho no completo, na mesma conta).
+
+`SUBS_SIMPLES` diz o que fica: Planejamento só **Renda** (a barra some, porque
+uma aba só não é escolha); Análises **Gráficos** e **Meses**; Ajustes
+**Conta**, **Alertas** e **Dados** — e Conta passou a ser a primeira aba e a
+padrão de Ajustes, porque é lá que o interruptor mora. Tetos, Objetivos, Cofre,
+Extra, O que cortar, Extrato e Importar aparecem no modo completo.
+
+Duas regras em `irPara`:
+
+* **Link direto abre a aba escondida mesmo assim.** Um aviso de Hoje que diz
+  "remanejar o teto" leva para Tetos, e a aba aparece enquanto está aberta.
+  Esconder a tela de quem foi mandado para ela seria um beco.
+* **Sem destino, cai de novo no básico**: `SUB` que aponta para uma aba fora da
+  barra volta para a primeira visível.
+
+`body.simples` esconde também o botão grande do calendário em Hoje — o ícone do
+cabeçalho abre o mesmo calendário.
+
+### O gasto de sempre: dois toques
+
+`ultimoDoNome()` acha o lançamento mais recente com aquele nome (ciclo aberto,
+depois o histórico) e `preencherDoHistorico()` traz **o valor e a forma de
+pagamento** dele. O valor vem **selecionado**: se foi igual, é só Salvar; se foi
+diferente, o primeiro número digitado substitui. Uma linha embaixo diz "mesmo
+valor da última vez".
+
+Dispara ao tocar num atalho, ao dar Enter no nome e ao sair do campo do nome
+(`change`). **Só preenche campo vazio** — valor escrito pela pessoa nunca é
+trocado por palpite (há teste). Os atalhos mostram esse valor ao lado do nome,
+para não haver surpresa.
+
+`valida-ui.js` ganhou as duas coisas (109 verificações).

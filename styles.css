@@ -3300,3 +3300,11 @@ body.todos-aberto .tema-flutua{display:none}
 .btn.novo-ok{width:100%;margin-top:18px;min-height:54px;font-size:17px;font-weight:700}
 .novo .palpite{margin-top:8px}
 .mais summary{font-size:14.5px;padding:4px 0}
+
+/* v10.22 — modo simples e campos preenchidos */
+.novo-dica{margin:7px 2px 0;font-size:13px;color:var(--txt-2)}
+.novo .chip-s small{font-size:12.5px;margin-left:2px}
+.chip-s.on small{color:inherit;opacity:.75}
+/* No modo simples o calendário abre pelo ícone do cabeçalho; o botão grande
+   repetia o mesmo caminho no meio da tela inicial. */
+body.simples .cal-abre{display:none}

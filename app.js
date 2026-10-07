@@ -769,7 +769,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v10.21';
+const VERSAO_APP='v10.22';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -2656,6 +2656,7 @@ function limparFormGasto(){
   catNaMao=false; meioForm='cartao'; pintarMeio();
   pintarPagadorForm('eu'); ajustarCamposForm(); palpitarNoForm();
   linhaFaturaDaFolha(false);
+  const d=$('#lValorDica'); if(d) d.hidden=true;
 }
 $('#addObj').onclick=()=>{
   const nome=$('#oNome').value.trim(), alvo=+$('#oAlvo').value;
@@ -4514,21 +4515,57 @@ const AREAS={
   ajustes: {titulo:'Ajustes',     subs:['alertas','conta','assinatura','extrato','dados']}
 };
 let AREA='hoje';
-const SUB={plano:'renda',analise:'graficos',ajustes:'alertas'};
+const SUB={plano:'renda',analise:'graficos',ajustes:'conta'};
+
+/* ==========================================================================
+   Modo simples (v10.22) — o padrão
+
+   O pedido: "menos funções, o mais básico". Nada foi apagado: o que é
+   avançado só não aparece na barra de sub-abas até a pessoa pedir, em
+   Ajustes → Conta → "Mostrar todas as funções". Vale por aparelho, como as
+   outras preferências de tela (a mãe usa o simples no celular dela, o filho
+   o completo no dele, na mesma conta).
+
+   O que fica no simples é o que responde às perguntas de todo dia: quanto
+   ganho e quanto guardo (Renda), para onde foi (Gráficos), como foi cada mês
+   (Meses), a conta, os avisos e a cópia dos dados.
+
+   Um link que leva direto a uma sub-aba escondida (um aviso de Hoje que diz
+   "remanejar o teto") continua funcionando: a sub-aba aparece enquanto está
+   aberta. Esconder a tela de quem foi mandado para ela seria um beco. */
+const SUBS_SIMPLES={plano:['renda'], analise:['graficos','hist'], ajustes:['conta','alertas','dados']};
+/* Nunca na barra, em modo nenhum: abre pelo menu do perfil. */
+const SUBS_FORA=['assinatura'];
+function modoCompleto(){
+  try{ return localStorage.getItem('sobra:completo')==='1'; }catch(e){ return false; }
+}
+function subVisivel(area,sub){
+  if(SUBS_FORA.includes(sub)) return false;
+  return modoCompleto()||!SUBS_SIMPLES[area]||SUBS_SIMPLES[area].includes(sub);
+}
 
 function irPara(destino){
   const [area,sub]=String(destino).split(':');
   if(!AREAS[area]) return;
   AREA=area;
   if(sub&&AREAS[area].subs.includes(sub)) SUB[area]=sub;
+  // Sem destino explícito, uma sub-aba que saiu da barra não é onde se cai.
+  else if(SUB[area]&&!subVisivel(area,SUB[area])) SUB[area]=AREAS[area].subs.find(x=>subVisivel(area,x))||SUB[area];
   Object.keys(AREAS).forEach(a=>{ const el=$('#a-'+a); if(el) el.hidden=(a!==area); });
   document.querySelectorAll('.tb').forEach(b=>b.setAttribute('aria-selected',b.dataset.a===area));
   const el=$('#a-'+area);
-  if(el) el.querySelectorAll('.subnav .sub').forEach(b=>{
-    const alvo=(b.dataset.s===SUB[area]);
-    b.setAttribute('aria-selected',alvo);
-    const sec=$('#t-'+b.dataset.s); if(sec) sec.hidden=!alvo;
-  });
+  if(el){
+    let vis=0;
+    el.querySelectorAll('.subnav .sub').forEach(b=>{
+      const alvo=(b.dataset.s===SUB[area]);
+      b.setAttribute('aria-selected',alvo);
+      b.hidden=!(alvo||subVisivel(area,b.dataset.s));
+      if(!b.hidden) vis++;
+      const sec=$('#t-'+b.dataset.s); if(sec) sec.hidden=!alvo;
+    });
+    // Uma aba só não é escolha: a barra some e a tela fica com o conteúdo.
+    const nav=el.querySelector('.subnav'); if(nav) nav.hidden=vis<2;
+  }
   $('#tituloArea').textContent=AREAS[area].titulo;
   if(area==='analise'&&SUB.analise==='graficos') renderGraficos(calc());
   if(area==='analise'&&SUB.analise==='extratos') renderExtratos();
@@ -4995,17 +5032,58 @@ function renderChips(){
     exemploRapido=um.nome.toLowerCase()+' '+(ref?Math.round(+ref.valor):(VALOR_EXEMPLO[um.cat]||50));
     const inp=$('#lNome'); if(inp) inp.placeholder='Ex.: '+um.nome.toLowerCase();
   }
-  el.innerHTML=its.map(x=>`<button type="button" class="chip-s" data-chip="${esc(x.nome)}">
-    <i style="background:${catDe(x.cat).c}"></i>${esc(x.nome)}</button>`).join('');
+  /* O atalho mostra o valor da última vez (v10.22): é o número que vai entrar
+     no campo ao tocar, e vê-lo antes evita a surpresa. */
+  el.innerHTML=its.map(x=>{ const u=ultimoDoNome(x.nome);
+    return `<button type="button" class="chip-s" data-chip="${esc(x.nome)}">
+    <i style="background:${catDe(x.cat).c}"></i>${esc(x.nome)}${u?` <small>${esc(valorCurto(u.valor))}</small>`:''}</button>`; }).join('');
   /* Um toque no atalho preenche o nome e leva direto ao valor: "Mercado",
      80, Salvar — três toques, sem escrever uma letra. */
   el.querySelectorAll('[data-chip]').forEach(b=>b.onclick=()=>{
     $('#lNome').value=b.dataset.chip;
     palpitarNoForm();
     el.querySelectorAll('[data-chip]').forEach(x=>x.classList.toggle('on',x===b));
-    $('#lValor').focus();
+    $('#lValor').value='';
+    preencherDoHistorico();
+    irAoValor();
     vibrar(8);
   });
+}
+
+/* ---------- o gasto já vem preenchido (v10.22) ----------
+
+   Quem lança "Uber" lança quase sempre o mesmo valor, do mesmo jeito. Então
+   o nome conhecido traz o valor e a forma de pagamento da ÚLTIMA vez — e o
+   valor vem selecionado: se foi igual, é só Salvar; se foi diferente, o
+   primeiro número digitado já substitui. Dois toques para o gasto de sempre.
+
+   Só preenche campo VAZIO. Um valor que a pessoa já escreveu nunca é trocado
+   por um palpite. */
+function ultimoDoNome(nome){
+  const k=String(nome||'').trim().toLowerCase(); if(!k) return null;
+  const mesmo=l=>l&&l.nome&&l.nome.toLowerCase()===k&&+l.valor>0;
+  const vivo=S.lanc.filter(mesmo).sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0))[0];
+  if(vivo) return vivo;
+  for(const h of S.hist){ const i=(h.itens||[]).find(mesmo); if(i) return i; }
+  return null;
+}
+function valorCurto(v){
+  v=+v||0;
+  return v.toLocaleString('pt-BR',{minimumFractionDigits:v%1?2:0,maximumFractionDigits:2});
+}
+function preencherDoHistorico(){
+  const dica=$('#lValorDica');
+  const u=ultimoDoNome($('#lNome').value);
+  if(!u||valorDe($('#lValor').value)>0){ if(dica&&!u) dica.hidden=true; return false; }
+  $('#lValor').value=valorCurto(u.valor);
+  meioForm=u.meio==='avista'?'avista':'cartao';
+  pintarMeio(); linhaFaturaDaFolha(meioForm==='avista');
+  if(dica){ dica.hidden=false; dica.textContent='Mesmo valor da última vez — se foi diferente, é só digitar por cima.'; }
+  return true;
+}
+function irAoValor(){
+  const v=$('#lValor'); v.focus();
+  try{ v.select(); }catch(e){}
 }
 
 /* ---------- folha ---------- */
@@ -5343,7 +5421,10 @@ document.addEventListener('click',e=>{
   if(af){ abrirFolha(); if(af.dataset.abrirFolha==='fixo'){ $('#lTipo').value='fixo'; ajustarCamposForm(); $('#mais').open=true; } }
 });
 $('#lNome').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault();
-  if(valorDe($('#lValor').value)>0) $('#addLanc').click(); else $('#lValor').focus(); } });
+  preencherDoHistorico(); irAoValor(); } });
+// Saiu do nome escrito à mão: o nome conhecido traz o valor da última vez.
+$('#lNome').addEventListener('change',preencherDoHistorico);
+$('#lValor').addEventListener('input',()=>{ const d=$('#lValorDica'); if(d) d.hidden=true; });
 $('#lValor').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $('#addLanc').click(); } });
 // O atalho marcado deixa de valer quando a pessoa escreve outro nome.
 $('#lNome').addEventListener('input',()=>{ const v=$('#lNome').value.trim().toLowerCase();
@@ -6170,7 +6251,7 @@ async function abrirApp(recemLogado, contaNova){
   const ir=new URLSearchParams(location.search).get('ir');
   irPara(ir||'hoje');
   renderAgenda(); renderAlertas(calc()); renderChips(); pintarConta();
-  renderAssinatura(); pintarMenuPerfil(); pintarSwitchCapa(); pintarSwitchFundo(); pintarSwitchPortal();
+  renderAssinatura(); pintarMenuPerfil(); pintarSwitchCapa(); pintarSwitchFundo(); pintarSwitchPortal(); pintarSwitchCompleto();
 
   // Local primeiro: o app já está pronto com o que estava no aparelho. A nuvem
   // é consultada em segundo plano, sem segurar a tela. Se vier algo mais novo,
@@ -6795,6 +6876,20 @@ $('#swCapa').onclick=()=>{
   pintarSwitchCapa();
   toast(ligar?'Abertura animada ligada':'Abertura animada desligada');
 };
+
+function pintarSwitchCompleto(){
+  const b=$('#swCompleto'); if(!b) return;
+  b.setAttribute('aria-checked', modoCompleto()?'true':'false');
+  document.body.classList.toggle('simples',!modoCompleto());
+}
+$('#swCompleto').onclick=()=>{
+  const ligar=!modoCompleto();
+  try{ localStorage.setItem('sobra:completo', ligar?'1':'0'); }catch(e){}
+  pintarSwitchCompleto();
+  irPara(AREA+':'+SUB[AREA]);
+  toast(ligar?'Todas as funções à mostra':'Modo simples: só o básico');
+};
+pintarSwitchCompleto();
 
 function pintarSwitchPortal(){
   const b=$('#swPortal'); if(!b) return;
