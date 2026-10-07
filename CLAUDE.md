@@ -2070,3 +2070,79 @@ trocado por palpite (há teste). Os atalhos mostram esse valor ao lado do nome,
 para não haver surpresa.
 
 `valida-ui.js` ganhou as duas coisas (109 verificações).
+
+## Três abas, e os gastos separados por cartão (v10.23)
+
+Depois da v10.22 a queixa foi: *"não mudou nada — tem muita informação, muitas
+abas, muita coisa na tela"*. E veio, junto, o pedido da mãe, nas palavras dela:
+*"só tivesse como colocar os gastos que são do mês, que são parcelados, que são
+fixos, e colocar separado o que é de um cartão, o que é de outro e o que não é
+de cartão nenhum — e que desse a soma no final"*. Esta versão é esse pedido.
+
+### A barra: Hoje, Gastos, Mais
+
+Eram quatro áreas e até cinco sub-abas em cada — duas fileiras de abas. Agora a
+barra tem **três** e nenhuma tela tem sub-abas à vista:
+
+* **Hoje** — quanto pode gastar, contas a vencer, os quatro últimos gastos.
+* **Gastos** — a lista do mês, separada por cartão (abaixo).
+* **Mais** — uma LISTA com nomes que se leem (`MAIS_ITENS`): Minha renda,
+  Gráficos, Meses anteriores, Calendário, Avisos, Minha conta, Meus dados, e
+  no modo completo as avançadas. Tema escuro e "Mostrar todas as funções"
+  moraram para cá.
+
+Planejamento, Análises e Ajustes continuam existindo como telas (`SOB_MAIS`):
+abrem a partir de Mais, a aba Mais fica acesa enquanto se está nelas e o
+cabeçalho mostra **Voltar** (`#voltarMais`). O título é o nome da linha de Mais
+("Minha renda"), não o da área antiga. As `.subnav` continuam no HTML porque é
+por elas que `irPara` mostra e esconde as seções — só nunca aparecem.
+
+No modo simples somem também do cabeçalho o perfil e o tema (estão em Mais) e,
+de Hoje, os três números miúdos do topo. Os avisos de Hoje caem para um.
+
+### Vários cartões — `S.cartoes` e `l.cartao`
+
+`S.cartoes` é `[{id, nome}]` e viaja na conta (entrou em `LISTAS_ID`, mescla
+por id). Cada gasto no cartão guarda **`l.cartao`**. Quem nunca cadastrou
+cartão tem UM, implícito: `{id:'c0', nome:'Cartão'}` — e **todo gasto antigo
+(sem `l.cartao`) é desse cartão**; `cartaoDe(l)` lê a ausência como `'c0'`, e
+nada é migrado. O id nunca é vazio: a mesclagem indexa listas por id, e um id
+vazio viraria duplicata entre aparelhos.
+
+`+ outro cartão` (na folha de lançar) cria um cartão; no primeiro, pergunta
+antes o nome do cartão que já se usa, senão a lista teria "Cartão" e "Itaú" e
+ninguém saberia qual é qual. Renomear fica no cabeçalho do grupo, em Gastos.
+
+`pintarOnde()` monta os botões de "Onde pagou?" — um por cartão, mais **Sem
+cartão** (`meio:'avista'`) — para as duas folhas. Ela só reescreve o HTML
+quando a lista muda: reescrever o botão que está sendo clicado é o defeito da
+v10.1. O cartão que vem marcado é o do último gasto no cartão; o nome conhecido
+traz o cartão da última vez, como já trazia o valor.
+
+**O que isto NÃO faz:** fechamento e vencimento por cartão. O ciclo continua um
+só (`diaFech`/`diaVenc`); a separação é de lista e de soma. Fazer cada cartão
+fechar no seu dia mexe em `calc()`, `fecharCiclo`, `faturaAberta`/`faturaAPagar`
+e no calendário — é a próxima coisa, se for pedida.
+
+### "Do mês, parcelado, fixo"
+
+A folha de lançar ganhou os três botões com essas palavras (`#lTipoSeg`), à
+vista, entre o valor e o cartão. Eles só escrevem no `#lTipo`, que continua
+existindo escondido — é ele que o resto do código lê. `var` ("fixo, mas o valor
+muda") não tem botão: fica na folha de edição, e aparece aceso como "Fixo". A
+gaveta virou só "Dividir com alguém ou mudar a categoria".
+
+### A aba Gastos
+
+`renderListaGastos()`: o total do mês no topo, depois **um bloco por cartão**
+(e "Sem cartão"), cada um com seus gastos — fixos, parcelados, do mês, nessa
+ordem — e a **soma** embaixo; no fim, **Total do mês** com a quebra Fixos /
+Parcelados / Do mês. As somas são do **valor cheio**, porque é ele que vem na
+fatura; quando há gasto dividido, uma linha diz quanto disso é seu. Tocar numa
+linha abre a folha de edição — que também troca o cartão. A tabela antiga fica
+em "ver em tabela", no modo completo; "Onde o dinheiro foi" e o resumo da
+divisão também ficaram só no completo (o gráfico está em Mais → Gráficos).
+
+`valida-ui.js`: 121 verificações, com as três abas, o Voltar, os botões de
+cartão, o gasto parcelado no Itaú, a soma por cartão, o total e a troca de
+cartão pela edição.
