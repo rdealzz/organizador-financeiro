@@ -3271,3 +3271,40 @@ body.todos-aberto .tema-flutua{display:none}
   .todos-nav{width:100%}
   .todos-busca{flex:1;min-width:0}
 }
+
+/* ==========================================================================
+   v10.21 — lançar um gasto: três perguntas e um botão
+
+   Os rótulos são PERGUNTAS ("O que você comprou?", "Quanto foi?") e vêm em
+   tamanho de leitura, não em cinza miúdo: quem abre a folha pela primeira vez
+   tem que saber o que fazer sem ler explicação nenhuma. O valor é o campo
+   maior da folha porque é o que importa — e o botão de salvar ocupa a
+   largura inteira, no lugar onde o polegar já está.
+   ========================================================================== */
+.novo{display:flex;flex-direction:column}
+.novo-rot{display:block;margin:16px 0 7px;font-size:15px;font-weight:600;color:var(--txt);
+  letter-spacing:0;text-transform:none}
+.novo-rot:first-child{margin-top:4px}
+.novo .novo-nome{font-size:18px;padding:14px 15px}
+.novo .chips{margin:10px 0 0}
+.novo .chip-s{font-size:14px;padding:9px 13px;min-height:40px}
+.chip-s.on{background:var(--azul);color:var(--sobre-azul);border-color:var(--azul)}
+.novo-valor{display:flex;align-items:center;gap:8px;background:var(--fill);border-radius:var(--r-s);
+  padding:0 15px}
+.novo-valor:focus-within{outline:2px solid var(--azul);outline-offset:-1px}
+.novo-valor span{font-size:22px;font-weight:600;color:var(--txt-3)}
+.novo-valor input{background:transparent!important;outline:none!important;font-size:28px;font-weight:700;
+  padding:12px 0;font-variant-numeric:tabular-nums}
+.novo .segm button{min-height:50px;font-size:14.5px}
+.novo .sheet-fatura{margin-top:8px}
+.btn.novo-ok{width:100%;margin-top:18px;min-height:54px;font-size:17px;font-weight:700}
+.novo .palpite{margin-top:8px}
+.mais summary{font-size:14.5px;padding:4px 0}
+
+/* v10.22 — modo simples e campos preenchidos */
+.novo-dica{margin:7px 2px 0;font-size:13px;color:var(--txt-2)}
+.novo .chip-s small{font-size:12.5px;margin-left:2px}
+.chip-s.on small{color:inherit;opacity:.75}
+/* No modo simples o calendário abre pelo ícone do cabeçalho; o botão grande
+   repetia o mesmo caminho no meio da tela inicial. */
+body.simples .cal-abre{display:none}

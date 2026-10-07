@@ -194,7 +194,7 @@ const cmp=(n,a,b,tol=0.01)=>{const p=typeof a==='number'?Math.abs(a-b)<=tol:JSON
    document.querySelector('#addLanc').click();
  });
  const novo=await p.evaluate(()=>{
-   const l=S.lanc.find(x=>x.nome==='uber do pai');
+   const l=S.lanc.find(x=>x.nome.toLowerCase()==='uber do pai');
    return l?{pai:l.pai,acertado:acertado(l,'pai'),limpou:!document.querySelector('#lJaPago').checked}:null;});
  eh('lançado como "já me pagou", o gasto nasce acertado',!!novo&&novo.acertado&&novo.pai===50,novo);
  eh('e a caixa volta desmarcada para o próximo gasto',!!novo&&novo.limpou);

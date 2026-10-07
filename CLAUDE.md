@@ -1950,3 +1950,123 @@ tela de entrada. **Logo depois de *Sair* o app não entra sozinho de novo**
 pedir para sair.
 
 `testes/valida-sessao.js` guarda isto.
+
+## Mais simples de usar (v10.21)
+
+A queixa, de quem usa com a mãe: *"está muito difícil fazer funções que
+deveriam ser simples — o jeito de cadastrar os gastos, o jeito de visualizar"*.
+Olhando o app como celular, a dificuldade vinha de três lugares, e nenhum era
+falta de função — era excesso de passo e de texto.
+
+### Abrir o app custava dois toques antes de ver o próprio dinheiro
+
+A capa animada pedia "toque em qualquer lugar para entrar", e depois as cartas
+pediam "por onde começamos?". Pior: entrando por uma carta a **barra de abas
+sumia** (modo foco), e trocar de área exigia voltar às cartas.
+
+* **Capa, cartas e esfera de fundo nascem DESLIGADAS.** As três leituras
+  (`capaLigada`, `portalLigado`, `fundoLigado`) agora só dizem "ligado" quando a
+  pessoa gravou isso de propósito em Ajustes → Conta. Quem nunca mexeu abre
+  direto em Hoje.
+* **`entrarFoco()` não esconde mais a barra** — ela nunca sai da tela. O nome
+  ficou porque é chamado de dois lugares.
+* O botão de cartas do cabeçalho (`#voltarPortal`) só aparece com as cartas
+  ligadas (`pintarBotaoAreas`): sem elas ele não levava a lugar nenhum.
+
+### Um jeito só de lançar um gasto
+
+A folha tinha DOIS formulários: o campo "mercado 800" (que exigia aprender um
+formato) e outro, completo, escondido em "Mais opções". Agora é um só, com
+três perguntas na ordem em que se fala — **O que você comprou? / Quanto foi? /
+Como pagou?** — e um botão largo **Salvar gasto**. Repetição, parcelas e quem
+divide ficam numa gaveta ("Repete todo mês, é parcelado ou dividido com
+alguém?"), porque a maioria dos gastos é compra única.
+
+* **Tocar num atalho preenche o nome e pula para o valor**: atalho → número →
+  Salvar, sem escrever uma letra. Os atalhos caíram de 12 para 8 (`CHIPS_MAX`).
+* **O valor é `type=text inputmode=decimal`**, lido por `valorDe()`, que aceita
+  `45`, `45,90`, `1.234,56` e `R$ 80`. `type=number` recusava a vírgula em parte
+  dos celulares e o gasto saía zero.
+* **O jeito antigo continua funcionando**: "mercado 80" ou "uber 25 pix" escrito
+  no nome, com o valor vazio, passa por `lerRapido()`/`meioDoTexto()` como antes.
+  `salvarRapido()` e `renderEco()` deixaram de existir; `lerRapido()` fica.
+* **A folha fecha depois de salvar**, com o aviso e o *Desfazer*. Ficar aberta
+  com os campos limpos deixava a dúvida "salvou?". `limparFormGasto()` devolve
+  tudo ao padrão (compra única, cartão, só eu) — a regra da v9.9 vale para todos
+  os campos.
+* O passo 2 do começo ("Gastos fixos") abre a folha já em *todo mês, valor
+  igual*, com a gaveta aberta.
+* O nome passa a ser salvo com inicial maiúscula nos dois caminhos (antes só o
+  campo rápido fazia isso).
+
+### Hoje sem parágrafos
+
+* O topo diz "R$ 74 **por dia, pelos próximos 29 dias**" — sem a frase de três
+  linhas sobre fatura cobrada e meta descontada.
+* *Quanto é seu, de verdade* virou **uma frase** ("Dos R$ 2.845 lançados,
+  R$ 500 são da Mãe. Só os R$ 2.345 que são seus contam no orçamento") — a conta
+  da v10.7 continua fechando, sem quatro cartões e um parágrafo.
+* No máximo **dois** avisos, e saiu o que repetia o número do topo.
+* Saíram os parágrafos de instrução de *Contas a vencer* e de *Dividido com*.
+
+Medido no celular de 390px com o mesmo estado: a tela Hoje caiu de **3.131px
+para 2.255px** de altura.
+
+### Abas
+
+Planejamento: *Renda e meta → Renda*, *Metas → Objetivos*, *Entrou → Extra* —
+"Metas" ao lado de "Guardar" parecia a mesma coisa, e os nomes curtos cabem na
+tela sem rolar a barra. Em Ajustes, *Assinatura* saiu da barra (o botão fica
+`hidden`, porque é por ele que `irPara` mostra a seção; continua abrindo pelo
+menu do perfil), e os oito interruptores de alerta ficaram recolhidos em
+*Escolher quais avisos receber*.
+
+`valida-ui.js` ganhou o caminho novo (atalho → "12,50" → Pix → Salvar), o
+jeito antigo num campo só, `valorDe` e "sem valor não salva".
+
+**Nota sobre `valida-motor.js`:** a verificação "dia 31 guardado não pula mês
+nenhum: 7 fechamentos" já falhava antes desta versão — ela conta fechamentos
+até HOJE e foi escrita em setembro; em outubro são 8. Não é regressão.
+
+## Modo simples e o gasto que já vem preenchido (v10.22)
+
+O pedido seguinte: *"menos funções, o mais básico; as funções têm que aparecer
+preenchidas, com mais rapidez"*.
+
+### O app nasce no modo simples
+
+Nada foi apagado — o avançado só sai da barra de sub-abas até a pessoa pedir,
+em **Ajustes → Conta → Mostrar todas as funções** (`sobra:completo`, por
+aparelho: a mãe no simples, o filho no completo, na mesma conta).
+
+`SUBS_SIMPLES` diz o que fica: Planejamento só **Renda** (a barra some, porque
+uma aba só não é escolha); Análises **Gráficos** e **Meses**; Ajustes
+**Conta**, **Alertas** e **Dados** — e Conta passou a ser a primeira aba e a
+padrão de Ajustes, porque é lá que o interruptor mora. Tetos, Objetivos, Cofre,
+Extra, O que cortar, Extrato e Importar aparecem no modo completo.
+
+Duas regras em `irPara`:
+
+* **Link direto abre a aba escondida mesmo assim.** Um aviso de Hoje que diz
+  "remanejar o teto" leva para Tetos, e a aba aparece enquanto está aberta.
+  Esconder a tela de quem foi mandado para ela seria um beco.
+* **Sem destino, cai de novo no básico**: `SUB` que aponta para uma aba fora da
+  barra volta para a primeira visível.
+
+`body.simples` esconde também o botão grande do calendário em Hoje — o ícone do
+cabeçalho abre o mesmo calendário.
+
+### O gasto de sempre: dois toques
+
+`ultimoDoNome()` acha o lançamento mais recente com aquele nome (ciclo aberto,
+depois o histórico) e `preencherDoHistorico()` traz **o valor e a forma de
+pagamento** dele. O valor vem **selecionado**: se foi igual, é só Salvar; se foi
+diferente, o primeiro número digitado substitui. Uma linha embaixo diz "mesmo
+valor da última vez".
+
+Dispara ao tocar num atalho, ao dar Enter no nome e ao sair do campo do nome
+(`change`). **Só preenche campo vazio** — valor escrito pela pessoa nunca é
+trocado por palpite (há teste). Os atalhos mostram esse valor ao lado do nome,
+para não haver surpresa.
+
+`valida-ui.js` ganhou as duas coisas (109 verificações).
