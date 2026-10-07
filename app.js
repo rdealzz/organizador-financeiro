@@ -390,6 +390,17 @@ let saindo=false;   // logout em andamento: nada mais pode gravar em disco
 
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+/* Valor digitado do jeito que se escreve no Brasil: "45", "45,90", "1.234,56",
+   "R$ 80". O campo de valor do gasto é texto com teclado numérico (v10.21) —
+   `type=number` recusava a vírgula em parte dos celulares e o gasto saía zero. */
+function valorDe(txt){
+  let t=String(txt==null?'':txt).replace(/r\$/i,'').replace(/\s+/g,'').trim();
+  if(!t) return 0;
+  if(/,/.test(t)) t=t.replace(/\./g,'').replace(',','.');
+  else if(/^\d{1,3}(\.\d{3})+$/.test(t)) t=t.replace(/\./g,'');
+  const v=parseFloat(t);
+  return isFinite(v)&&v>0?v:0;
+}
 const pct=v=>(v*100).toFixed(0)+'%';
 /* Escapa TUDO que muda de significado dentro de HTML, aspas simples e crase
    incluídas: um atributo escrito com aspas simples em alguma linha futura não
@@ -758,7 +769,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v10.20';
+const VERSAO_APP='v10.21';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -1696,7 +1707,7 @@ function opcoesPagador(l,curto){
   /* Na tabela o rótulo é curto de propósito: a coluna cabe em 430px de tela e
      "Dividido com Mãe" a espremia até virar "Divi". O nome por extenso fica
      embaixo da descrição, que é a coluna que nunca sai da tela. */
-  return op('eu',curto?'Eu':'Eu, sozinho')
+  return op('eu',curto?'Eu':'Só eu')
     +lista.map(p=>op('d:'+p.id,curto?'Com '+p.nome:'Dividido com '+p.nome)
                  +op('t:'+p.id,curto?p.nome+' paga':p.nome+' paga tudo')).join('')
     +`<option value="+">${curto?'+ pessoa…':'+ Nova pessoa…'}</option>`;
@@ -1796,9 +1807,7 @@ function renderPessoas(c){
       <span class="cb-iv">${brl(i.valor)}${i.cheio>i.valor+0.005?`<small>de ${brl(i.cheio)}</small>`:''}</span></div>`).join('')}</div>
     <button class="btn sec" data-prev="${esc(p.id)}" style="margin-top:10px">${navigator.share?'Enviar':'Copiar'} prévia</button>
    </details>`:'')).join('')
-   +`<p class="ajuda" style="margin:12px 0 0">${total>0
-      ? 'Ao todo <b>'+brl(total)+'</b> da fatura deste ciclo é de outra pessoa. Esse valor aparece na fatura, mas não entra nos seus tetos. A cobrança fechada, item a item e com o “já recebi”, aparece quando a fatura fechar — em <b>Análises → Faturas</b>. Para mandar o extrato de alguém em PDF, a qualquer momento: <b>Análises → Extrato</b>.'
-      : 'Marque quem divide cada gasto na coluna <b>Quem paga</b>, em “Todos os gastos do ciclo”.'}</p>
+   +`${total>0?'':'<p class="ajuda" style="margin:12px 0 0">Para dividir um gasto, escolha a pessoa em <b>Quem paga?</b> ao lançar.</p>'}
     <div class="nova-pessoa">
       <input id="pNome" maxlength="28" placeholder="Ex.: Mãe" aria-label="Nome da pessoa">
       <button class="btn sec" id="addPessoa">Adicionar pessoa</button></div>`;
@@ -2392,7 +2401,7 @@ document.querySelectorAll('#chipsMeta [data-meta]').forEach(b=>b.onclick=()=>{
 function pintarPagadorForm(valor){
   const sel=$('#lPagador'); if(!sel) return;
   const antes=valor||sel.value||'eu';
-  const v=+$('#lValor').value||0, pago=+$('#lPai').value||0;
+  const v=valorDe($('#lValor').value), pago=+$('#lPai').value||0;
   const [modo,id]=String(antes).split(':');
   sel.innerHTML=opcoesPagador({valor:v,pai:antes==='eu'?0:(pago||v),com:antes==='eu'?'':(id||'')});
   sel.value=[...sel.options].some(o=>o.value===antes)?antes:'eu';
@@ -2413,7 +2422,7 @@ $('#lPagador').onchange=e=>{
     pintarPagadorForm(p?'d:'+p.id:'eu');
     if(p){ render(); salvar(); }
   }
-  const v=+$('#lValor').value||0, escolha=$('#lPagador').value;
+  const v=valorDe($('#lValor').value), escolha=$('#lPagador').value;
   if(escolha==='eu') $('#lPai').value='';
   else if(escolha.startsWith('t:')) $('#lPai').value=v||'';
   else if(v) $('#lPai').value=(v/2).toFixed(2);
@@ -2589,15 +2598,31 @@ window.addEventListener('beforeunload',()=>{ try{
 }catch(e){} });
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') salvar(); });
 $('#addLanc').onclick=()=>{
-  const nome=$('#lNome').value.trim(), valor=+$('#lValor').value;
-  if(!nome||!(valor>0)){ $('#lNome').focus(); return; }
+  let nome=$('#lNome').value.trim(), valor=valorDe($('#lValor').value);
+  /* Quem aprendeu o jeito antigo escreve "mercado 80" num campo só — e quem
+     fala "uber 25 pix" diz também como pagou. As duas coisas continuam sendo
+     entendidas: o valor sai do nome quando o campo de valor está vazio, e
+     "pix/débito/dinheiro" dito no nome vira o meio de pagamento. */
+  let meio=meioForm;
+  const mp=meioDoTexto(nome);
+  if(mp.meio==='avista'){ meio='avista'; nome=mp.nome; }
+  if(!(valor>0)){
+    const r=lerRapido(nome);
+    if(r&&!r.incompleto){ nome=r.nome; valor=r.valor; }
+  }
+  if(!nome){ toast('Escreva o que você comprou',true); $('#lNome').focus(); return; }
+  if(!(valor>0)){ toast('Falta o valor',true); $('#lValor').focus(); return; }
+  nome=nome.charAt(0).toUpperCase()+nome.slice(1);
+  if(!catNaMao){ const g=palpiteDoNome(nome); $('#lCat').value=g.cat; $('#lTier').value=String(g.tier); }
   const tipo=$('#lTipo').value;
+  const fonteDig=$('#lFonte').value.trim();
   const l={id:Date.now()+Math.random(),criadoEm:Date.now(),nome,valor,cat:$('#lCat').value,tier:+$('#lTier').value,
     catManual:catNaMao,
-    fonte:$('#lFonte').value.trim()||'Conta',tipo,pRest:tipo==='parc'?(+$('#lParc').value||1):0,
+    fonte:fonteDig||(meio==='avista'?'Pix':(palpiteDoNome(nome).fonte||'Conta')),
+    tipo,pRest:tipo==='parc'?(+$('#lParc').value||1):0,
     com:'',pai:Math.min(+$('#lPai').value||0,valor),ref:0,venc:Math.min(Math.max(+$('#lVenc').value||0,0),31),
-    meio:meioForm,
-    prox:(meioForm==='cartao'&&+$('#lFatura').value===1)?1:0};
+    meio,
+    prox:(meio==='cartao'&&+$('#lFatura').value===1)?1:0};
   const pag=$('#lPagador').value;
   if(pag==='eu'||pag==='+'){ l.pai=0; l.com=''; }
   else{
@@ -2610,23 +2635,28 @@ $('#addLanc').onclick=()=>{
     if($('#lJaPago')&&$('#lJaPago').checked&&l.pai>0) marcarAcerto(l,l.com,true);
   }
   S.lanc.push(l);
-  ['lNome','lValor','lParc','lPai','lVenc'].forEach(i=>$('#'+i).value=''); $('#lFatura').value='0';
-  /* Pelo mesmo motivo que a repetição volta a "compra única": ninguém confere
-     um campo que já estava certo da última vez, e um "já me pagou" grudado no
-     próximo gasto esconderia uma cobrança de verdade. */
+  limparFormGasto();
+  render(); salvar(); vibrar(14);
+  /* A folha FECHA depois de salvar (v10.21). Ficar aberta, com os campos
+     limpos, deixava a dúvida "salvou?" — a resposta agora é a própria tela
+     de Hoje com o gasto no topo dos últimos lançamentos, mais o aviso. */
+  fecharFolha();
+  const f=faturaAberta();
+  snack(l.nome+' · '+brl(l.valor)+(l.meio==='avista'?' · já pago':l.prox?' · próxima fatura':' · fatura de '+ddmm(f.vence)),
+    'Desfazer',()=>{ S.lanc=S.lanc.filter(x=>x.id!==l.id); render(); salvar(); toast('Desfeito'); });
+};
+/* Tudo volta ao padrão depois de lançar. Ninguém confere um campo que já
+   estava certo da última vez: o "todo mês" do aluguel pegaria carona no cinema
+   lançado logo depois, e um "já me pagou" grudado esconderia uma cobrança. */
+function limparFormGasto(){
+  ['lNome','lValor','lParc','lPai','lVenc','lFonte'].forEach(i=>{ const el=$('#'+i); if(el) el.value=''; });
+  $('#lFatura').value='0';
   if($('#lJaPago')) $('#lJaPago').checked=false;
-  /* A repetição volta ao padrão a cada lançamento. Sem isto, o "todo mês"
-     escolhido para o aluguel continuaria selecionado no cinema lançado logo
-     depois — e ninguém confere um campo que já estava certo da última vez. */
   $('#lTipo').value='unico';
   catNaMao=false; meioForm='cartao'; pintarMeio();
   pintarPagadorForm('eu'); ajustarCamposForm(); palpitarNoForm();
-  $('#lNome').focus();
-  render(); salvar();
-  const f=faturaAberta();
-  toast(l.meio==='avista'?'Fora da fatura — já saiu da conta'
-    :l.prox?'Guardado pra próxima fatura':'Entra na fatura cobrada em '+ddmm(f.vence));
-};
+  linhaFaturaDaFolha(false);
+}
 $('#addObj').onclick=()=>{
   const nome=$('#oNome').value.trim(), alvo=+$('#oAlvo').value;
   if(!nome||!(alvo>0)){ $('#oNome').focus(); return; }
@@ -3903,9 +3933,9 @@ function renderVenc(){
     return `<button class="btn-pago" data-abrepago="${x.l.id}"
       aria-label="Marcar ${esc(x.l.nome)} como pago">Paguei</button>`;
   };
-  el.innerHTML=`<h3>Contas a vencer · ${brl(total)}</h3>
-   <p class="ajuda">Lançamentos com dia de vencimento marcado. Toque em <b>Paguei</b> quando quitar: a conta sai da contagem e para de avisar até o vencimento do mês que vem.
-   Pagou <b>no cartão</b>? Continua paga — só que o dinheiro sai quando a fatura vencer, e o app mostra o dia.${pagas?` <b>${pagas}</b> já ${pagas===1?'está paga':'estão pagas'} neste mês.`:''}</p>`+
+  /* v10.21: sem o parágrafo de instrução. O botão "Paguei" se explica, e a
+     pergunta "no cartão / do bolso" aparece quando ele é tocado. */
+  el.innerHTML=`<h3>Contas a vencer · ${brl(total)}</h3>`+
    cs.map(x=>`<div class="venc${x.pago?' pago':(x.dias<=3?' perto':'')}">
      <div class="dia"><b>${x.data.getDate()}</b><span>${MES_CURTO[x.data.getMonth()]}</span></div>
      <div class="vn">${esc(x.l.nome)}<small>${legenda(x)} · ${esc(x.l.fonte||'Conta')}</small></div>
@@ -4567,8 +4597,8 @@ function renderHero(c){
     animarValor(v,Math.max(porDia,0));
     v.className='hero-v num'+(porDia<0?' neg':'');
     $('#hoje-sub').innerHTML= porDia<0
-      ? `Você já passou <b>${brl(-folga)}</b> do que tinha pra este ciclo. Cada gasto novo sai da sua meta de guardar.`
-      : `É o que cabe por dia nos <b>${dias} dia${dias===1?'':'s'}</b> que faltam até a fatura fechar (cobrada em ${ddmm(faturaAberta().vence)}), já descontando o que você quer guardar.`;
+      ? `Você já passou <b>${brl(-folga)}</b> do que tinha para este mês.`
+      : `por dia, pelos próximos <b>${dias} dia${dias===1?'':'s'}</b>, sem mexer no que você quer guardar.`;
   }
   document.querySelector('.hero-mini').hidden=!c.renda;
   document.querySelector('.hero-pista').hidden=!c.renda;
@@ -4611,27 +4641,14 @@ function resumoDivisao(c){
      está na minha mão? Sem a resposta, o número parece dinheiro no ar. */
   const jaVeio=doCiclo().reduce((t,l)=>t+recebidoDe(l),0);
   const faltaVir=Math.max(c.pai-jaVeio,0);
-  el.innerHTML=`<section class="bloco divisao-bloco">
-    <div class="bloco-topo"><h2>Quanto é seu, de verdade</h2>
-      <button class="link" data-ir="analise:lanc">ver por pessoa</button></div>
-    <div class="cards">
-      <div class="card"><div class="l">Total lançado</div><div class="v">${brl(total)}</div>
-        <div class="n">tudo que passou no ciclo${c.avista>0?', no cartão e fora dele':''}</div></div>
-      <div class="card" style="border-color:var(--verde)"><div class="l">Minha parte</div>
-        <div class="v" style="color:var(--verde)">${brl(c.gasto)}</div>
-        <div class="n">é só ela que entra no orçamento</div></div>
-      <div class="card" style="border-color:var(--pai)"><div class="l">Terceiros pagam</div>
-        <div class="v" style="color:var(--pai)">${brl(c.pai)}</div>
-        <div class="n">${fatias.length?fatias.map(f=>esc(f.nome)+' '+brl(f.valor)).join(' · '):'de outras pessoas'}</div></div>
-      ${jaVeio>0?`<div class="card" style="border-color:var(--verde)"><div class="l">Já me pagaram</div>
-        <div class="v" style="color:var(--verde)">${brl(jaVeio)}</div>
-        <div class="n">${faltaVir>0?brl(faltaVir)+' ainda por receber':'está tudo acertado'}</div></div>`:''}
-    </div>
-    <p class="ajuda" style="margin:12px 0 0">Os <b>${brl(c.pai)}</b> de outras pessoas não consomem nada do seu
-      orçamento: o <i>quanto posso gastar</i>, os tetos e a sobra do mês contam apenas os
-      <b>${brl(c.gasto)}</b> que saem do seu bolso. A fatura inteira continua em
-      <button class="link" data-ir="analise:lanc">Lançamentos</button>, que é o registro do cartão.</p>
-  </section>`;
+  /* v10.21: uma frase, não quatro cartões e um parágrafo. A conta que ela
+     precisa fechar continua a mesma — total = minha parte + terceiros —, só
+     que dita do jeito que se fala. O detalhe por pessoa está logo abaixo, em
+     "Dividido com". */
+  const quem=fatias.length===1?esc(fatias[0].nome):'outras pessoas';
+  el.innerHTML=`<div class="nota info divisao-bloco">Dos <b>${brl(total)}</b> lançados, <b>${brl(c.pai)}</b> são de ${quem}.
+    Só os <b>${brl(c.gasto)}</b> que são seus contam no seu orçamento.${jaVeio>0
+      ?` ${faltaVir>0?'Já recebeu '+brl(jaVeio)+', faltam '+brl(faltaVir)+'.':'Já está tudo acertado.'}`:''}</div>`;
 }
 
 /* ---------- os atalhos de divisão ----------
@@ -4642,7 +4659,7 @@ function resumoDivisao(c){
    — e a frase embaixo diz, em reais, o que sobra para você. O campo continua
    ali para a divisão torta (300 eu, 500 ela). */
 function pintarDivisao(pre){
-  const val=+$('#'+pre+'Valor').value||0;
+  const val=valorDe($('#'+pre+'Valor').value);
   const pago=Math.min(+$('#'+pre+'Pai').value||0,val);
   const meu=Math.max(val-pago,0);
   const sel=$('#'+pre+'Pagador').value, [,id]=String(sel).split(':');
@@ -4659,7 +4676,7 @@ function pintarDivisao(pre){
     : 'Escreva o valor do gasto para dividir.';
 }
 function aplicarDivisao(pre,pct){
-  const val=+$('#'+pre+'Valor').value||0;
+  const val=valorDe($('#'+pre+'Valor').value);
   $('#'+pre+'Pai').value = pct===0 ? '' : (val*pct/100).toFixed(2);
   pintarDivisao(pre);
 }
@@ -4697,10 +4714,8 @@ function renderUltimos(c){
         <div class="passo ${temRenda?'feito':''}"><b>1</b><span>Renda e meta</span>
           ${temRenda?'<i>✓</i>':'<button class="btn sec" data-ir="plano:renda">Preencher</button>'}</div>
         <div class="passo"><b>2</b><span>Gastos fixos</span>
-          <button class="btn ${temRenda?'':'sec'}" data-abrir-folha="1">Adicionar</button></div>
+          <button class="btn ${temRenda?'':'sec'}" data-abrir-folha="fixo">Adicionar</button></div>
       </div>
-      <p class="ajuda" style="margin:14px auto 0;max-width:34ch;font-size:13px">
-        Dica: no campo de gasto basta escrever <b>aluguel 1350</b> — o app entende sozinho a categoria.</p>
     </div>`;
     return;
   }
@@ -4784,9 +4799,11 @@ function montarInsights(c){
   // parabéns
   if(c.sobra>=c.meta&&c.meta>0&&S.lanc.length)
     out.push({t:'bom',e:'alvo',txt:`Você está batendo a meta e ainda sobram <b>${brl(c.sobra-c.meta)}</b> livres.`});
-  if(porDia>0&&S.lanc.length&&dias>0)
-    out.push({t:'bom',e:'certo',txt:`Sobram <b>${brl(folga)}</b> pro resto do ciclo: dá <b>${brl(porDia)}</b> por dia sem mexer no que você quer guardar.`});
-  return out.slice(0,3);
+  /* v10.21: no máximo DOIS avisos, e nenhum que repita o número grande do
+     topo ("dá R$ 74 por dia" já é o que o topo diz). Três cartões de texto
+     empilhados antes do primeiro gráfico faziam a tela inicial parecer um
+     relatório para ler, e o aviso que importa se perdia entre os outros. */
+  return out.slice(0,2);
 }
 function renderInsights(c){
   const el=$('#insights'); if(!el) return;
@@ -4866,31 +4883,6 @@ function palpiteDoNome(nome){
     herdado: !!corrigido
   };
 }
-function renderEco(){
-  const el=$('#rapidoEco'), p=lerRapido($('#rapido').value);
-  linhaFaturaDaFolha((p&&!p.incompleto)?p.meio==='avista':meioForm==='avista');
-  if(!p){ el.innerHTML='<span class="aviso">Escreva o gasto e o valor — <b>qualquer</b> palavra serve, o app acha a categoria. Ex.: <b>'+esc(exemploRapido)+'</b></span>'; return; }
-  if(p.incompleto){ el.innerHTML='<span class="aviso">Falta o valor no fim. Ex.: <b>'+esc(p.nome)+' 45</b></span>'; return; }
-  el.innerHTML=`<span class="pt" style="background:${catDe(p.cat).c}"></span>
-    <span><b>${esc(p.nome)}</b> · ${brl(p.valor)} · ${catDe(p.cat).n} · ${tierDe(p.tier).n}${p.meio==='avista'?' · <b>à vista, fora da fatura</b>':''}</span>
-    ${p.herdado?'<span class="aviso">(como da última vez)</span>':''}`;
-}
-function salvarRapido(){
-  const p=lerRapido($('#rapido').value);
-  if(!p||p.incompleto){ toast('Escreva a descrição e o valor. Ex.: ifood 45',true); $('#rapido').focus(); return; }
-  const l={id:Date.now()+Math.random(),criadoEm:Date.now(),nome:p.nome,valor:p.valor,cat:p.cat,
-    tier:p.tier,tipo:p.tipo,fonte:p.meio==='avista'?'Pix':p.fonte,pRest:0,pai:0,ref:0,venc:0,prox:0,
-    meio:p.meio||'cartao'};
-  S.lanc.push(l);
-  $('#rapido').value=''; renderEco();
-  render(); salvar(); vibrar(14);
-  toast(p.nome+' · '+brl(p.valor));
-  snack('Lançamento adicionado.','Desfazer',()=>{
-    S.lanc=S.lanc.filter(x=>x.id!==l.id); render(); salvar(); toast('Desfeito');
-  });
-  $('#rapido').focus();
-}
-
 /* Um atalho por CATEGORIA, não uma lista fixa de nomes.
 
    O defeito: existem dez categorias em CATS, e os padrões daqui cobriam
@@ -4934,7 +4926,7 @@ const CHIP_EXTRA={
   assinatura:['Spotify','Disney'],
   divida:['Empréstimo','Parcela']
 };
-const CHIPS_MAX=12;
+const CHIPS_MAX=8;   // v10.21: duas linhas e meia de atalho, não cinco — o resto se escreve
 /* Valor de exemplo por categoria, para o atalho que a pessoa ainda não lançou
    nenhuma vez. Serve só para ensinar o formato "nome valor" com um número que
    não soa absurdo — assim que ela lançar o gasto de verdade, o exemplo passa a
@@ -5001,16 +4993,18 @@ function renderChips(){
     const ref=doCiclo().concat(S.hist.slice(0,4).flatMap(h=>h.itens||[]))
       .find(l=>l.nome&&l.nome.toLowerCase()===um.nome.toLowerCase()&&+l.valor>0);
     exemploRapido=um.nome.toLowerCase()+' '+(ref?Math.round(+ref.valor):(VALOR_EXEMPLO[um.cat]||50));
-    const inp=$('#rapido'); if(inp) inp.placeholder=exemploRapido;
+    const inp=$('#lNome'); if(inp) inp.placeholder='Ex.: '+um.nome.toLowerCase();
   }
   el.innerHTML=its.map(x=>`<button type="button" class="chip-s" data-chip="${esc(x.nome)}">
     <i style="background:${catDe(x.cat).c}"></i>${esc(x.nome)}</button>`).join('');
+  /* Um toque no atalho preenche o nome e leva direto ao valor: "Mercado",
+     80, Salvar — três toques, sem escrever uma letra. */
   el.querySelectorAll('[data-chip]').forEach(b=>b.onclick=()=>{
-    const inp=$('#rapido');
-    inp.value=b.dataset.chip+' ';
-    inp.focus();
-    try{ inp.setSelectionRange(inp.value.length,inp.value.length); }catch(e){}
-    renderEco(); vibrar(8);
+    $('#lNome').value=b.dataset.chip;
+    palpitarNoForm();
+    el.querySelectorAll('[data-chip]').forEach(x=>x.classList.toggle('on',x===b));
+    $('#lValor').focus();
+    vibrar(8);
   });
 }
 
@@ -5021,9 +5015,9 @@ function abrirFolha(){
   renderChips();
   $('#sheetBg').classList.add('abre');
   $('#sheet').classList.add('abre');
-  $('#rapido').value=''; renderEco();
+  limparFormGasto();
   document.body.style.overflow='hidden';
-  setTimeout(()=>$('#rapido').focus(),260);
+  setTimeout(()=>$('#lNome').focus(),260);
 }
 function fecharFolha(){
   folhaAberta=false;
@@ -5343,11 +5337,17 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){ if(folhaAberta) fecharFolha(); else if(!$('#retro').hidden) fecharRetro(); }
 });
 document.addEventListener('click',e=>{
-  if(e.target.closest('[data-abrir-folha]')) abrirFolha();
+  const af=e.target.closest('[data-abrir-folha]');
+  /* Do passo a passo vem "gasto fixo": a folha já abre com "todo mês, valor
+     igual" escolhido e a gaveta aberta, para a pessoa ver o que está marcado. */
+  if(af){ abrirFolha(); if(af.dataset.abrirFolha==='fixo'){ $('#lTipo').value='fixo'; ajustarCamposForm(); $('#mais').open=true; } }
 });
-$('#rapido').addEventListener('input',renderEco);
-$('#rapido').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); salvarRapido(); } });
-$('#rapidoOk').onclick=salvarRapido;
+$('#lNome').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault();
+  if(valorDe($('#lValor').value)>0) $('#addLanc').click(); else $('#lValor').focus(); } });
+$('#lValor').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $('#addLanc').click(); } });
+// O atalho marcado deixa de valer quando a pessoa escreve outro nome.
+$('#lNome').addEventListener('input',()=>{ const v=$('#lNome').value.trim().toLowerCase();
+  document.querySelectorAll('#chips [data-chip]').forEach(x=>x.classList.toggle('on',x.dataset.chip.toLowerCase()===v)); });
 /* A lista completa é uma CAMADA, não um pedaço do fim da página.
 
    Antes `ver todos` revelava uma seção no rodapé da área Hoje e rolava até
@@ -6142,6 +6142,7 @@ async function abrirApp(recemLogado, contaNova){
   sairFoco();
   if(!contaNova) abrirPortal();
   ligarVoltarPortal();
+  pintarBotaoAreas();
 
   await carregar();
 
@@ -6682,8 +6683,10 @@ function encerrarCena(){
    aparelho, não de conta: quem usa um celular fraco desliga ali, e isso não
    deve seguir a pessoa para o computador dela. */
 const FUNDO_APP='sobra:fundo-app';
+/* Desligada por padrão (v10.21): a esfera é enfeite, gasta bateria e é a
+   origem da armadilha do `--bg: transparent`. Liga quem pedir, em Ajustes. */
 function fundoLigado(){
-  try{ return localStorage.getItem('sobra:fundo-app')!=='0'; }catch(e){ return true; }
+  try{ return localStorage.getItem('sobra:fundo-app')==='1'; }catch(e){ return false; }
 }
 
 /* Leva a cena para trás do app: z-index abaixo do conteúdo, e o campo entra em
@@ -6711,8 +6714,11 @@ const CAPA_DESLIGADA='sobra:capa-off';
    partida, que roda ANTES desta linha do arquivo — ler a constante ali dá
    ReferenceError, o catch engolia e a preferência de quem desligou a abertura
    era ignorada. Depender de uma const declarada mais abaixo é armadilha. */
+/* A abertura animada é OPCIONAL desde a v10.21: só aparece para quem ligou
+   ('0' gravado). Um toque a mais a cada abertura, para ver uma animação, era
+   o primeiro obstáculo de quem só queria lançar um gasto. */
 function capaLigada(){
-  try{ return localStorage.getItem('sobra:capa-off')!=='1'; }catch(e){ return true; }
+  try{ return localStorage.getItem('sobra:capa-off')==='0'; }catch(e){ return false; }
 }
 function mostrarCapa(){
   /* No resgate a página vai embora em seguida: montar a esfera aqui só
@@ -6797,7 +6803,7 @@ function pintarSwitchPortal(){
 $('#swPortal').onclick=()=>{
   const ligar=!portalLigado();
   try{ localStorage.setItem(PORTAL_OFF, ligar?'0':'1'); }catch(e){}
-  pintarSwitchPortal();
+  pintarSwitchPortal(); pintarBotaoAreas();
   toast(ligar?'Cartas ligadas na entrada':'Cartas desligadas');
 };
 
@@ -7188,8 +7194,11 @@ function montarEscolhaAvatar(){
 }
 
 const PORTAL_OFF='sobra:portal-off';
+/* As cartas também viraram opcionais (v10.21). O app abre direto em Hoje,
+   com a barra de abas — escolher uma área antes de ver o próprio dinheiro era
+   o segundo toque desnecessário de toda abertura. */
 function portalLigado(){
-  try{ return localStorage.getItem('sobra:portal-off')!=='1'; }catch(e){ return true; }
+  try{ return localStorage.getItem('sobra:portal-off')==='0'; }catch(e){ return false; }
 }
 
 function montarPortal(){
@@ -7275,16 +7284,21 @@ document.addEventListener('keydown',e=>{
 
    Quem prefere a navegação livre continua tendo: "Ir direto para Hoje" nas
    cartas, e o ajuste que desliga a tela de entrada por completo. */
-function entrarFoco(){
-  document.body.classList.add('modo-foco');
-  const b=$('#voltarFoco'); if(b) b.hidden=false;
-  // A barra sai da ordem de leitura enquanto não está na tela.
-  const t=$('#tabbar'); if(t) t.setAttribute('aria-hidden','true');
-}
+/* v10.21: a barra de abas NUNCA sai da tela. Esconder a barra e obrigar a
+   voltar às cartas para trocar de área transformava "ir de Hoje para
+   Planejamento" em três toques e um caminho que precisava ser aprendido.
+   A carta continua levando para a área escolhida; daí em diante a navegação
+   é a de sempre. O nome fica porque é chamado de dois lugares. */
+function entrarFoco(){ sairFoco(); }
 function sairFoco(){
   document.body.classList.remove('modo-foco');
   const b=$('#voltarFoco'); if(b) b.hidden=true;
   const t=$('#tabbar'); if(t) t.removeAttribute('aria-hidden');
+}
+/* O botão de cartas do cabeçalho só existe para quem ligou as cartas: sem
+   elas ele não leva a lugar nenhum, e um botão que não faz nada é ruído. */
+function pintarBotaoAreas(){
+  const b=$('#voltarPortal'); if(b) b.hidden=!portalLigado();
 }
 function voltarAsAreas(){
   vibrar(8);

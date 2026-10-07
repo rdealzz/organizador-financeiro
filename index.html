@@ -204,7 +204,7 @@ html[data-tema="escuro"] #splash{background:#000}
         <circle cx="12" cy="8.4" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/>
       </svg>
     </button>
-    <button class="voltar-portal" id="voltarPortal" type="button"
+    <button class="voltar-portal" id="voltarPortal" type="button" hidden
             aria-label="Voltar para a escolha de áreas" title="Voltar para as áreas">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>
     </button>
@@ -293,11 +293,11 @@ html[data-tema="escuro"] #splash{background:#000}
 <!-- ══════════════════════ PLANEJAMENTO ══════════════════════ -->
 <div class="area" id="a-plano" hidden>
   <div class="subnav" role="tablist">
-    <button class="sub" role="tab" aria-selected="true" data-s="renda">Renda e meta</button>
+    <button class="sub" role="tab" aria-selected="true" data-s="renda">Renda</button>
     <button class="sub" role="tab" aria-selected="false" data-s="tetos">Tetos</button>
-    <button class="sub" role="tab" aria-selected="false" data-s="objetivos">Metas</button>
+    <button class="sub" role="tab" aria-selected="false" data-s="objetivos">Objetivos</button>
     <button class="sub" role="tab" aria-selected="false" data-s="guardar">Guardar</button>
-    <button class="sub" role="tab" aria-selected="false" data-s="entrou">Entrou</button>
+    <button class="sub" role="tab" aria-selected="false" data-s="entrou">Extra</button>
   </div>
 
   <!-- Renda e meta em dois passos numerados, e nada mais na primeira olhada.
@@ -539,13 +539,15 @@ html[data-tema="escuro"] #splash{background:#000}
     <button class="sub" role="tab" aria-selected="true" data-s="alertas">Alertas</button>
     <button class="sub" role="tab" aria-selected="false" data-s="extrato">Importar</button>
     <button class="sub" role="tab" aria-selected="false" data-s="conta">Conta</button>
-    <button class="sub" role="tab" aria-selected="false" data-s="assinatura">Assinatura</button>
+    <!-- v10.21: Assinatura saiu da barra (abre pelo menu do perfil). Uma aba
+         sobre uma versão paga que não existe era ruído entre as que servem. -->
+    <button class="sub" role="tab" aria-selected="false" data-s="assinatura" hidden>Assinatura</button>
     <button class="sub" role="tab" aria-selected="false" data-s="dados">Dados</button>
   </div>
 
   <section class="bloco" id="t-alertas">
     <h2>Alertas no celular</h2>
-    <p class="ajuda">O app avisa quando o gasto foge do plano e manda um lembrete nos horários que você escolher. Funciona melhor <b>instalado na tela inicial</b>. Nada passa por servidor: a checagem acontece no seu aparelho.</p>
+    <p class="ajuda">O app avisa quando o gasto foge do plano. Funciona melhor <b>instalado na tela inicial</b>.</p>
 
     <div id="notifEstado"></div>
     <div class="acoes">
@@ -555,11 +557,15 @@ html[data-tema="escuro"] #splash{background:#000}
     </div>
 
     <h3>Lembretes com hora marcada</h3>
-    <p class="ajuda">Escolha os horários em que quer ser lembrado. Em cada um o app manda a dica do momento — quanto dá pra gastar hoje, quanto guardar pra fatura, onde está gastando demais.</p>
     <div id="agenda"></div>
     <div class="acoes"><button class="btn sec" id="addHorario">+ Adicionar horário</button></div>
     <div id="avisoAgenda"></div>
 
+    <!-- v10.21: os oito interruptores já nascem ligados do jeito certo. Ficam
+         recolhidos para a tela de alertas caber numa olhada: ligar as
+         notificações é o que quase todo mundo vem fazer aqui. -->
+    <details class="mais" id="alertasDetalhe">
+    <summary>Escolher quais avisos receber</summary>
     <h3>Quando me avisar</h3>
     <div id="listaAlertas"></div>
 
@@ -570,6 +576,7 @@ html[data-tema="escuro"] #splash{background:#000}
       <div><label for="aDiasVenc">Dias antes de vencer</label><input type="number" inputmode="numeric" id="aDiasVenc" min="1" max="15" step="1" value="2"></div>
     </div>
     <p class="ajuda" style="margin-top:10px">Cada alerta é enviado <b>uma vez por ciclo</b> — ele não repete o mesmo aviso todo dia.</p>
+    </details>
 
     <h3>O que está pendente agora</h3>
     <div id="pendentes"></div>
@@ -648,21 +655,21 @@ html[data-tema="escuro"] #splash{background:#000}
       <div class="ai"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.4"/><circle cx="12" cy="12" r="8.6"/></svg></div>
       <div class="at"><div class="an">Abertura animada</div>
         <div class="ad">A tela de entrada com a esfera, a cada vez que o app abre. Vale por aparelho.</div></div>
-      <button class="sw" role="switch" id="swCapa" aria-checked="true" aria-label="Abertura animada"></button>
+      <button class="sw" role="switch" id="swCapa" aria-checked="false" aria-label="Abertura animada"></button>
     </div>
 
     <div class="alerta-linha" style="border-top:1px solid var(--sep);margin-top:var(--e4);padding-top:var(--e4)">
       <div class="ai"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="9.2" cy="9.6" r="1.1"/><circle cx="14.6" cy="13.4" r="1.1"/><circle cx="10.4" cy="15" r="1.1"/></svg></div>
       <div class="at"><div class="an">Esfera atrás do app</div>
         <div class="ad">Mantém o fundo animado durante o uso. A esfera acompanha o tema — clara no claro, escura no escuro — e gasta um pouco mais de bateria. Vale por aparelho.</div></div>
-      <button class="sw" role="switch" id="swFundo" aria-checked="true" aria-label="Esfera atrás do app"></button>
+      <button class="sw" role="switch" id="swFundo" aria-checked="false" aria-label="Esfera atrás do app"></button>
     </div>
 
     <div class="alerta-linha" style="border-top:1px solid var(--sep);margin-top:var(--e4);padding-top:var(--e4)">
       <div class="ai"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg></div>
       <div class="at"><div class="an">Cartas na entrada</div>
-        <div class="ad">A escolha de área em cartas, uma vez a cada abertura. Entrando por uma carta o app fica só naquela área, e o botão <b>Áreas</b>, no canto, é o caminho de volta para as outras. Desligado, o app abre direto em Hoje com a barra de abas de sempre. Vale por aparelho.</div></div>
-      <button class="sw" role="switch" id="swPortal" aria-checked="true" aria-label="Cartas na entrada"></button>
+        <div class="ad">Mostra a escolha de área em cartas a cada abertura. Desligado, o app abre direto em Hoje. Vale por aparelho.</div></div>
+      <button class="sw" role="switch" id="swPortal" aria-checked="false" aria-label="Cartas na entrada"></button>
     </div>
 
     <div id="trocaSenha" hidden>
@@ -936,46 +943,47 @@ html[data-tema="escuro"] #splash{background:#000}
       <button class="btn-x" id="sheetFechar" aria-label="Fechar">×</button>
     </div>
 
-    <div class="rapido">
-      <input id="rapido" autocomplete="off" enterkeyhint="done"
-             placeholder="ifood 45" aria-label="Descrição e valor do gasto">
-      <button class="btn" id="rapidoOk" aria-label="Salvar gasto">Salvar</button>
-    </div>
-    <div class="rapido-eco" id="rapidoEco"></div>
+    <!-- v10.21: UM formulário só. Antes havia dois jeitos de lançar — o campo
+         "mercado 800", que exigia aprender um formato, e um segundo formulário
+         escondido em "Mais opções" —, e quem abria a folha não sabia qual usar.
+         Agora são três perguntas com nome, na ordem em que se fala ("mercado,
+         80 reais, no cartão"), e um botão. Quem ainda escreve "mercado 80" no
+         primeiro campo continua sendo entendido (lerRapido). -->
+    <div class="novo">
+      <label class="novo-rot" for="lNome">O que você comprou?</label>
+      <input id="lNome" class="novo-nome" autocomplete="off" enterkeyhint="next" placeholder="Ex.: mercado">
+      <div class="chips" id="chips" aria-label="Atalhos"></div>
+      <p class="palpite" id="lPalpite" hidden></p>
 
-    <div class="chips" id="chips"></div>
-    <p class="sheet-fatura" id="sheetFatura"></p>
+      <label class="novo-rot" for="lValor">Quanto foi?</label>
+      <div class="novo-valor"><span aria-hidden="true">R$</span>
+        <input id="lValor" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done" placeholder="0,00"></div>
+
+      <!-- Como pagou muda quem cobra, não quanto custa: no cartão entra na
+           fatura e vence junto; no Pix já saiu da conta. Nos dois casos o
+           gasto conta igual no teto e na sobra do mês. -->
+      <span class="novo-rot">Como pagou?</span>
+      <div class="segm" id="lMeio" role="radiogroup" aria-label="Como pagou">
+        <button type="button" data-meio="cartao" class="on" role="radio" aria-checked="true">Cartão de crédito</button>
+        <button type="button" data-meio="avista" role="radio" aria-checked="false">Pix, débito ou dinheiro</button>
+      </div>
+      <p class="sheet-fatura" id="sheetFatura"></p>
+
+      <button class="btn novo-ok" id="addLanc" type="button">Salvar gasto</button>
+    </div>
 
     <details class="mais" id="mais">
-      <summary>Mais opções</summary>
-      <!-- Quatro campos à vista, e só. Categoria, peso e repetição chegam
-           preenchidos pelo nome (palpiteDoNome, no app.js): quem escreve
-           "estacionamento" não precisa procurar "Carro e transporte" numa
-           lista de dez. O resto aparece quando faz sentido — parcelas quando
-           é parcelado, quanto o outro cobre quando alguém divide — e o que
-           é ajuste fino fica numa gaveta. -->
+      <summary>Repete todo mês, é parcelado ou dividido com alguém?</summary>
       <div class="grade g2" style="margin-top:14px">
-        <div class="full"><label for="lNome">O que foi</label><input id="lNome" placeholder="Ex.: estacionamento"></div>
-        <div><label for="lValor">Valor</label><input type="number" inputmode="decimal" id="lValor" min="0" step="0.01" placeholder="0,00"></div>
-        <!-- Como pagou muda quem cobra, não quanto custa: no cartão entra na
-             fatura e vence junto; no Pix já saiu da conta. Nos dois casos o
-             gasto conta igual no teto e na sobra do mês. -->
-        <div class="full"><span class="rot-seg">Como pagou</span>
-          <div class="segm" id="lMeio" role="radiogroup" aria-label="Como pagou">
-            <button type="button" data-meio="cartao" class="on" role="radio" aria-checked="true">No cartão</button>
-            <button type="button" data-meio="avista" role="radio" aria-checked="false">Pix, débito ou dinheiro</button>
-          </div></div>
         <!-- A ordem é a da vida real: a maioria do que se lança é compra de uma
-             vez, então ela vem primeiro e é o padrão da folha. "Só neste mês" não
-             dizia isso — parecia um filtro de exibição, não a natureza do gasto. -->
-        <div><label for="lTipo">Repetição</label><select id="lTipo">
-          <option value="unico">Compra única — não repete</option>
+             vez, então ela vem primeiro e é o padrão da folha. -->
+        <div class="full"><label for="lTipo">Repete?</label><select id="lTipo">
+          <option value="unico">Não, foi só desta vez</option>
           <option value="var">Todo mês, valor muda</option>
           <option value="fixo">Todo mês, valor igual</option>
           <option value="parc">Parcelado</option></select></div>
         <!-- Parcelas e dia de vencimento andam juntos: é o par que o calendário
-             usa para espalhar a conta pelos meses. Ficavam separados — um aqui,
-             outro escondido na gaveta — e sem o dia a parcela não tinha onde cair. -->
+             usa para espalhar a conta pelos meses. -->
         <div id="campoParc" hidden><label for="lParc">Parcelas que ainda faltam</label>
           <input type="number" inputmode="numeric" id="lParc" min="0" step="1" placeholder="Ex.: 8"></div>
         <div id="campoVenc" hidden><label for="lVenc">Vence todo dia</label>
@@ -983,8 +991,8 @@ html[data-tema="escuro"] #splash{background:#000}
         <p class="ajuda full" id="lPrazo" style="margin:0" hidden></p>
         <!-- As opções deste select são as pessoas cadastradas: quem monta é
              pintarPagadorForm(), no app.js. -->
-        <div class="full"><label for="lPagador">Quem paga</label><select id="lPagador">
-          <option value="eu">Eu, sozinho</option></select></div>
+        <div class="full"><label for="lPagador">Quem paga?</label><select id="lPagador">
+          <option value="eu">Só eu</option></select></div>
         <div class="full" id="campoPai" hidden>
           <label for="lPai" id="labPai">Quanto a outra pessoa cobre</label>
           <div class="divisao">
@@ -996,22 +1004,18 @@ html[data-tema="escuro"] #splash{background:#000}
             <input type="number" inputmode="decimal" id="lPai" min="0" step="0.01" placeholder="0,00">
           </div>
           <p class="div-diz" id="lDivDiz"></p>
-          <!-- O caso que faltava: o pai compra no seu cartão e manda o Pix na
-               mesma tarde. A parte dele já não era sua (o orçamento nunca a
-               contou); o que muda aqui é só a COBRANÇA — marcado, o gasto não
-               volta na lista do que falta receber. -->
+          <!-- O pai compra no seu cartão e manda o Pix na mesma tarde: marcado,
+               o gasto não volta na lista do que falta receber. -->
           <label class="caixa" for="lJaPago">
             <input type="checkbox" id="lJaPago">
             <span><b id="lJaPagoTx">Ela já me pagou esta parte</b>
-              <em>Pix, dinheiro ou desconto — já acertado, não entra na cobrança do mês.</em></span>
+              <em>Já acertado — não entra na cobrança do mês.</em></span>
           </label>
         </div>
       </div>
 
-      <p class="palpite" id="lPalpite" hidden></p>
-
       <details class="mais2" id="mais2">
-        <summary>Categoria, conta e outros ajustes</summary>
+        <summary>Categoria e outros ajustes</summary>
         <div class="grade g2" style="margin-top:12px">
           <div><label for="lCat">Categoria</label><select id="lCat"></select></div>
           <div><label for="lTier">Peso</label><select id="lTier">
@@ -1024,9 +1028,6 @@ html[data-tema="escuro"] #splash{background:#000}
             <option value="1">A próxima</option></select></div>
         </div>
       </details>
-
-      <div class="acoes"><button class="btn" id="addLanc">Adicionar</button></div>
-      <p class="ajuda" style="margin:6px 0 0"><b>Repetição:</b> <i>compra única</i> é o caso comum — uma garrafa de água, um cinema: entra neste ciclo e não volta no próximo; <i>todo mês, valor muda</i> é a conta que se repete com valor diferente (mercado, combustível) e volta em branco pra você preencher; <i>todo mês, valor igual</i> repete sozinho com o mesmo valor (aluguel, assinatura); <i>parcelado</i> desconta uma parcela por fatura. <b>Como pagou:</b> <i>no cartão</i> entra na fatura e vence junto com ela; <i>Pix, débito ou dinheiro</i> já saiu da sua conta e fica fora da fatura — mas conta igual no seu gasto do mês e no teto da categoria. <b>Quem paga:</b> cadastre quem divide com você — pai, mãe, quem for — em <b>+ Nova pessoa</b>, ali no próprio select. O gasto continua inteiro no lançamento, mas só a sua parte conta no teto.</p>
     </details>
   </div>
 </div>

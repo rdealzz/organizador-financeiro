@@ -126,11 +126,32 @@ const cmp=(n,a,b)=>eh(n,JSON.stringify(a)===JSON.stringify(b),[a,b]);
  await semErro('escolher parcelado mostra parcelas', ()=>p.evaluate(()=>{
    const s=document.querySelector('#lTipo'); s.value='parc'; s.dispatchEvent(new Event('change',{bubbles:true}));}));
  eh('parcelas apareceram',await p.evaluate(()=>!document.querySelector('#campoParc').hidden));
- await semErro('lançar pelo campo rápido', ()=>p.evaluate(()=>{
-   const i=document.querySelector('#rapido'); i.value='estacionamento 25 pix';
-   i.dispatchEvent(new Event('input',{bubbles:true})); salvarRapido();}));
+ // o jeito antigo, tudo num campo só, continua sendo entendido
+ await semErro('lançar escrevendo "estacionamento 25 pix" no nome', ()=>p.evaluate(()=>{
+   const s=document.querySelector('#lTipo'); s.value='unico'; s.dispatchEvent(new Event('change',{bubbles:true}));
+   const i=document.querySelector('#lNome'); i.value='estacionamento 25 pix';
+   i.dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('#addLanc').click();}));
  const novo=await p.evaluate(()=>{const l=S.lanc[S.lanc.length-1];return{nome:l.nome,valor:l.valor,cat:l.cat,meio:l.meio,tipo:l.tipo};});
- cmp('gasto rápido entrou certo',[novo.valor,novo.cat,novo.meio,novo.tipo],[25,'transporte','avista','unico']);
+ cmp('gasto num campo só entrou certo',[novo.nome,novo.valor,novo.cat,novo.meio,novo.tipo],['Estacionamento',25,'transporte','avista','unico']);
+ eh('a folha fecha depois de salvar',await p.evaluate(()=>!document.querySelector('#sheet').classList.contains('abre')));
+ // o caminho novo: atalho → valor com vírgula → Pix → Salvar
+ await semErro('lançar pelo atalho com valor "12,50" e Pix', ()=>p.evaluate(()=>{
+   abrirFolha();
+   const chip=[...document.querySelectorAll('#chips [data-chip]')].find(b=>/uber/i.test(b.dataset.chip))
+     ||document.querySelector('#chips [data-chip]');
+   chip.click();
+   document.querySelector('#lValor').value='12,50';
+   document.querySelector('#lMeio [data-meio="avista"]').click();
+   document.querySelector('#addLanc').click();}));
+ const pelo=await p.evaluate(()=>{const l=S.lanc[S.lanc.length-1];return{valor:l.valor,meio:l.meio,fonte:l.fonte};});
+ cmp('o atalho lançou R$ 12,50 à vista',[pelo.valor,pelo.meio,pelo.fonte],[12.5,'avista','Pix']);
+ eh('o meio volta a cartão no próximo gasto',await p.evaluate(()=>{abrirFolha();return meioForm==='cartao';}));
+ cmp('valorDe entende o jeito brasileiro',await p.evaluate(()=>['45','45,90','1.234,56','R$ 80','12.500','45.5','','abc'].map(valorDe)),
+     [45,45.9,1234.56,80,12500,45.5,0,0]);
+ await semErro('sem valor não salva', ()=>p.evaluate(()=>{const n=S.lanc.length;
+   document.querySelector('#lNome').value='padaria'; document.querySelector('#lValor').value='';
+   document.querySelector('#addLanc').click(); window.__n=[n,S.lanc.length];}));
+ eh('sem valor não entra nada',await p.evaluate(()=>window.__n[0]===window.__n[1]));
  // a folha completa: lançar com "todo mês" e conferir que o campo volta sozinho
  await semErro('lançar pela folha completa', ()=>p.evaluate(()=>{
    document.querySelector('#lNome').value='aluguel';
