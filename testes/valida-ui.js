@@ -200,6 +200,46 @@ const cmp=(n,a,b)=>eh(n,JSON.stringify(a)===JSON.stringify(b),[a,b]);
  cmp('voltando sem destino, cai de novo no básico',simp.volta,'renda');
  cmp('completo: as cinco abas de Planejamento',simp.todas,5);
 
+ // ── 4d. três abas e vários cartões (v10.23)
+ const nav=await p.evaluate(()=>{
+   const tabs=[...document.querySelectorAll('#tabbar .tb')].map(b=>b.dataset.a);
+   irPara('plano:renda');
+   const maisAceso=document.querySelector('#tabbar [data-a="mais"]').getAttribute('aria-selected')==='true';
+   const voltar=!document.querySelector('#voltarMais').hidden, tit=document.querySelector('#tituloArea').textContent;
+   document.querySelector('#voltarMais').click();
+   const emMais=AREA==='mais'&&document.querySelectorAll('#maisLista [data-mais]').length>=7;
+   return {tabs,maisAceso,voltar,tit,emMais};});
+ cmp('a barra tem três abas',nav.tabs,['hoje','gastos','mais']);
+ eh('tela aberta por Mais acende Mais e mostra Voltar',nav.maisAceso&&nav.voltar&&nav.tit==='Minha renda',nav);
+ eh('Voltar leva para a lista de Mais',nav.emMais,nav);
+ const car=await p.evaluate(()=>{
+   S.cartoes=[{id:'c0',nome:'Nubank'},{id:'cx',nome:'Itaú'}];
+   abrirFolha();
+   const botoes=[...document.querySelectorAll('#lMeio button')].map(b=>b.textContent);
+   document.querySelector('#lNome').value='sapato'; document.querySelector('#lValor').value='200';
+   document.querySelector('#lTipoSeg [data-tiposeg="parc"]').click();
+   const parcVis=!document.querySelector('#campoParc').hidden;
+   document.querySelector('#lParc').value='4';
+   document.querySelector('#lMeio [data-cartao="cx"]').click();
+   document.querySelector('#addLanc').click();
+   const l=S.lanc[S.lanc.length-1];
+   irPara('gastos'); render();
+   const grupos=[...document.querySelectorAll('#listaGastos .g-cab b')].map(b=>b.textContent);
+   const somaItau=[...document.querySelectorAll('#listaGastos .g-grupo')].find(g=>/Itaú/.test(g.textContent))
+     .querySelector('.g-soma b').textContent;
+   const total=document.querySelector('#listaGastos .g-total-l b').textContent;
+   const esperado=brl(doCiclo().reduce((t,x)=>t+(+x.valor||0),0));
+   return {botoes,parcVis,tipo:l.tipo,pRest:l.pRest,cartao:l.cartao,grupos,somaItau,total,esperado};});
+ cmp('um botão por cartão e "sem cartão"',car.botoes,['Nubank','Itaú','Sem cartão']);
+ eh('"Parcelado" mostra o campo de parcelas',car.parcVis);
+ cmp('o gasto guardou tipo, parcelas e cartão',[car.tipo,car.pRest,car.cartao],['parc',4,'cx']);
+ eh('a lista separa por cartão',car.grupos.includes('Nubank')&&car.grupos.includes('Itaú'),car.grupos);
+ eh('a soma do Itaú inclui o gasto novo',/200,00/.test(car.somaItau),car.somaItau);
+ cmp('o total do mês é a soma de tudo',car.total,car.esperado);
+ eh('editar troca o cartão',await p.evaluate(()=>{const l=S.lanc[S.lanc.length-1]; abrirEdicao(l.id);
+   document.querySelector('#eMeio [data-ecartao="c0"]').click(); salvarEdicao(); return !l.cartao&&cartaoDe(l)==='c0';}));
+ await p.evaluate(()=>{S.lanc.pop(); S.cartoes=[]; irPara('hoje'); render();});
+
  // ── 5. calendário, pelas três portas
  for(const porta of ['#abrirCal','#btnCalTopo']){
    await semErro('calendário abre por '+porta, async()=>{

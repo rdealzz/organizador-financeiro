@@ -348,6 +348,59 @@ let viz3d=null, viz3dChave='';
    Mora AQUI no topo, junto de `cena`, porque renderFatura() o lê e render()
    roda antes do fim deste arquivo quando o app reabre com sessão salva. */
 let meioForm='cartao';
+/* ══════════════════ VÁRIOS CARTÕES (v10.23) ══════════════════
+
+   Pedido de quem usa: "separar o que é de um cartão, o que é de outro e o que
+   não é de cartão nenhum, e dar a soma no final". `S.cartoes` é a lista
+   ({id, nome}); cada gasto no cartão guarda `l.cartao` com o id.
+
+   Quem nunca cadastrou cartão tem UM, implícito, chamado "Cartão", com id
+   'c0'. Todo gasto antigo (sem `l.cartao`) é desse cartão — nada é migrado,
+   a ausência do campo já diz isso. O id nunca é vazio: a mesclagem entre
+   aparelhos indexa listas por id, e id vazio viraria duplicata.
+
+   O que isto NÃO faz: datas de fechamento por cartão. O ciclo continua sendo
+   um só (`diaFech`/`diaVenc`); a separação é de soma e de lista. */
+let cartaoForm='c0';
+function cartoes(){ return (S.cartoes&&S.cartoes.length)?S.cartoes:[{id:'c0',nome:'Cartão'}]; }
+function cartaoDe(l){ return l.cartao||'c0'; }
+function nomeCartao(id){ const c=cartoes().find(x=>x.id===(id||'c0')); return c?c.nome:'Outro cartão'; }
+function novoCartao(){
+  if(!S.cartoes||!S.cartoes.length){
+    /* Primeiro cartão novo: o de sempre ganha nome antes, senão a lista teria
+       "Cartão" e "Itaú" e ninguém saberia qual é o "Cartão". */
+    const velho=prompt('Qual o nome do cartão que você já usa?\n\nEx.: Nubank','Cartão');
+    if(velho===null) return null;
+    S.cartoes=[{id:'c0',nome:(velho.trim()||'Cartão').slice(0,20)}];
+  }
+  const n=prompt('Nome do outro cartão:\n\nEx.: Itaú, Caixa, Mercado Pago');
+  if(!n||!n.trim()) return null;
+  const c={id:'c'+Date.now().toString(36),nome:n.trim().slice(0,20)};
+  S.cartoes.push(c); salvar();
+  return c;
+}
+function renomearCartao(id){
+  const atual=nomeCartao(id);
+  const n=prompt('Novo nome do cartão:',atual); if(!n||!n.trim()) return;
+  if(!S.cartoes||!S.cartoes.length) S.cartoes=[{id:'c0',nome:'Cartão'}];
+  const c=S.cartoes.find(x=>x.id===id); if(!c) return;
+  c.nome=n.trim().slice(0,20); render(); salvar();
+}
+/* Os botões de "onde pagou": um por cartão, mais "sem cartão". Servem à folha
+   de lançar (pre 'l') e à de editar (pre 'e'). Só reescreve o HTML quando a
+   lista muda — reescrever o botão que está sendo clicado mata o clique (v10.1). */
+function pintarOnde(el,pre,meio,cartao){
+  if(!el) return;
+  const at=pre==='l'?['data-meio','data-cartao']:['data-emeio','data-ecartao'];
+  const html=cartoes().map(c=>`<button type="button" ${at[0]}="cartao" ${at[1]}="${esc(c.id)}" role="radio">${esc(cartoes().length>1?c.nome:'Cartão de crédito')}</button>`).join('')
+    +`<button type="button" ${at[0]}="avista" ${at[1]}="" role="radio">${cartoes().length>1?'Sem cartão':'Sem cartão (Pix, débito, dinheiro)'}</button>`;
+  if(el.dataset.html!==html){ el.innerHTML=html; el.dataset.html=html; }
+  el.querySelectorAll('button').forEach(b=>{
+    const on=meio==='avista'?b.getAttribute(at[0])==='avista'
+      :(b.getAttribute(at[0])==='cartao'&&b.getAttribute(at[1])===(cartao||'c0'));
+    b.classList.toggle('on',on); b.setAttribute('aria-checked',on?'true':'false');
+  });
+}
 /* Retrospectiva que está esperando o portal sair da frente — ver abrirApp(). */
 let retroPendente=null;
 /* Promessa que só resolve quando a capa sai. Quem revela o app espera por ela,
@@ -375,7 +428,7 @@ const ALERTAS_PADRAO={
    claro a cada recarga. O padrão claro mora em TEMA_PADRAO, lá embaixo, como
    ÚLTIMO recurso: só vale quando não há escolha nenhuma. */
 let S={versao:2,tema:'auto',avatar:'',salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:12,ultimoFech:null,hist:[],
-       tetos:{},lanc:SEED,div:[],obj:[],pessoas:[],meses:6,jaTem:0,entradas:[],guard:[],
+       tetos:{},lanc:SEED,div:[],obj:[],pessoas:[],cartoes:[],meses:6,jaTem:0,entradas:[],guard:[],
        orcaOculto:null,orcaEm:null,
        alertas:{teto:true,gasto:true,meta:true,fechamento:true,vencimento:true,contas:true,variavel:true,parcela:false},
        aTetoPct:85,aDiasFech:3,aDiasVenc:2,notifLog:{},_ultimoSalvo:0};
@@ -769,7 +822,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v10.22';
+const VERSAO_APP='v10.23';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -1081,7 +1134,7 @@ function render(){
   $('#blocoOnde').hidden=vazio;
   $('#topoUltimos').hidden=vazio;
   $('#blocoUltimos').classList.toggle('sem-moldura',vazio);
-  renderTopCats(c); renderUltimos(c);
+  renderTopCats(c); renderUltimos(c); renderListaGastos(c);
   renderMeta(c); renderHist(); renderTetos(c); renderPessoas(c); renderLanc(c); renderCortes(c); renderReserva(c); renderObj(c); renderDiv(); renderCofre(c); renderEntradas(c);
   renderVenc(c); renderFatura(c); renderAlertas(c); renderChips();
   /* O extrato só é montado quando está na tela. Ele pode varrer o histórico
@@ -2436,6 +2489,7 @@ $('#lPagador').onchange=e=>{
    é o que faz ele caber numa olhada. */
 function ajustarCamposForm(){
   const tipo=$('#lTipo').value, parc=tipo==='parc';
+  pintarTipoSeg();
   const cp=$('#campoParc'); if(cp) cp.hidden=!parc;
   if(!parc) $('#lParc').value='';
   /* O dia de vencimento só faz sentido para o que volta — e para o que volta
@@ -2463,22 +2517,37 @@ $('#lTipo').onchange=()=>{ ajustarCamposForm(); if($('#lTipo').value==='parc') $
 let catNaMao=false;
 function pintarMeio(){
   const g=$('#lMeio'); if(!g) return;
-  g.querySelectorAll('[data-meio]').forEach(b=>{
-    const on=b.dataset.meio===meioForm;
-    b.classList.toggle('on',on);
-    b.setAttribute('aria-checked',on?'true':'false');
-  });
+  pintarOnde(g,'l',meioForm,cartaoForm);
   // "entra na fatura" não existe pra quem já pagou à vista
   const cf=$('#lFatura'); if(cf){ const box=cf.closest('div'); if(box) box.hidden=(meioForm==='avista'); }
   if(meioForm==='avista'&&cf) cf.value='0';
 }
 document.addEventListener('click',e=>{
   const b=e.target.closest('#lMeio [data-meio]'); if(!b) return;
-  meioForm=b.dataset.meio; pintarMeio(); linhaFaturaDaFolha(meioForm==='avista'); vibrar(8);
+  meioForm=b.dataset.meio; if(meioForm==='cartao') cartaoForm=b.dataset.cartao||'c0'; pintarMeio(); linhaFaturaDaFolha(meioForm==='avista'); vibrar(8);
   const f=$('#lFonte');
   if(meioForm==='avista'&&(!f.value.trim()||f.value.trim()==='Conta')) f.value='Pix';
   if(meioForm==='cartao'&&f.value.trim()==='Pix') f.value='';
 });
+/* Os três botões de tipo escrevem no select escondido e avisam quem o escuta. */
+function pintarTipoSeg(){
+  const v=$('#lTipo').value, alvo=v==='var'?'fixo':v;
+  document.querySelectorAll('#lTipoSeg [data-tiposeg]').forEach(b=>{
+    const on=b.dataset.tiposeg===alvo;
+    b.classList.toggle('on',on); b.setAttribute('aria-checked',on?'true':'false');
+  });
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('#lTipoSeg [data-tiposeg]'); if(!b) return;
+  const t=$('#lTipo'); t.value=b.dataset.tiposeg;
+  t.dispatchEvent(new Event('change',{bubbles:true}));
+  vibrar(8);
+});
+$('#lNovoCartao').onclick=()=>{
+  const c=novoCartao(); if(!c) return;
+  meioForm='cartao'; cartaoForm=c.id; pintarMeio(); render();
+  toast(c.nome+' entrou na lista');
+};
 function palpitarNoForm(){
   const nome=$('#lNome').value.trim();
   const p=$('#lPalpite');
@@ -2543,6 +2612,7 @@ function temaAtual(){
    telas é um botão que a pessoa procura e não acha. */
 const BOTOES_TEMA=['#btnTema','#portalTema','#temaFlutua'];
 BOTOES_TEMA.forEach(id=>{ const b=$(id); if(b) b.onclick=alternarTema; });
+{ const sw=$('#swTema'); if(sw) sw.onclick=alternarTema; }
 
 function aplicarTema(){
   S.tema=temaAtual();
@@ -2559,6 +2629,7 @@ function aplicarTema(){
      e o app não abria. O desenho entra na segunda chamada, no fim do arquivo. */
   let ic='';
   try{ ic=icone(esc?'sol':'lua',20); }catch(e){}
+  const swT=$('#swTema'); if(swT) swT.setAttribute('aria-checked',esc?'true':'false');
   BOTOES_TEMA.forEach(id=>{
     const b=$(id); if(!b) return;
     // O botão do cabeçalho é liso; os outros dois têm a face da tecla.
@@ -2623,6 +2694,7 @@ $('#addLanc').onclick=()=>{
     com:'',pai:Math.min(+$('#lPai').value||0,valor),ref:0,venc:Math.min(Math.max(+$('#lVenc').value||0,0),31),
     meio,
     prox:(meio==='cartao'&&+$('#lFatura').value===1)?1:0};
+  if(meio==='cartao'&&cartaoForm&&cartaoForm!=='c0') l.cartao=cartaoForm;
   const pag=$('#lPagador').value;
   if(pag==='eu'||pag==='+'){ l.pai=0; l.com=''; }
   else{
@@ -2642,7 +2714,7 @@ $('#addLanc').onclick=()=>{
      de Hoje com o gasto no topo dos últimos lançamentos, mais o aviso. */
   fecharFolha();
   const f=faturaAberta();
-  snack(l.nome+' · '+brl(l.valor)+(l.meio==='avista'?' · já pago':l.prox?' · próxima fatura':' · fatura de '+ddmm(f.vence)),
+  snack(l.nome+' · '+brl(l.valor)+(l.meio==='avista'?' · sem cartão':(cartoes().length>1?' · '+nomeCartao(l.cartao):'')+(l.prox?' · próxima fatura':'')),
     'Desfazer',()=>{ S.lanc=S.lanc.filter(x=>x.id!==l.id); render(); salvar(); toast('Desfeito'); });
 };
 /* Tudo volta ao padrão depois de lançar. Ninguém confere um campo que já
@@ -2653,6 +2725,11 @@ function limparFormGasto(){
   $('#lFatura').value='0';
   if($('#lJaPago')) $('#lJaPago').checked=false;
   $('#lTipo').value='unico';
+  /* O cartão que vem marcado é o do último gasto no cartão: quem usa mais um
+     cartão do que o outro não precisa escolher toda vez. */
+  const ult=[...S.lanc].filter(x=>naFatura(x)).sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0))[0];
+  cartaoForm=ult?cartaoDe(ult):'c0';
+  if(!cartoes().some(c=>c.id===cartaoForm)) cartaoForm=cartoes()[0].id;
   catNaMao=false; meioForm='cartao'; pintarMeio();
   pintarPagadorForm('eu'); ajustarCamposForm(); palpitarNoForm();
   linhaFaturaDaFolha(false);
@@ -2768,7 +2845,7 @@ document.addEventListener('click',e=>{
 });
 $('#zerar').onclick=()=>{ if(confirm('Apagar tudo e recomeçar do zero?')){
   S=Object.assign({},S,{salario:0,extra:0,metaPct:20,metaVal:0,diaFech:5,diaVenc:12,
-     ultimoFech:iso(ultimoFechPassado()),hist:[],tetos:{},lanc:[],div:[],obj:[],pessoas:[],meses:6,jaTem:0,entradas:[],guard:[],metaCiclo:null,notifLog:{},agendaLog:{},retroVista:null,orcaOculto:null,orcaEm:null});
+     ultimoFech:iso(ultimoFechPassado()),hist:[],tetos:{},lanc:[],div:[],obj:[],pessoas:[],cartoes:[],meses:6,jaTem:0,entradas:[],guard:[],metaCiclo:null,notifLog:{},agendaLog:{},retroVista:null,orcaOculto:null,orcaEm:null});
   ['salario','extra','jaTem','metaVal'].forEach(i=>$('#'+i).value=''); $('#metaPct').value=20; $('#meses').value=6;
   avisoCiclo=''; render(); salvar();
   Auth.apagarEstadoNaNuvem().catch(()=>{});
@@ -3354,7 +3431,7 @@ function desmarcarPago(id){
    Esta folha edita TUDO de um lançamento que já existe. Ela é irmã da folha de
    novo gasto e usa os mesmos rótulos de propósito: quem aprendeu a lançar não
    precisa aprender a editar. */
-let edId=null, edMeio='cartao';
+let edId=null, edMeio='cartao', edCartao='c0';
 
 /* ---------- a lista de quem divide, na folha de edição ----------
 
@@ -3445,7 +3522,7 @@ function abrirEdicao(id){
   $('#eParc').value=(+l.pRest||0)||'';
   $('#eVenc').value=(+l.venc||0)||'';
   $('#eFatura').value=(+l.prox>0)?'1':'0';
-  edMeio=naFatura(l)?'cartao':'avista';
+  edMeio=naFatura(l)?'cartao':'avista'; edCartao=cartaoDe(l);
   edDivs=divisoes(l).map(d=>({id:d.id,valor:d.valor,pg:acertado(l,d.id),quando:dataAcerto(l,d.id)}));
   pintarMeioEd(); ajustarEdicao();
   $('#edBg').classList.add('abre');
@@ -3461,10 +3538,7 @@ function fecharEdicao(){
 }
 function pintarMeioEd(){
   const g=$('#eMeio'); if(!g) return;
-  g.querySelectorAll('[data-emeio]').forEach(b=>{
-    const on=b.dataset.emeio===edMeio;
-    b.classList.toggle('on',on); b.setAttribute('aria-checked',on?'true':'false');
-  });
+  pintarOnde(g,'e',edMeio,edCartao);
   const cf=$('#eCampoFatura'); if(cf) cf.hidden=(edMeio==='avista');
 }
 /* Mesma ideia do formulário de lançar: campo que não vale para a resposta
@@ -3507,6 +3581,7 @@ function salvarEdicao(){
   l.pRest=(tipo==='parc')?Math.max(+$('#eParc').value||0,0):0;
   l.venc=Math.min(Math.max(+$('#eVenc').value||0,0),31);
   l.meio=edMeio;
+  if(edMeio==='cartao'&&edCartao&&edCartao!=='c0') l.cartao=edCartao; else delete l.cartao;
   l.prox=(edMeio==='cartao'&&+$('#eFatura').value===1)?1:0;
   /* A lista é a verdade; `pai` e `com` são derivados dela em sincronizarDivs.
      Guardar `divs` com uma pessoa só seria peso morto — a própria função
@@ -4510,11 +4585,17 @@ document.addEventListener('visibilitychange',()=>{
    ========================================================================== */
 const AREAS={
   hoje:    {titulo:'Hoje',        subs:[]},
+  gastos:  {titulo:'Gastos',      subs:[]},
+  mais:    {titulo:'Mais',        subs:[]},
   plano:   {titulo:'Planejamento',subs:['renda','tetos','objetivos','guardar','entrou']},
   analise: {titulo:'Análises',    subs:['graficos','cortes','hist','extratos']},
   ajustes: {titulo:'Ajustes',     subs:['alertas','conta','assinatura','extrato','dados']}
 };
 let AREA='hoje';
+/* As três áreas antigas viraram telas que se abrem a partir de Mais (v10.23).
+   Enquanto uma delas está aberta, a aba Mais fica acesa e o cabeçalho mostra
+   "Voltar". */
+const SOB_MAIS=['plano','analise','ajustes'];
 const SUB={plano:'renda',analise:'graficos',ajustes:'conta'};
 
 /* ==========================================================================
@@ -4552,7 +4633,9 @@ function irPara(destino){
   // Sem destino explícito, uma sub-aba que saiu da barra não é onde se cai.
   else if(SUB[area]&&!subVisivel(area,SUB[area])) SUB[area]=AREAS[area].subs.find(x=>subVisivel(area,x))||SUB[area];
   Object.keys(AREAS).forEach(a=>{ const el=$('#a-'+a); if(el) el.hidden=(a!==area); });
-  document.querySelectorAll('.tb').forEach(b=>b.setAttribute('aria-selected',b.dataset.a===area));
+  document.querySelectorAll('.tb').forEach(b=>b.setAttribute('aria-selected',
+    b.dataset.a===area||(b.dataset.a==='mais'&&SOB_MAIS.includes(area))));
+  const vm=$('#voltarMais'); if(vm) vm.hidden=!SOB_MAIS.includes(area);
   const el=$('#a-'+area);
   if(el){
     let vis=0;
@@ -4563,16 +4646,152 @@ function irPara(destino){
       if(!b.hidden) vis++;
       const sec=$('#t-'+b.dataset.s); if(sec) sec.hidden=!alvo;
     });
-    // Uma aba só não é escolha: a barra some e a tela fica com o conteúdo.
-    const nav=el.querySelector('.subnav'); if(nav) nav.hidden=vis<2;
+    /* v10.23: a barra de sub-abas não aparece mais. Cada linha de Mais abre
+       UMA tela, com o nome dela no título — duas fileiras de abas (a de baixo
+       e esta) eram a "muita aba" da queixa. A barra continua no HTML porque é
+       por ela que esta função mostra e esconde as seções. */
+    const nav=el.querySelector('.subnav'); if(nav) nav.hidden=true;
   }
-  $('#tituloArea').textContent=AREAS[area].titulo;
+  const item=SOB_MAIS.includes(area)&&MAIS_ITENS.find(x=>x.ir===area+':'+SUB[area]);
+  $('#tituloArea').textContent=item?item.t:AREAS[area].titulo;
+  if(area==='mais') renderMais();
   if(area==='analise'&&SUB.analise==='graficos') renderGraficos(calc());
   if(area==='analise'&&SUB.analise==='extratos') renderExtratos();
   if(area==='ajustes'){ renderAlertas(calc()); renderAssinatura(); }
   try{ history.replaceState(null,'','?ir='+area+(AREAS[area].subs.length?':'+SUB[area]:'')); }catch(e){}
   window.scrollTo({top:0,behavior:'smooth'});
 }
+
+/* ══════════════════ MAIS — o resto do app, numa lista (v10.23) ══════════════════
+
+   Cada linha diz em palavras o que abre. `c:1` marca o que só aparece com
+   "Mostrar todas as funções" ligado. A ordem é a da frequência de uso, não a
+   das áreas antigas. */
+const MAIS_ITENS=[
+  {ir:'plano:renda',      ic:'cartao',     t:'Minha renda',          d:'Quanto entra e quanto quero guardar'},
+  {ir:'analise:graficos', ic:'subindo',    t:'Gráficos',             d:'Para onde foi o dinheiro'},
+  {ir:'analise:hist',     ic:'nota',       t:'Meses anteriores',     d:'As faturas que já fecharam'},
+  {acao:'cal',            ic:'calendario', t:'Calendário de contas', d:'Quando cada conta vence'},
+  {ir:'ajustes:alertas',  ic:'relogio',    t:'Avisos no celular',    d:'Lembretes e alertas de gasto'},
+  {ir:'ajustes:conta',    ic:'lapis',      t:'Minha conta',          d:'Nome, senha e sincronização'},
+  {ir:'ajustes:dados',    ic:'certo',      t:'Meus dados',           d:'Cópia de segurança e recuperar'},
+  {ir:'plano:tetos',      ic:'alvo',       t:'Tetos por categoria',  d:'Quanto cabe em cada categoria', c:1},
+  {ir:'plano:objetivos',  ic:'alvo',       t:'Objetivos e dívidas',  d:'Reserva, metas e juros', c:1},
+  {ir:'plano:guardar',    ic:'certo',      t:'Cofre',                d:'Quanto já guardei', c:1},
+  {ir:'plano:entrou',     ic:'raio',       t:'Dinheiro extra',       d:'Venda, freela, 13º', c:1},
+  {ir:'analise:cortes',   ic:'tesoura',    t:'O que cortar',         d:'Onde dá para economizar', c:1},
+  {ir:'analise:extratos', ic:'nota',       t:'Extrato em PDF',       d:'Para mandar a quem divide comigo', c:1},
+  {ir:'ajustes:extrato',  ic:'descendo',   t:'Importar do banco',    d:'Trazer gastos de um extrato', c:1},
+  {ir:'ajustes:assinatura',ic:'festa',     t:'Assinatura',           d:'O que a versão paga traria', c:1}
+];
+function renderMais(){
+  const el=$('#maisLista'); if(!el) return;
+  const comp=modoCompleto();
+  el.innerHTML=MAIS_ITENS.filter(x=>!x.c||comp).map((x,i)=>`
+    <button type="button" class="mais-item" data-mais="${i}">
+      <span class="mi-ic">${icone(x.ic,20)}</span>
+      <span class="mi-tx"><b>${esc(x.t)}</b><small>${esc(x.d)}</small></span>
+      <span class="mi-seta" aria-hidden="true">›</span>
+    </button>`).join('')
+    +`<button type="button" class="mais-item sair" id="maisSair"><span class="mi-tx"><b>Sair da conta</b></span></button>`;
+  const vis=MAIS_ITENS.filter(x=>!x.c||comp);
+  el.querySelectorAll('[data-mais]').forEach(b=>b.onclick=()=>{
+    const x=vis[+b.dataset.mais]; vibrar(8);
+    if(x.acao==='cal'){ abrirCalendario(); return; }
+    irPara(x.ir);
+  });
+  $('#maisSair').onclick=()=>sairDaConta();
+}
+
+/* ══════════════════ GASTOS — a lista do mês (v10.23) ══════════════════
+
+   O que antes morava numa tabela de sete colunas com selects em cada linha.
+   Aqui é uma lista: nome, categoria, valor. Tocar abre a folha de edição, que
+   é onde se muda ou se apaga — um lugar só para mexer num gasto, em vez de
+   seis controles por linha. A tabela continua em "ver em tabela", no modo
+   completo. */
+function rotuloDia(ts){
+  const d=new Date(ts||Date.now()); d.setHours(0,0,0,0);
+  const h=hojeD(), dif=Math.round((h-d)/86400000);
+  if(dif===0) return 'Hoje';
+  if(dif===1) return 'Ontem';
+  return d.getDate()+' de '+MES_LONGO[d.getMonth()];
+}
+function tipoDoGasto(l){
+  if(l.tipo==='parc') return 'Parcelado · faltam '+(+l.pRest||0);
+  if(l.tipo==='fixo'||l.tipo==='var') return 'Fixo';
+  return 'Do mês';
+}
+function linhaGasto(l){
+  const meu=meuValor(l), divide=+l.pai>0;
+  const quando=l.tipo==='unico'&&l.criadoEm?' · '+rotuloDia(l.criadoEm).toLowerCase():'';
+  return `<div class="item lin-gasto" data-editar="${l.id}" role="button" tabindex="0" aria-label="Mudar ou apagar ${esc(l.nome)}">
+    <div class="ic" style="background:color-mix(in srgb,${catDe(l.cat).c} 13%,transparent);color:${catDe(l.cat).c}"
+      >${icone(ICONE_CAT[l.cat]||'outros')}</div>
+    <div class="tx"><div class="nm">${esc(l.nome)}</div>
+      <div class="dt"><span class="g-tipo t-${l.tipo==='var'?'fixo':l.tipo}">${tipoDoGasto(l)}</span>${quando}${divide?' · com '+esc(nomePessoa(l.com)):''}</div></div>
+    <div class="vl">${+l.valor>0?brl(l.valor):'<span style="color:var(--txt-3)">sem valor</span>'}${divide?`<small>seu ${brl(meu)}</small>`:''}</div>
+  </div>`;
+}
+/* A lista é separada por ONDE foi pago, e cada grupo tem a sua soma — é o
+   formato que foi pedido ("o que é de um cartão, o que é de outro, o que não é
+   de cartão nenhum, e a soma no final"). Dentro do grupo: fixos, depois
+   parcelados, depois os do mês, do mais novo para o mais velho.
+
+   As somas são do VALOR CHEIO, porque é ele que vem na fatura do cartão. Quando
+   há gasto dividido, a linha de baixo diz quanto disso é seu. */
+const ORDEM_TIPO={fixo:0,var:0,parc:1,unico:2};
+function renderListaGastos(c){
+  const r=$('#gResumo');
+  if(r){
+    const {folga,dias}=podeGastarHoje(c);
+    r.innerHTML=`<div class="hero-rot">Neste mês você gastou</div>
+      <div class="hero-v num">${brl(c.gasto)}</div>
+      <div class="hero-sub">${!c.renda?'Preencha <button class="link" data-ir="plano:renda">sua renda</button> para o app dizer quanto ainda pode gastar.'
+        :folga>=0?`Ainda pode gastar <b>${brl(folga)}</b> nos próximos ${dias} dia${dias===1?'':'s'}.`
+        :`Passou <b>${brl(-folga)}</b> do que tinha para este mês.`}</div>`;
+  }
+  const el=$('#listaGastos'); if(!el) return;
+  const todos=doCiclo(), prox=daProxima();
+  if(!todos.length&&!prox.length){
+    el.innerHTML='<p class="ajuda" style="text-align:center;margin:8px 0">Nenhum gasto neste mês ainda. Toque em <b>Adicionar gasto</b>.</p>';
+    return;
+  }
+  const ordena=v=>v.slice().sort((a,b)=>(ORDEM_TIPO[a.tipo]??2)-(ORDEM_TIPO[b.tipo]??2)||(b.criadoEm||0)-(a.criadoEm||0));
+  const soma=v=>v.reduce((t,l)=>t+(+l.valor||0),0);
+  const somaMeu=v=>v.reduce((t,l)=>t+meuValor(l),0);
+  const grupos=[];
+  const ids=cartoes().map(x=>x.id);
+  todos.filter(naFatura).forEach(l=>{ if(!ids.includes(cartaoDe(l))) ids.push(cartaoDe(l)); });
+  const varios=ids.length>1;
+  ids.forEach(id=>{
+    const its=todos.filter(l=>naFatura(l)&&cartaoDe(l)===id);
+    if(!its.length&&varios) grupos.push({id,nome:nomeCartao(id),its,cartao:true});
+    else if(its.length) grupos.push({id,nome:varios?nomeCartao(id):'Cartão de crédito',its,cartao:true});
+  });
+  const fora=todos.filter(l=>!naFatura(l));
+  if(fora.length) grupos.push({nome:'Sem cartão',sub:'Pix, débito, dinheiro',its:fora});
+  let html=grupos.map(g=>`<div class="g-grupo">
+    <div class="g-cab"><b>${esc(g.nome)}</b>${g.sub?`<small>${g.sub}</small>`:''}
+      ${g.cartao&&varios?`<button class="link mini" data-rencartao="${esc(g.id)}">renomear</button>`:''}</div>
+    ${g.its.length?ordena(g.its).map(linhaGasto).join(''):'<p class="ajuda" style="margin:6px 0">Nada neste cartão ainda.</p>'}
+    <div class="g-soma"><span>Total ${g.cartao?(varios?'do '+esc(g.nome):'no cartão'):'sem cartão'}</span><b>${brl(soma(g.its))}</b></div>
+  </div>`).join('');
+  const tudo=todos, total=soma(tudo), meu=somaMeu(tudo);
+  const porTipo=k=>soma(tudo.filter(l=>(ORDEM_TIPO[l.tipo]??2)===k));
+  html+=`<div class="g-total">
+    <div class="g-total-l"><span>Total do mês</span><b>${brl(total)}</b></div>
+    <div class="g-quebra"><span>Fixos <b>${brl(porTipo(0))}</b></span><span>Parcelados <b>${brl(porTipo(1))}</b></span><span>Do mês <b>${brl(porTipo(2))}</b></span></div>
+    ${Math.abs(total-meu)>0.005?`<p class="ajuda" style="margin:8px 0 0">Desse total, <b>${brl(meu)}</b> é seu — o resto é de quem divide com você.</p>`:''}
+  </div>`;
+  if(prox.length) html+=`<div class="g-grupo"><div class="g-cab"><b>Ficam para a próxima fatura</b></div>${prox.map(linhaGasto).join('')}</div>`;
+  el.innerHTML=html;
+  el.querySelectorAll('[data-rencartao]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); renomearCartao(b.dataset.rencartao); });
+}
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter') return;
+  const b=e.target.closest&&e.target.closest('.lin-gasto[data-editar]'); if(b) abrirEdicao(b.dataset.editar);
+});
 
 /* ---------- feedback: toast, vibração, snackbar de desfazer ---------- */
 let toastT=null;
@@ -4756,18 +4975,17 @@ function renderUltimos(c){
     </div>`;
     return;
   }
-  const its=[...S.lanc].sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0)||b.valor-a.valor).slice(0,6);
-  const selo=l=>(l.tipo==='fixo')?'todo mês':l.tipo==='var'?'todo mês, valor muda':l.tipo==='parc'?`faltam ${l.pRest||0}x`:'compra única';
-  el.innerHTML=its.map(l=>`<div class="item">
+  /* v10.23: quatro, e a linha inteira abre a edição — o × de apagar saiu
+     daqui (apagar é na folha de edição, com Desfazer), e a lista completa
+     mora na aba Gastos. */
+  const its=[...S.lanc].sort((a,b)=>(b.criadoEm||0)-(a.criadoEm||0)||b.valor-a.valor).slice(0,4);
+  el.innerHTML=its.map(l=>`<div class="item lin-gasto" data-editar="${l.id}" role="button" tabindex="0">
     <div class="ic" style="background:color-mix(in srgb,${catDe(l.cat).c} 13%,transparent);color:${catDe(l.cat).c}"
       >${icone(ICONE_CAT[l.cat]||'outros')}</div>
-    <div class="tx" data-editar="${l.id}" role="button" tabindex="0" title="Editar ${esc(l.nome)}"><div class="nm">${esc(l.nome)}</div>
-      <div class="dt">${catDe(l.cat).n} · ${selo(l)}${l.fonte&&l.fonte!=='Conta'?' · '+esc(l.fonte):''}${+l.prox>0?' · <b style="color:var(--indigo)">próxima fatura</b>':''}</div></div>
+    <div class="tx"><div class="nm">${esc(l.nome)}</div>
+      <div class="dt">${tipoDoGasto(l)}${cartoes().length>1&&naFatura(l)?' · '+esc(nomeCartao(cartaoDe(l))):l.meio==='avista'?' · sem cartão':''}${+l.prox>0?' · <b style="color:var(--indigo)">próxima fatura</b>':''}</div></div>
     <div class="vl">${brl(l.valor)}${(+l.pai>0)?`<small>meu ${brl(meuValor(l))} · ${esc(nomePessoa(l.com))}</small>`:''}</div>
-    <button class="rm" data-del="${l.id}" aria-label="Remover ${esc(l.nome)}">×</button>
   </div>`).join('');
-  if(S.lanc.length>6) el.innerHTML+=`<p class="ajuda" style="margin:12px 0 0;text-align:center">
-    e mais ${S.lanc.length-6} lançado${S.lanc.length-6===1?'':'s'}</p>`;
 }
 
 /* ---------- insights: o app falando como consultor ---------- */
@@ -4840,7 +5058,7 @@ function montarInsights(c){
      topo ("dá R$ 74 por dia" já é o que o topo diz). Três cartões de texto
      empilhados antes do primeiro gráfico faziam a tela inicial parecer um
      relatório para ler, e o aviso que importa se perdia entre os outros. */
-  return out.slice(0,2);
+  return out.slice(0,modoCompleto()?2:1);
 }
 function renderInsights(c){
   const el=$('#insights'); if(!el) return;
@@ -5077,6 +5295,7 @@ function preencherDoHistorico(){
   if(!u||valorDe($('#lValor').value)>0){ if(dica&&!u) dica.hidden=true; return false; }
   $('#lValor').value=valorCurto(u.valor);
   meioForm=u.meio==='avista'?'avista':'cartao';
+  if(meioForm==='cartao'&&cartoes().some(c=>c.id===cartaoDe(u))) cartaoForm=cartaoDe(u);
   pintarMeio(); linhaFaturaDaFolha(meioForm==='avista');
   if(dica){ dica.hidden=false; dica.textContent='Mesmo valor da última vez — se foi diferente, é só digitar por cima.'; }
   return true;
@@ -5394,7 +5613,7 @@ $('#eValor').addEventListener('input',linhasDivisao);
    O da folha de LANÇAR continua, para o caso de uma pessoa só. */
 document.addEventListener('click',e=>{
   const b=e.target.closest('#eMeio [data-emeio]'); if(!b) return;
-  edMeio=b.dataset.emeio; pintarMeioEd(); vibrar(8);
+  edMeio=b.dataset.emeio; if(edMeio==='cartao') edCartao=b.dataset.ecartao||'c0'; pintarMeioEd(); vibrar(8);
 });
 /* Os atalhos de divisão, nos dois formulários. */
 document.addEventListener('click',e=>{
@@ -5457,7 +5676,9 @@ function fecharTodosOsGastos(){
      gastos, sem lembrar que havia um filtro, é a lista mentindo. */
   filtroTodos=''; const b=$('#todosBusca'); if(b) b.value='';
 }
-$('#verTodos').onclick=abrirTodosOsGastos;
+$('#verTodos').onclick=()=>irPara('gastos');
+$('#verTabela').onclick=abrirTodosOsGastos;
+$('#voltarMais').onclick=()=>{ vibrar(8); irPara('mais'); };
 // O "ver os gastos" do bloco Dividido com leva pra mesma tabela: é lá que se
 // marca quem paga cada linha.
 document.querySelectorAll('[data-ver-todos]').forEach(b=>b.onclick=abrirTodosOsGastos);
@@ -5634,7 +5855,7 @@ function agendarRetentativa(){
 /* Listas de itens com identidade própria, e o campo que as identifica. A
    fatura arquivada não tem `id` — a data do fechamento é única e é a chave
    natural dela. */
-const LISTAS_ID={lanc:'id',div:'id',obj:'id',pessoas:'id',entradas:'id',guard:'id',agenda:'id',hist:'data'};
+const LISTAS_ID={lanc:'id',div:'id',obj:'id',pessoas:'id',cartoes:'id',entradas:'id',guard:'id',agenda:'id',hist:'data'};
 /* Mapas de chave livre: a chave é o dado (a categoria em `tetos`, o alerta já
    mostrado em `notifLog`). Mesclam-se chave por chave, como as listas. */
 const MAPAS_LIVRES=['tetos','notifLog','agendaLog','alertas'];
@@ -6886,7 +7107,8 @@ $('#swCompleto').onclick=()=>{
   const ligar=!modoCompleto();
   try{ localStorage.setItem('sobra:completo', ligar?'1':'0'); }catch(e){}
   pintarSwitchCompleto();
-  irPara(AREA+':'+SUB[AREA]);
+  irPara(AREA+(AREAS[AREA].subs.length?':'+SUB[AREA]:''));
+  render();
   toast(ligar?'Todas as funções à mostra':'Modo simples: só o básico');
 };
 pintarSwitchCompleto();
