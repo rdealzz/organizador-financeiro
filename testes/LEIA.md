@@ -19,6 +19,10 @@ falhar.
   a pagar), `vencDaFatura` com fechamento e vencimento no mesmo dia, a divisão
   entre várias pessoas, as parcelas espalhadas pelo calendário até a última, o
   fechamento de ciclo (o que sobrevive, o que anda uma casa) e o CSV.
+* **`valida-planilha.js`** — a tela principal (v11) usada pelo teclado como
+  uma planilha: salário, guardar, gasto novo na última linha, Tab e Enter, `12x`,
+  `3/12`, `fixo`, "Pai paga", a coluna Sobra batendo com `calc()`, apagar e
+  desfazer, e o render vindo da nuvem sem apagar o que está sendo digitado.
 * **`valida-ui.js`** — as quatro áreas e todas as sub-abas, cada botão e select
   da linha da tabela, a folha de edição inteira, a lista de quem divide, o
   calendário pelas três portas com navegação e editor de fatura, menu de

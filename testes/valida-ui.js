@@ -209,7 +209,7 @@ const cmp=(n,a,b)=>eh(n,JSON.stringify(a)===JSON.stringify(b),[a,b]);
    document.querySelector('#voltarMais').click();
    const emMais=AREA==='mais'&&document.querySelectorAll('#maisLista [data-mais]').length>=7;
    return {tabs,maisAceso,voltar,tit,emMais};});
- cmp('a barra tem três abas',nav.tabs,['hoje','gastos','mais']);
+ cmp('a barra tem duas abas: Planilha e Mais',nav.tabs,['planilha','mais']);
  eh('tela aberta por Mais acende Mais e mostra Voltar',nav.maisAceso&&nav.voltar&&nav.tit==='Minha renda',nav);
  eh('Voltar leva para a lista de Mais',nav.emMais,nav);
  const car=await p.evaluate(()=>{

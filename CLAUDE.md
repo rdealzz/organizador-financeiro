@@ -2146,3 +2146,66 @@ divisão também ficaram só no completo (o gráfico está em Mais → Gráficos
 `valida-ui.js`: 121 verificações, com as três abas, o Voltar, os botões de
 cartão, o gasto parcelado no Itaú, a soma por cartão, o total e a troca de
 cartão pela edição.
+
+## A planilha virou a tela principal (v11)
+
+O pedido: *"repaginação total — quero que seja como uma planilha: coloco o meu
+salário e ele vai diminuindo com os gastos, um embaixo do outro; ponho 12x pra
+saber que é parcelado, um espaço pra dizer dividido ou pai paga, e coloco
+quanto quero guardar pra saber quanto posso gastar"*.
+
+A barra tem **duas abas: Planilha e Mais**. Hoje e Gastos não sumiram: abrem
+de Mais (*Resumo do dia*, *Gastos por cartão*), com Voltar, como as outras
+telas (`SOB_MAIS`). `irPara()` grava `body.dataset.area`, e o botão flutuante
+some na planilha — lá a última linha É o lugar de lançar.
+
+**Nada do motor mudou: a planilha é uma VISTA.** Salário é `S.salario`, *Outra
+renda* é `S.extra`, *Guardar* é a meta (`S.metaVal`), cada linha é um gasto de
+`doCiclo()`, `12x` é `tipo:'parc'` com `pRest:12`, "Pai paga" é o mesmo
+`aplicarPagador()` da tabela. Por isso *Posso gastar* é `disponivel − gasto`,
+o mesmo número do resto do app, e a coluna **Sobra desconta só a SUA parte**
+(`meuValor`) — o gasto que o pai paga aparece com o valor cheio e "seu R$ 0,00"
+embaixo. `valida-planilha.js` confere que a última Sobra, o rodapé e o resumo
+do topo batem com `calc()`.
+
+Colunas: `#` · Descrição · Valor · **Sobra** · Vezes · Quem paga · Onde · ✎ ×.
+A Sobra vem logo depois do Valor de propósito: no celular é o que cabe na tela
+sem rolar, e "vai diminuindo" é o ponto do pedido. `#` e Descrição ficam presas
+à esquerda (a coluna que diz de qual gasto se trata nunca some — v10.19); com a
+esfera ligada elas são opacas na cor do tema.
+
+**Vezes** (`lerVezes`): vazio ou `1x` = compra única, `12x` ou `12` =
+parcelado com 12 (contando esta — `pRest` sempre foi assim), `3/12` = parcela 3
+de 12 (`pRest` 10), `fixo`/`mensal` = todo mês. O que não entende é recusado
+com aviso, não adivinhado. Um `var` continua `var` quando se escreve "fixo".
+
+**Guardar** escreve a regra permanente (`S.metaVal`), porque célula de planilha
+é número que fica até alguém trocar. Escrever ali apaga o ajuste só-deste-mês
+(`S.metaCiclo`, v10.17), e **zero zera também `S.metaPct`** — senão a meta
+cairia de volta nos 20% da renda.
+
+Mudar o Valor de um gasto dividido **escala a parte dos outros na mesma
+proporção** (`plMudarValor`): "Pai paga" continua tudo, metade continua metade.
+
+### O foco é a parte difícil
+
+Cada célula grava no `change` e a tabela é redesenhada inteira. Três armadilhas,
+todas medidas:
+
+1. **Redesenhar dentro do `change` perde o Tab** — o foco ainda não chegou à
+   célula seguinte, e ela é destruída. Dar foco dentro do `focusout` também não
+   serve: o navegador desfaz logo depois. Quem redesenha é o **`focusin` da
+   célula seguinte** (ou o `focusout` quando o foco sai da tabela), e
+   `renderPlanilha` devolve o foco pela chave `data-k` (`id|coluna`).
+2. **Timer não serve de caminho principal.** Com digitação rápida o navegador
+   atende o teclado antes de um `setTimeout(0)`, e o "fixo" digitado logo
+   depois de criar o gasto caía na linha NOVA. Ele ficou só de rede.
+3. **Um `render()` de fora (a nuvem respondeu) não pode apagar o que está
+   sendo digitado**: o valor da célula em foco e o que estiver escrito na linha
+   nova são guardados antes de reescrever e devolvidos depois.
+
+O gasto nasce ao sair do **Valor** (ou do nome, quando o valor veio escrito
+nele: "tv 1200 10x pix" funciona numa célula só — `meioDoTexto`, o `10x` e
+`lerRapido`). `plRemap` troca `novo|coluna` pelo id do gasto recém-criado, para
+o foco seguir no gasto e não voltar à linha vazia. Enter desce na mesma coluna;
+na linha nova, salva e volta para o nome.

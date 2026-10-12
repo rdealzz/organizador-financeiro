@@ -348,6 +348,14 @@ let viz3d=null, viz3dChave='';
    Mora AQUI no topo, junto de `cena`, porque renderFatura() o lê e render()
    roda antes do fim deste arquivo quando o app reabre com sessão salva. */
 let meioForm='cartao';
+/* A planilha (v11): célula que recebe o foco depois do redesenho, troca de
+   "linha nova" pelo id do gasto que acabou de nascer, e o redesenho agendado.
+   No topo pelo mesmo motivo de `cena`: render() roda antes do fim do arquivo. */
+let plProx=null, plRemap=null, plTimer=null;
+const fmtCel=v=>(+v||0)?(+v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
+/* O saldo da coluna Sobra vai sem "R$", como numa planilha: o cabeçalho já
+   diz a moeda, e no celular o "R$ " a mais empurrava o número para fora. */
+const numCel=v=>(v<-0.004?'−':'')+Math.abs(+v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 /* ══════════════════ VÁRIOS CARTÕES (v10.23) ══════════════════
 
    Pedido de quem usa: "separar o que é de um cartão, o que é de outro e o que
@@ -822,7 +830,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v10.23';
+const VERSAO_APP='v11';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -1134,7 +1142,7 @@ function render(){
   $('#blocoOnde').hidden=vazio;
   $('#topoUltimos').hidden=vazio;
   $('#blocoUltimos').classList.toggle('sem-moldura',vazio);
-  renderTopCats(c); renderUltimos(c); renderListaGastos(c);
+  renderPlanilha(c); renderTopCats(c); renderUltimos(c); renderListaGastos(c);
   renderMeta(c); renderHist(); renderTetos(c); renderPessoas(c); renderLanc(c); renderCortes(c); renderReserva(c); renderObj(c); renderDiv(); renderCofre(c); renderEntradas(c);
   renderVenc(c); renderFatura(c); renderAlertas(c); renderChips();
   /* O extrato só é montado quando está na tela. Ele pode varrer o histórico
@@ -2849,7 +2857,7 @@ $('#zerar').onclick=()=>{ if(confirm('Apagar tudo e recomeçar do zero?')){
   ['salario','extra','jaTem','metaVal'].forEach(i=>$('#'+i).value=''); $('#metaPct').value=20; $('#meses').value=6;
   avisoCiclo=''; render(); salvar();
   Auth.apagarEstadoNaNuvem().catch(()=>{});
-  toast('Tudo apagado'); irPara('hoje'); } };
+  toast('Tudo apagado'); irPara('planilha'); } };
 
 /* ---------- leitura de extrato ---------- */
 /* Normaliza antes de classificar: "Farmácia" e "farmacia" têm que cair no
@@ -3008,7 +3016,7 @@ function renderPrev(){
     const n=prev.length;
     prev=[]; $('#txExtrato').value=''; renderPrev(); render(); salvar();
     toast(n+' lançamento'+(n===1?'':'s')+' importado'+(n===1?'':'s')); vibrar(16);
-    irPara('hoje');
+    irPara('planilha');
   };
 }
 
@@ -4584,6 +4592,7 @@ document.addEventListener('visibilitychange',()=>{
    v3 — navegação por área, lançamento em um campo, feedback e insights
    ========================================================================== */
 const AREAS={
+  planilha:{titulo:'Planilha',    subs:[]},
   hoje:    {titulo:'Hoje',        subs:[]},
   gastos:  {titulo:'Gastos',      subs:[]},
   mais:    {titulo:'Mais',        subs:[]},
@@ -4591,11 +4600,11 @@ const AREAS={
   analise: {titulo:'Análises',    subs:['graficos','cortes','hist','extratos']},
   ajustes: {titulo:'Ajustes',     subs:['alertas','conta','assinatura','extrato','dados']}
 };
-let AREA='hoje';
+let AREA='planilha';
 /* As três áreas antigas viraram telas que se abrem a partir de Mais (v10.23).
    Enquanto uma delas está aberta, a aba Mais fica acesa e o cabeçalho mostra
    "Voltar". */
-const SOB_MAIS=['plano','analise','ajustes'];
+const SOB_MAIS=['hoje','gastos','plano','analise','ajustes'];
 const SUB={plano:'renda',analise:'graficos',ajustes:'conta'};
 
 /* ==========================================================================
@@ -4652,7 +4661,8 @@ function irPara(destino){
        por ela que esta função mostra e esconde as seções. */
     const nav=el.querySelector('.subnav'); if(nav) nav.hidden=true;
   }
-  const item=SOB_MAIS.includes(area)&&MAIS_ITENS.find(x=>x.ir===area+':'+SUB[area]);
+  const item=SOB_MAIS.includes(area)&&MAIS_ITENS.find(x=>x.ir===(AREAS[area].subs.length?area+':'+SUB[area]:area));
+  document.body.dataset.area=area;
   $('#tituloArea').textContent=item?item.t:AREAS[area].titulo;
   if(area==='mais') renderMais();
   if(area==='analise'&&SUB.analise==='graficos') renderGraficos(calc());
@@ -4668,6 +4678,8 @@ function irPara(destino){
    "Mostrar todas as funções" ligado. A ordem é a da frequência de uso, não a
    das áreas antigas. */
 const MAIS_ITENS=[
+  {ir:'hoje',             ic:'relogio',    t:'Resumo do dia',        d:'Quanto posso gastar por dia e contas a vencer'},
+  {ir:'gastos',           ic:'cartao',     t:'Gastos por cartão',    d:'A lista do mês separada por cartão, com a soma'},
   {ir:'plano:renda',      ic:'cartao',     t:'Minha renda',          d:'Quanto entra e quanto quero guardar'},
   {ir:'analise:graficos', ic:'subindo',    t:'Gráficos',             d:'Para onde foi o dinheiro'},
   {ir:'analise:hist',     ic:'nota',       t:'Meses anteriores',     d:'As faturas que já fecharam'},
@@ -4792,6 +4804,337 @@ document.addEventListener('keydown',e=>{
   if(e.key!=='Enter') return;
   const b=e.target.closest&&e.target.closest('.lin-gasto[data-editar]'); if(b) abrirEdicao(b.dataset.editar);
 });
+
+/* ══════════════════ A PLANILHA (v11) ══════════════════
+
+   O pedido: "quero que seja como uma planilha — eu coloco o meu salário e ele
+   vai diminuindo comigo adicionando os gastos, um embaixo do outro; ponho 12x
+   pra saber que é parcelado, um espaço pra dizer dividido ou pai paga, e
+   ponho quanto quero guardar pra saber quanto posso gastar".
+
+   Nada do motor mudou. A planilha é uma VISTA de campos que já existiam:
+   o salário é `S.salario`, a outra renda é `S.extra`, guardar é a meta
+   (`S.metaVal`), cada linha é um lançamento de `doCiclo()`, "12x" é
+   `tipo:'parc'` com `pRest`, e "Pai paga" é o mesmo `aplicarPagador()` do
+   select da tabela. Por isso a última célula ("posso gastar") é o mesmo
+   número que o resto do app mostra — e a coluna Sobra desconta só a SUA parte
+   (`meuValor`), como o orçamento sempre fez.
+
+   Três regras de planilha que custaram cuidado:
+
+   1. **Toda célula é editável e grava ao sair dela** (`change`). A tabela é
+      redesenhada no quadro seguinte, e o foco volta para a célula onde a
+      pessoa estava — senão o Tab andaria para uma célula que acabou de ser
+      destruída.
+   2. **A última linha está sempre vazia**, e é nela que nasce o gasto novo:
+      basta nome e valor. O Enter desce para a mesma coluna da linha de baixo,
+      como no Excel; na linha nova, salva e volta para o nome.
+   3. **Um render vindo de fora (a nuvem respondeu) não pode apagar o que está
+      sendo digitado.** O que estiver escrito na célula em foco e na linha
+      nova é guardado antes e devolvido depois. */
+const VEZES_FIXO=/^(fixo|fixa|mensal|todo\s*m[eê]s|sempre|recorrente|todo mes)$/i;
+/* "12x", "12", "3/12" (parcela 3 de 12), "fixo" ou vazio (compra única).
+   `pRest` conta a parcela deste mês — é como o resto do app o lê: com 1, esta
+   é a última. Devolve null quando não entende, para a célula reclamar em vez
+   de adivinhar. */
+function lerVezes(txt){
+  const t=String(txt==null?'':txt).trim().toLowerCase();
+  if(!t||/^1\s*(x|vez)?$/.test(t)||/^([uú]nica|[aà] vista|1 vez)$/.test(t)) return {tipo:'unico',pRest:0};
+  if(VEZES_FIXO.test(t)) return {tipo:'fixo',pRest:0};
+  let m=t.match(/^(\d{1,3})\s*(?:\/|de)\s*(\d{1,3})$/);
+  if(m){
+    const a=+m[1], n=+m[2];
+    if(n>=2&&a>=1&&a<=n) return {tipo:'parc',pRest:n-a+1};
+    if(n===1&&a===1) return {tipo:'unico',pRest:0};
+    return null;
+  }
+  m=t.match(/^(\d{1,3})\s*(?:x|vezes)?$/);
+  if(m&&+m[1]>=2) return {tipo:'parc',pRest:+m[1]};
+  return null;
+}
+function textoVezes(l){
+  if(l.tipo==='parc') return (+l.pRest||1)+'x';
+  if(l.tipo==='fixo'||l.tipo==='var'||l.tipo==='rec') return 'fixo';
+  return '';
+}
+function opcoesOnde(l){
+  const av=l&&l.meio==='avista', id=l?cartaoDe(l):cartaoForm;
+  const varios=cartoes().length>1;
+  return cartoes().map(c=>`<option value="c:${esc(c.id)}"${!av&&id===c.id?' selected':''}>${esc(varios?c.nome:'Cartão')}</option>`).join('')
+    +`<option value="avista"${av?' selected':''}>Pix / dinheiro</option>`
+    +`<option value="+">+ cartão…</option>`;
+}
+function aplicarOnde(l,v){
+  if(v==='avista'){ l.meio='avista'; l.prox=0; delete l.cartao; return; }
+  l.meio='cartao';
+  const id=String(v).slice(2);
+  if(id&&id!=='c0') l.cartao=id; else delete l.cartao;
+}
+function linhaPlanilha(l,n,saldo,proxima){
+  const k=String(l.id), divide=+l.pai>0, varias=nDivisoes(l)>1;
+  const cel=(col,html,cls)=>`<td class="${cls||''}">${html}</td>`;
+  const inp=(col,val,extra)=>`<input data-k="${esc(k)}|${col}" data-orig="${esc(val)}" value="${esc(val)}" ${extra||''}>`;
+  return `<tr class="pl-gasto${proxima?' pl-prox':''}">
+    ${cel('n',n,'pl-n')}
+    ${cel('nome',inp('nome',l.nome||'','aria-label="Descrição" autocomplete="off" maxlength="42"'),'pl-desc')}
+    ${cel('valor',inp('valor',fmtCel(l.valor),'aria-label="Valor" inputmode="decimal" autocomplete="off" placeholder="0,00"')
+      +(divide?`<small class="pl-seu">seu ${brl(meuValor(l))}</small>`:''),'pl-num')}
+    ${cel('sobra',proxima?'<span class="pl-mudo">próx. fatura</span>':numCel(saldo),'pl-num pl-saldo'+(saldo<0&&!proxima?' neg':''))}
+    ${cel('vezes',inp('vezes',textoVezes(l),'aria-label="Vezes: 12x, 3/12 ou fixo" list="dlVezes" autocomplete="off" placeholder="1x"'),'pl-vez')}
+    ${cel('quem',varias
+      ?`<button type="button" class="pl-btn-cel" data-pled="${esc(k)}">${nDivisoes(l)} pessoas</button>`
+      :`<select data-k="${esc(k)}|quem" aria-label="Quem paga">${opcoesPagador(l,false)}</select>`,'pl-sel')}
+    ${cel('onde',`<select data-k="${esc(k)}|onde" aria-label="Onde pagou">${opcoesOnde(l)}</select>`,'pl-sel')}
+    <td class="pl-ac"><button type="button" data-pled="${esc(k)}" aria-label="Mais opções de ${esc(l.nome)}" title="Mais opções">✎</button><button type="button" data-plx="${esc(k)}" aria-label="Apagar ${esc(l.nome)}" title="Apagar">×</button></td>
+  </tr>`;
+}
+function renderPlanilha(c){
+  const tab=$('#plTab'); if(!tab) return;
+  /* O que está sendo digitado sobrevive ao redesenho (regra 3). */
+  const a=document.activeElement;
+  let foco=null;
+  if(plProx){ foco={k:plProx,sel:true}; plProx=null; }
+  else if(a&&tab.contains(a)&&a.dataset.k)
+    foco={k:a.dataset.k,v:a.value,s:a.selectionStart,e:a.selectionEnd,
+          editando:a.tagName==='INPUT'&&a.value!==a.dataset.orig};
+  const novos={};
+  tab.querySelectorAll('[data-k^="novo|"]').forEach(el=>{ if(el.tagName==='INPUT'&&el.value) novos[el.dataset.k]=el.value; });
+
+  const its=doCiclo(), prox=daProxima();
+  const sal=+S.salario||0, ext=+S.extra||0;
+  let saldo=0, n=0, linhas='';
+  const linRenda=(rot,col,val,nota,cls)=>{ n++;
+    return `<tr class="${cls}"><td class="pl-n">${n}</td><td class="pl-desc pl-rot">${rot}</td>
+      <td class="pl-num"><input data-k="renda|${col}" data-orig="${esc(fmtCel(val))}" value="${esc(fmtCel(val))}" inputmode="decimal" autocomplete="off" placeholder="0,00" aria-label="${rot}"></td>
+      <td class="pl-num pl-saldo${saldo<0?' neg':''}">${numCel(saldo)}</td><td class="pl-nota" colspan="4">${nota}</td></tr>`; };
+  saldo+=sal;  linhas+=linRenda('Salário','salario',sal,'entra todo mês','pl-entra');
+  saldo+=ext;  linhas+=linRenda('Outra renda','extra',ext,'pensão, aluguel, freela fixo','pl-entra');
+  if(c.entrou>0){ n++; saldo+=c.entrou;
+    linhas+=`<tr class="pl-entra"><td class="pl-n">${n}</td><td class="pl-desc pl-rot">Extra do mês</td>
+      <td class="pl-num">${numCel(c.entrou)}</td><td class="pl-num pl-saldo">${numCel(saldo)}</td>
+      <td class="pl-nota" colspan="4">venda, 13º… <button type="button" class="link" data-ir="plano:entrou">ver</button></td></tr>`; }
+  saldo-=c.metaMes;
+  linhas+=linRenda('Guardar','guardar',c.meta,
+    c.entrouGuardar>0?`sai antes dos gastos · +${brl(c.entrouGuardar)} do extra`:'sai antes dos gastos','pl-guarda');
+  linhas+=`<tr class="pl-sep"><td class="pl-n"></td><td colspan="7">Gastos do mês <small>· fatura fecha ${dataBR(iso(faturaAberta().fecha))}</small></td></tr>`;
+  its.forEach(l=>{ n++; saldo-=meuValor(l); linhas+=linhaPlanilha(l,n,saldo,false); });
+  n++;
+  const pNovo={valor:0,pai:0,com:''};
+  linhas+=`<tr class="pl-novo"><td class="pl-n">${n}</td>
+    <td class="pl-desc"><input data-k="novo|nome" placeholder="escreva um gasto…" aria-label="Descrição do gasto novo" autocomplete="off" maxlength="60"></td>
+    <td class="pl-num"><input data-k="novo|valor" placeholder="0,00" inputmode="decimal" autocomplete="off" aria-label="Valor do gasto novo"></td>
+    <td class="pl-num pl-saldo"></td>
+    <td class="pl-vez"><input data-k="novo|vezes" placeholder="1x" list="dlVezes" autocomplete="off" aria-label="Vezes do gasto novo: 12x, 3/12 ou fixo"></td>
+    <td class="pl-sel"><select data-k="novo|quem" aria-label="Quem paga o gasto novo">${opcoesPagador(pNovo,false)}</select></td>
+    <td class="pl-sel"><select data-k="novo|onde" aria-label="Onde pagou o gasto novo">${opcoesOnde(null)}</select></td>
+    <td class="pl-ac"></td></tr>`;
+  if(prox.length){
+    linhas+=`<tr class="pl-sep"><td class="pl-n"></td><td colspan="7">Já ficam para a próxima fatura <small>· não descontam deste mês</small></td></tr>`;
+    prox.forEach(l=>{ n++; linhas+=linhaPlanilha(l,n,0,true); });
+  }
+  const total=its.reduce((t,l)=>t+(+l.valor||0),0), meu=its.reduce((t,l)=>t+meuValor(l),0);
+  const dias=Math.max(diasRestantes(),1);
+  tab.innerHTML=`<thead><tr><th class="pl-n">#</th><th class="pl-desc">Descrição</th><th class="pl-num">Valor R$</th><th class="pl-num">Sobra R$</th>
+      <th>Vezes</th><th>Quem paga</th><th>Onde</th><th class="pl-ac"></th></tr></thead>
+    <tbody>${linhas}</tbody>
+    <tfoot>
+      <tr><td class="pl-n"></td><td class="pl-desc">Total dos gastos</td><td class="pl-num">${brl(total)}</td><td class="pl-num">${Math.abs(total-meu)>0.005?'seu '+brl(meu):''}</td><td colspan="4"></td></tr>
+      <tr class="pl-final${saldo<0?' neg':''}"><td class="pl-n"></td><td class="pl-desc">${saldo<0?'Passou do limite':'Posso gastar'}</td><td class="pl-num" colspan="2">${brl(saldo)}</td>
+        <td colspan="4" class="pl-nota">${saldo>0?brl(saldo/dias)+' por dia até a fatura fechar ('+dias+' dia'+(dias===1?'':'s')+')':''}</td></tr>
+    </tfoot>`;
+
+  const r=$('#plResumo');
+  if(r) r.innerHTML=`<div class="pl-conta">
+      <span><small>Renda</small><b>${brl(sal+ext+c.entrou)}</b></span><i>−</i>
+      <span><small>Guardar</small><b>${brl(c.metaMes)}</b></span><i>−</i>
+      <span><small>Gastos</small><b>${brl(meu)}</b></span><i>=</i>
+      <span class="pl-res${saldo<0?' neg':''}"><small>${saldo<0?'Passou':'Posso gastar'}</small><b>${brl(saldo)}</b></span>
+    </div>`;
+  const d=$('#plDica');
+  if(d) d.innerHTML=!sal?'Comece pelo <b>Salário</b> na primeira linha. Depois escreva cada gasto na última linha — ela está sempre vazia.'
+    :'Na coluna <b>Vezes</b>: <b>12x</b> é parcelado, <b>3/12</b> é a parcela 3 de 12, <b>fixo</b> repete todo mês, vazio é compra única. Toque em ✎ para mudar a categoria.';
+
+  Object.entries(novos).forEach(([k,v])=>{ const el=tab.querySelector(`[data-k="${CSS.escape(k)}"]`); if(el) el.value=v; });
+  if(foco){
+    let k=foco.k;
+    if(plRemap&&k.startsWith(plRemap.de+'|')) k=plRemap.para+k.slice(plRemap.de.length);
+    plRemap=null;
+    const el=tab.querySelector(`[data-k="${CSS.escape(k)}"]`);
+    if(el){
+      if(foco.editando) el.value=foco.v;
+      el.focus({preventScroll:!foco.sel});
+      try{
+        if(foco.sel&&el.select) el.select();
+        else if(foco.s!=null&&el.setSelectionRange) el.setSelectionRange(foco.s,foco.e);
+      }catch(e){}
+    }
+  }
+}
+function avisarCriado(l){
+  vibrar(10);
+  snack(l.nome+' · '+brl(l.valor),'Desfazer',()=>{ S.lanc=S.lanc.filter(x=>x.id!==l.id); render(); salvar(); toast('Desfeito'); });
+}
+/* Redesenhar no `change` de um campo de texto não dá: o foco ainda não
+   chegou à célula seguinte, e redesenhar ali perde o Tab. Quem redesenha é o
+   focusout (foco saindo da tabela) ou o focusin da célula seguinte — ver
+   ligarPlanilha. Um timer não serve de caminho principal: com digitação
+   rápida o navegador atende o teclado antes dele, e a letra seguinte caía na
+   linha nova em vez do gasto que acabou de nascer (medido). Um select muda sem
+   perder o foco, então redesenha na hora. */
+let plSujo=false;
+function plAtualizar(el){
+  clearTimeout(plTimer);
+  if(el&&el.tagName==='INPUT'){
+    plSujo=true;
+    plTimer=setTimeout(()=>{ plTimer=null; if(plSujo){ plSujo=false; render(); salvar(); } },60);
+    return;
+  }
+  plSujo=false; plTimer=null; render(); salvar();
+}
+/* Cria o gasto da linha vazia. Aceita também o jeito do campo rápido: tudo
+   escrito no nome ("mercado 80", "tv 1200 12x", "uber 25 pix"). */
+function plCriar(){
+  const tab=$('#plTab');
+  const g=k=>tab.querySelector(`[data-k="novo|${k}"]`);
+  let nome=g('nome').value.trim(), valor=valorDe(g('valor').value), vez=g('vezes').value;
+  if(!nome) return null;
+  let meio=null;
+  const mp=meioDoTexto(nome); if(mp.meio==='avista'){ meio='avista'; nome=mp.nome; }
+  const mv=nome.match(/(?:^|\s)(\d{1,3}\s*\/\s*\d{1,3}|\d{1,3}\s?x)(?=\s|$)/i);
+  if(mv){ if(!vez.trim()) vez=mv[1]; nome=(nome.slice(0,mv.index)+' '+nome.slice(mv.index+mv[0].length)).replace(/\s+/g,' ').trim(); }
+  if(!(valor>0)){ const r=lerRapido(nome); if(r&&!r.incompleto){ nome=r.nome; valor=r.valor; } }
+  if(!(valor>0)||!nome) return null;
+  const vz=lerVezes(vez)||{tipo:'unico',pRest:0};
+  nome=nome.charAt(0).toUpperCase()+nome.slice(1);
+  const pg=palpiteDoNome(nome);
+  const l={id:Date.now()+Math.random(),criadoEm:Date.now(),nome,valor,cat:pg.cat,tier:pg.tier,catManual:false,
+    fonte:pg.fonte||'Conta',tipo:vz.tipo,pRest:vz.pRest,com:'',pai:0,ref:0,venc:0,meio:'cartao',prox:0};
+  aplicarOnde(l,meio==='avista'?'avista':g('onde').value);
+  if(l.meio==='avista'&&l.fonte==='Conta') l.fonte='Pix';
+  const q=g('quem').value;
+  if(q&&q!=='eu'&&q!=='+') aplicarPagador(l,q);
+  S.lanc.push(l);
+  if(l.meio==='cartao') cartaoForm=cartaoDe(l);
+  // A linha nova volta a ficar vazia: o redesenho devolveria o que estava nela.
+  tab.querySelectorAll('[data-k^="novo|"]').forEach(x=>{ if(x.tagName==='INPUT') x.value=''; });
+  return l;
+}
+/* Mudou o valor: quem divide acompanha na mesma proporção. "Pai paga" (tudo)
+   continua tudo, "metade" continua metade — ninguém conferiria isso à mão. */
+function plMudarValor(l,v){
+  const antes=+l.valor||0;
+  if(antes>0&&+l.pai>0){
+    const f=v/antes;
+    if(Array.isArray(l.divs)&&l.divs.length){ l.divs.forEach(d=>d.valor=+((+d.valor||0)*f).toFixed(2)); l.valor=v; sincronizarDivs(l); return; }
+    l.pai=+Math.min((+l.pai||0)*f,v).toFixed(2);
+  }
+  l.valor=v;
+}
+function plMudarCelula(el){
+  const [id,col]=el.dataset.k.split('|');
+  if(id==='renda'){
+    const v=valorDe(el.value);
+    if(col==='salario') S.salario=v;
+    else if(col==='extra') S.extra=v;
+    else if(col==='guardar'){
+      /* A célula é a regra: o número fica até alguém trocar, como o salário.
+         Um ajuste só deste ciclo (v10.17) perde o sentido quando a pessoa
+         escreve o valor por cima dele. Zero tem que valer zero — sem zerar o
+         percentual, a meta cairia de volta nos 20% da renda. */
+      delete S.metaCiclo; S.metaVal=v; if(!(v>0)) S.metaPct=0;
+    }
+    if(typeof preencherCampos==='function') preencherCampos();
+    plAtualizar(el); return;
+  }
+  if(id==='novo'){
+    if(col==='quem'&&el.value==='+'){
+      const p=pedirPessoa(); el.innerHTML=opcoesPagador({valor:0,pai:0,com:''},false);
+      if(p){ el.innerHTML=opcoesPagador({valor:0,pai:0,com:''},false); el.value='d:'+p.id; salvar(); } else el.value='eu';
+      return;
+    }
+    if(col==='onde'&&el.value==='+'){
+      const c=novoCartao(); el.innerHTML=opcoesOnde(null); if(c) el.value='c:'+c.id;
+      return;
+    }
+    /* Só nasce quando sai do VALOR (ou do nome, quando o valor veio escrito
+       nele): criar ao sair do nome com o valor ainda vazio seria um gasto de
+       zero reais. */
+    if(col==='valor'||col==='nome'){
+      const l=plCriar();
+      if(l){ plRemap={de:'novo',para:String(l.id)}; plAtualizar(el); avisarCriado(l); }
+    }
+    return;
+  }
+  const l=S.lanc.find(x=>String(x.id)===id); if(!l) return;
+  if(col==='nome'){
+    let n=el.value.trim().replace(/\s+/g,' ').slice(0,42);
+    if(!n){ toast('A descrição não pode ficar vazia',true); el.value=l.nome; return; }
+    l.nome=n.charAt(0).toUpperCase()+n.slice(1);
+    if(!l.catManual){ const g=palpiteDoNome(l.nome); l.cat=g.cat; l.tier=g.tier; }
+  }else if(col==='valor'){
+    plMudarValor(l,valorDe(el.value));
+  }else if(col==='vezes'){
+    const vz=lerVezes(el.value);
+    if(!vz){ toast('Em Vezes escreva 12x, 3/12 ou fixo',true); el.value=textoVezes(l); return; }
+    if(vz.tipo==='fixo'&&(l.tipo==='var'||l.tipo==='rec')){/* continua como estava: já é fixo */}
+    else l.tipo=vz.tipo;
+    l.pRest=vz.pRest;
+  }else if(col==='quem'){
+    let v=el.value;
+    if(v==='+'){ const p=pedirPessoa(); if(!p){ el.innerHTML=opcoesPagador(l,false); return; } v='d:'+p.id; }
+    aplicarPagador(l,v);
+  }else if(col==='onde'){
+    let v=el.value;
+    if(v==='+'){ const c=novoCartao(); if(!c){ el.innerHTML=opcoesOnde(l); return; } v='c:'+c.id; }
+    aplicarOnde(l,v);
+  }
+  plAtualizar(el);
+}
+(function ligarPlanilha(){
+  const tab=$('#plTab'); if(!tab) return;
+  tab.addEventListener('change',e=>{ const el=e.target; if(el.dataset&&el.dataset.k) plMudarCelula(el); });
+  /* O foco saiu de uma célula que mudou. Indo para FORA da tabela, redesenha
+     já. Indo para outra célula, espera ela receber o foco (focusin): dar foco
+     de dentro do focusout é desfeito pelo navegador logo em seguida. */
+  const redesenhar=()=>{ plSujo=false; clearTimeout(plTimer); plTimer=null; render(); salvar(); };
+  tab.addEventListener('focusout',e=>{
+    if(!plSujo) return;
+    const r=e.relatedTarget;
+    if(r&&tab.contains(r)&&r.dataset&&r.dataset.k){ if(!plProx) plProx=r.dataset.k; return; }
+    redesenhar();
+  });
+  tab.addEventListener('focusin',()=>{ if(plSujo) redesenhar(); });
+  tab.addEventListener('keydown',e=>{
+    const el=e.target; if(e.key!=='Enter'||!el.dataset||!el.dataset.k||el.tagName!=='INPUT') return;
+    e.preventDefault();
+    const [id,col]=el.dataset.k.split('|');
+    /* Na linha nova o Enter salva e volta para o nome dela — é assim que se
+       lança um gasto embaixo do outro. */
+    if(id==='novo'){
+      const nm=tab.querySelector('[data-k="novo|nome"]');
+      if(!nm.value.trim()){ nm.focus(); return; }
+      const l=plCriar();
+      if(!l){ const v=tab.querySelector('[data-k="novo|valor"]'); v.focus(); toast('Falta o valor',true); return; }
+      plProx='novo|nome'; plAtualizar(); avisarCriado(l);
+      return;
+    }
+    /* Nas outras, desce para a mesma coluna da linha de baixo, como no Excel. */
+    const grupo=id==='renda'?[...tab.querySelectorAll('[data-k^="renda|"]')]:[...tab.querySelectorAll(`[data-k$="|${col}"]`)];
+    const prox=grupo[grupo.indexOf(el)+1]||tab.querySelector(`[data-k="novo|${id==='renda'?'nome':col}"]`)||tab.querySelector('[data-k="novo|nome"]');
+    const alvo=plProx=prox?prox.dataset.k:null;
+    el.blur();   // dispara o change, se a célula mudou
+    // Nada mudou na célula: não houve redesenho, e o foco desce daqui mesmo.
+    if(plProx===alvo){ plProx=null; const x=alvo&&tab.querySelector(`[data-k="${CSS.escape(alvo)}"]`); if(x){ x.focus(); try{x.select();}catch(e){} } }
+  });
+  tab.addEventListener('click',e=>{
+    const ed=e.target.closest('[data-pled]'); if(ed){ abrirEdicao(ed.dataset.pled); return; }
+    const x=e.target.closest('[data-plx]'); if(!x) return;
+    const i=S.lanc.findIndex(l=>String(l.id)===x.dataset.plx); if(i<0) return;
+    const [l]=S.lanc.splice(i,1);
+    render(); salvar(); vibrar(12);
+    snack(l.nome+' apagado','Desfazer',()=>{ S.lanc.splice(Math.min(i,S.lanc.length),0,l); render(); salvar(); toast('Desfeito'); });
+  });
+})();
 
 /* ---------- feedback: toast, vibração, snackbar de desfazer ---------- */
 let toastT=null;
@@ -6470,7 +6813,7 @@ async function abrirApp(recemLogado, contaNova){
   pedirNomeSeFaltar();
 
   const ir=new URLSearchParams(location.search).get('ir');
-  irPara(ir||'hoje');
+  irPara(ir||'planilha');
   renderAgenda(); renderAlertas(calc()); renderChips(); pintarConta();
   renderAssinatura(); pintarMenuPerfil(); pintarSwitchCapa(); pintarSwitchFundo(); pintarSwitchPortal(); pintarSwitchCompleto();
 

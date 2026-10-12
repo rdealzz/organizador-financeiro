@@ -3378,3 +3378,103 @@ body.simples .so-completo{display:none}
 .segm-onde{flex-wrap:wrap}
 .segm-onde button{flex:1 1 40%}
 .novo-cartao{align-self:flex-start;margin-top:8px;font-size:14px}
+
+/* ══════════════════ A PLANILHA (v11) ══════════════════
+   Cara de planilha de propósito: grade com linha fina em toda célula,
+   cabeçalho cinza, número da linha à esquerda e valores alinhados à direita
+   com algarismos de mesma largura — é o que faz a coluna Sobra ser lida de
+   cima para baixo, diminuindo. A descrição (e o nº da linha) ficam presos à
+   esquerda: no celular a tabela rola de lado, e sem isso a coluna que diz DE
+   QUAL gasto se trata sumiria (a lição da v10.19). */
+body[data-area="planilha"] .fab{display:none}
+.pl-resumo{margin:0 0 12px}
+.pl-conta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;
+  background:var(--card);border:1px solid var(--sep);border-radius:var(--r-sm);padding:10px 12px}
+.pl-conta span{display:flex;flex-direction:column;line-height:1.15}
+.pl-conta small{font-size:11px;color:var(--txt-3);text-transform:uppercase;letter-spacing:.04em}
+.pl-conta b{font-variant-numeric:tabular-nums;font-size:15px;color:var(--txt)}
+.pl-conta i{font-style:normal;color:var(--txt-3);font-weight:600}
+.pl-conta .pl-res{margin-left:auto;text-align:right}
+.pl-conta .pl-res b{font-size:20px;color:var(--verde-txt)}
+.pl-conta .pl-res.neg b{color:var(--vermelho-txt)}
+
+.pl-folha{background:var(--card);border:1px solid var(--sep);border-radius:var(--r-sm);overflow:hidden}
+.pl-rola{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.pl{border-collapse:collapse;width:100%;min-width:720px;font-size:14px;color:var(--txt)}
+.pl th,.pl td{border:1px solid var(--sep);padding:0;height:36px;vertical-align:middle;background:var(--card)}
+.pl th{background:var(--card-2);color:var(--txt-2);font-size:12px;font-weight:600;text-align:left;
+  padding:0 8px;height:30px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+.pl tr>*:first-child{border-left:0}
+.pl tr>*:last-child{border-right:0}
+.pl thead tr>*{border-top:0}
+.pl tfoot tr:last-child>*{border-bottom:0}
+.pl .pl-n{width:30px;min-width:30px;text-align:center;color:var(--txt-3);font-size:11.5px;
+  background:var(--card-2);font-variant-numeric:tabular-nums;position:sticky;left:0;z-index:2}
+.pl .pl-desc{min-width:150px;width:30%;position:sticky;left:30px;z-index:2}
+.pl .pl-num{text-align:right;width:108px;min-width:100px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pl th.pl-num{text-align:right}
+.pl td.pl-num:not(:has(input)),.pl td.pl-saldo{padding:0 8px}
+.pl .pl-vez{width:64px;min-width:64px}
+.pl .pl-sel{width:130px;min-width:120px}
+.pl .pl-ac{width:58px;min-width:58px;white-space:nowrap;text-align:center}
+.pl .pl-nota{color:var(--txt-3);font-size:12.5px;padding:0 8px}
+.pl .pl-rot{padding:0 8px;font-weight:600}
+.pl .pl-saldo{color:var(--txt-2)}
+.pl .neg,.pl .pl-saldo.neg{color:var(--vermelho-txt)}
+
+/* A célula É o campo: sem moldura, ocupando tudo, e o foco desenha a borda
+   azul grossa da célula ativa, como numa planilha. */
+.pl input,.pl select{all:unset;box-sizing:border-box;display:block;width:100%;height:100%;min-height:36px;
+  padding:0 8px;font:inherit;color:inherit;background:transparent;cursor:text}
+.pl select{cursor:pointer;padding-right:18px;line-height:36px;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;
+  background:linear-gradient(45deg,transparent 50%,var(--txt-3) 50%) right 9px center/5px 5px no-repeat,
+             linear-gradient(-45deg,transparent 50%,var(--txt-3) 50%) right 5px center/5px 5px no-repeat}
+.pl select option{background:var(--card);color:var(--txt)}
+.pl .pl-num input{text-align:right;font-variant-numeric:tabular-nums}
+.pl input::placeholder{color:var(--txt-3);opacity:.8}
+.pl input:focus,.pl select:focus{outline:2px solid var(--azul);outline-offset:-2px;background:var(--azul-fraco)}
+.pl td:has(.pl-seu){position:relative}
+.pl .pl-seu{position:absolute;right:8px;bottom:1px;font-size:10px;color:var(--txt-3);pointer-events:none}
+.pl td:has(.pl-seu) input{padding-bottom:9px}
+
+.pl .pl-ac button{all:unset;cursor:pointer;width:24px;height:28px;line-height:28px;text-align:center;
+  color:var(--txt-3);font-size:15px;border-radius:6px}
+.pl .pl-ac button:hover,.pl .pl-ac button:focus-visible{color:var(--txt);background:var(--fill)}
+.pl .pl-ac [data-plx]:hover{color:var(--vermelho-txt)}
+.pl .pl-btn-cel{all:unset;cursor:pointer;display:block;padding:0 8px;height:36px;line-height:36px;color:var(--azul-txt);font-size:13px}
+
+.pl .pl-entra td{background:color-mix(in srgb,var(--verde) 6%,var(--card))}
+.pl .pl-entra .pl-num input{color:var(--verde-txt);font-weight:600}
+.pl .pl-guarda td{background:color-mix(in srgb,var(--azul) 7%,var(--card))}
+.pl .pl-guarda .pl-num input{color:var(--azul-txt);font-weight:600}
+.pl .pl-entra .pl-n,.pl .pl-guarda .pl-n{background:var(--card-2)}
+.pl .pl-sep td{height:28px;background:var(--card-2);color:var(--txt-2);font-size:12px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.04em;padding:0 8px}
+.pl .pl-sep td:nth-child(2){position:sticky;left:30px}
+.pl .pl-sep small{text-transform:none;font-weight:500;letter-spacing:0;color:var(--txt-3)}
+.pl .pl-novo td{background:color-mix(in srgb,var(--azul) 3%,var(--card))}
+.pl .pl-novo .pl-n{color:var(--azul-txt);font-weight:700}
+.pl .pl-prox td{opacity:.72}
+.pl .pl-mudo{color:var(--txt-3);font-size:12px}
+.pl tfoot td{background:var(--card-2);font-weight:600;padding:0 8px}
+.pl tfoot .pl-desc{background:var(--card-2)}
+.pl .pl-final td{height:46px}
+.pl .pl-final .pl-num{font-size:19px;color:var(--verde-txt)}
+.pl .pl-final.neg .pl-num,.pl .pl-final.neg .pl-desc{color:var(--vermelho-txt)}
+.pl .pl-final .pl-nota{font-weight:500}
+.pl-dica{font-size:13px;color:var(--txt-3);margin:10px 4px 0;line-height:1.45}
+/* Com a esfera ligada --bg fica transparente; a planilha já usa --card, mas
+   no modo esfera --card fica translúcido, e a célula presa à esquerda precisa
+   ser opaca para o texto que rola por baixo dela não aparecer através — opaca na cor do TEMA (v10.6). */
+[data-tema="claro"] body.fundo-vivo .pl .pl-desc{background:#FFFFFF}
+[data-tema="claro"] body.fundo-vivo .pl .pl-n{background:#ECF3FC}
+[data-tema="escuro"] body.fundo-vivo .pl .pl-desc{background:#08131F}
+[data-tema="escuro"] body.fundo-vivo .pl .pl-n{background:#0E1A28}
+@media(max-width:520px){
+  .pl{font-size:13.5px}
+  .pl .pl-desc{min-width:120px;width:120px}
+  .pl .pl-num{width:92px;min-width:88px}
+  .pl-conta b{font-size:14px}
+  .pl-conta .pl-res{flex-basis:100%;flex-direction:row;justify-content:space-between;align-items:baseline;
+    border-top:1px solid var(--sep);padding-top:6px;margin-top:2px}
+}

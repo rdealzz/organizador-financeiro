@@ -214,7 +214,7 @@ html[data-tema="escuro"] #splash{background:#000}
     </button>
     <div class="cab-txt">
       <span class="eyebrow" id="saudacao">Controle financeiro pessoal</span>
-      <h1 id="tituloArea">Hoje</h1>
+      <h1 id="tituloArea">Planilha</h1>
     </div>
   </div>
 
@@ -227,8 +227,27 @@ html[data-tema="escuro"] #splash{background:#000}
   <button class="btn-x" id="btnInstalarNao" aria-label="Agora não">×</button>
 </div>
 
+<!-- ══════════════════════ PLANILHA (v11) ══════════════════════ -->
+<!-- A tela principal. O salário em cima, o que guardar logo embaixo, e os
+     gastos um embaixo do outro — a coluna "Sobra" vai diminuindo a cada
+     linha, como numa planilha. A última linha está sempre vazia: é nela que
+     se escreve o gasto novo. Tudo é montado por renderPlanilha(), no app.js. -->
+<div class="area" id="a-planilha">
+  <section class="pl-resumo" id="plResumo" aria-live="polite"></section>
+  <section class="pl-folha">
+    <div class="pl-rola"><table class="pl" id="plTab"></table></div>
+  </section>
+  <p class="pl-dica" id="plDica"></p>
+  <datalist id="dlVezes">
+    <option value="1x"></option><option value="2x"></option><option value="3x"></option>
+    <option value="4x"></option><option value="5x"></option><option value="6x"></option>
+    <option value="10x"></option><option value="12x"></option><option value="18x"></option>
+    <option value="24x"></option><option value="fixo"></option>
+  </datalist>
+</div>
+
 <!-- ══════════════════════ HOJE ══════════════════════ -->
-<div class="area" id="a-hoje">
+<div class="area" id="a-hoje" hidden>
 
   <section class="hero" id="hero">
     <div class="hero-rot">Você pode gastar hoje</div>
@@ -788,16 +807,13 @@ html[data-tema="escuro"] #splash{background:#000}
   <div class="portal-grade" id="portalGrade"></div>
 </div>
 
-<!-- v10.23: TRÊS abas. Eram quatro áreas com até cinco sub-abas cada —
-     dezoito lugares para procurar uma coisa. Agora: o dia (Hoje), o que
-     gastei (Gastos) e todo o resto, numa lista com nomes que se leem (Mais).
-     Planejamento, Análises e Ajustes continuam existindo como telas: abrem a
-     partir de Mais, e a aba Mais fica acesa enquanto se está nelas. -->
+<!-- v11: DUAS abas. A Planilha é o app; todo o resto mora numa lista com
+     nomes que se leem (Mais). Hoje, Gastos, Planejamento, Análises e Ajustes
+     continuam existindo como telas: abrem a partir de Mais, e a aba Mais fica
+     acesa enquanto se está nelas. -->
 <nav class="tabbar" id="tabbar" role="tablist" aria-label="Áreas do app">
-  <button class="tb" role="tab" aria-selected="true" data-a="hoje">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5 12 5l8 7.5"/><path d="M6.5 11v8h11v-8"/></svg><span>Hoje</span></button>
-  <button class="tb" role="tab" aria-selected="false" data-a="gastos">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6.5h11M8 12h11M8 17.5h11"/><circle cx="4.6" cy="6.5" r="1"/><circle cx="4.6" cy="12" r="1"/><circle cx="4.6" cy="17.5" r="1"/></svg><span>Gastos</span></button>
+  <button class="tb" role="tab" aria-selected="true" data-a="planilha">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M3.5 14.5h17M9.5 4.5v15"/></svg><span>Planilha</span></button>
   <button class="tb" role="tab" aria-selected="false" data-a="mais">
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/></svg><span>Mais</span></button>
 </nav>
