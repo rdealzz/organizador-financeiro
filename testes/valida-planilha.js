@@ -107,6 +107,34 @@ const SHOT=process.env.SHOT;
  // guardar zero vale zero
  await cel('renda|guardar').fill('0'); await cel('renda|guardar').press('Enter'); await p.waitForTimeout(60);
  eh(pre+'guardar 0 vale 0 (não volta aos 20%)', await p.evaluate(()=>calc().meta===0));
+
+ // ── Quem me deve
+ await p.evaluate(()=>{ S.pessoas.push({id:'mae',nome:'Mãe',cor:'var(--pes2)'});
+   S.lanc.push({id:'jantar',criadoEm:Date.now(),nome:'Jantar',valor:300,cat:'comida',tier:3,tipo:'unico',fonte:'Conta',pRest:0,ref:0,venc:0,prox:0,meio:'cartao',
+     divs:[{id:'pai',valor:100},{id:'mae',valor:100}],pai:200,com:'pai'});
+   S.hist=[{data:'2026-09-05',venc:'2026-09-12',bruto:500,meu:300,pai:200,itens:[{nome:'Mercado set',valor:400,cat:'mercado',tier:1,pai:200,com:'mae'}],
+     pessoas:[{id:'mae',nome:'Mãe',cor:'var(--pes2)',valor:200}]}];
+   render(); });
+ const deve=await p.evaluate(()=>[...document.querySelectorAll('#plDeve tbody tr')].map(t=>t.innerText.replace(/\s+/g,' ').trim()));
+ eh(pre+'quadro lista as duas pessoas', deve.length===2, deve);
+ const valores=await p.evaluate(()=>Object.fromEntries(devedores().map(e=>[e.nome,[e.aberto,e.pago]])));
+ eh(pre+'Pai deve geladeira (300) + jantar (100); Mãe deve jantar (100) + fatura de setembro (200)',
+    JSON.stringify(valores)===JSON.stringify({'Pai':[400,0],'Mãe':[300,0]}), valores);
+ const gastoAntes=await p.evaluate(()=>{const c=calc();return [c.gasto,c.disponivel];});
+ await p.evaluate(()=>{ window.confirm=()=>true; });
+ await p.locator('#plDeve [data-deve-ok="mae"]').click(); await p.waitForTimeout(80);
+ const depois=await p.evaluate(()=>Object.fromEntries(devedores().map(e=>[e.nome,[e.aberto,e.pago]])));
+ eh(pre+'"Recebi tudo" zera o que a Mãe deve, nos dois lugares', JSON.stringify(depois['Mãe'])==='[0,300]', depois);
+ eh(pre+'Pai continua devendo', JSON.stringify(depois['Pai'])==='[400,0]', depois);
+ eh(pre+'receber não muda o orçamento', JSON.stringify(await p.evaluate(()=>{const c=calc();return [c.gasto,c.disponivel];}))===JSON.stringify(gastoAntes));
+ eh(pre+'fatura de setembro marcada como recebida da Mãe', await p.evaluate(()=>!!(S.hist[0].recebido&&S.hist[0].recebido.mae)));
+ await p.locator('#snack button').first().click().catch(()=>{}); await p.waitForTimeout(60);
+ eh(pre+'Desfazer devolve a dívida da Mãe', await p.evaluate(()=>devedores().find(e=>e.nome==='Mãe').aberto===300));
+ await p.locator('#plDeve [data-deve-pdf="pai"]').click(); await p.waitForTimeout(80);
+ eh(pre+'PDF abre o extrato do Pai', await p.evaluate(()=>!document.querySelector('#recibo').hidden&&/Extrato de Pai/.test(document.querySelector('#recFolha').innerText)&&/400,00/.test(document.querySelector('#recFolha').innerText)));
+ await p.evaluate(()=>fecharRecibo());
+ const txt=await p.evaluate(()=>textoExtrato(extratoDe('mae','tudo')));
+ eh(pre+'texto do extrato termina em "Em aberto: R$ 300"', /Em aberto: R\$\s300,00$/.test(txt), txt);
  // texto com NaN/undefined
  eh(pre+'sem NaN/undefined na planilha', await p.evaluate(()=>!/NaN|undefined|Invalid/.test(document.querySelector('#a-planilha').innerText)));
  // Mais → Resumo do dia e Gastos por cartão continuam alcançáveis
@@ -123,7 +151,7 @@ const SHOT=process.env.SHOT;
    eh(pre+'descrição presa é opaca com esfera ('+t+')', !/rgba\(.*,\s*0?\.\d+\)$/.test(op)&&op!=='rgba(0, 0, 0, 0)', op);
  }
  await p.evaluate(()=>{document.documentElement.dataset.tema='claro';});
- if(SHOT){ await p.evaluate(()=>{document.activeElement&&document.activeElement.blur(); scrollTo(0,0); document.querySelector('.pl-rola').scrollLeft=0;}); await p.screenshot({path:SHOT+'-'+larg+'.png',fullPage:true}); }
+ if(SHOT){ await p.evaluate(()=>{document.activeElement&&document.activeElement.blur(); scrollTo(0,0); document.querySelectorAll('.pl-rola').forEach(x=>x.scrollLeft=0); document.querySelector('#tabbar').hidden=true; const s=document.querySelector('#snack'); if(s) s.hidden=true;}); await p.screenshot({path:SHOT+'-'+larg+'.png',fullPage:true}); }
  eh(pre+'sem erro no console', errs.length===0, errs);
  await p.close();
  }

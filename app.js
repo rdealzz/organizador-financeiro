@@ -830,7 +830,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v11';
+const VERSAO_APP='v11.1';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -4079,7 +4079,7 @@ function fontesExtrato(escopo){
   }
   const daHist=x=>({rotulo:'Fatura fechada em '+dataBR(x.data),
     detalhe:'cobrada em '+dataBR(x.venc||iso(vencDaFatura(dataDeISO(x.data)))),
-    data:x.data,aberta:false,itens:x.itens||[],congeladas:fatiasDoHist(x)});
+    data:x.data,aberta:false,itens:x.itens||[],congeladas:fatiasDoHist(x),ref:x});
   if(escopo==='tudo') (S.hist||[]).forEach(x=>fs.push(daHist(x)));
   else if(m&&S.hist&&S.hist[+m[1]]) fs.push(daHist(S.hist[+m[1]]));
   return fs;
@@ -4119,8 +4119,12 @@ function extratoDe(alvo,escopo){
           divide:divisoes(l).map(d=>nomePessoa(d.id)).join(', ')}));
       }else{
         const d=divisoes(l).find(d=>String(d.id)===String(alvo)); if(!d) return;
-        linhas.push(Object.assign(base,{valor:d.valor,pg:acertado(l,alvo),
-          quando:dataAcerto(l,alvo),l}));
+        /* Numa fatura fechada, "Já recebi" marca a FATURA inteira
+           (`x.recebido`), não cada gasto. Sem olhar para ela, o extrato
+           cobraria de novo o que a pessoa já tinha dado por pago lá. */
+        const daFatura=f.ref&&recebeuDe(f.ref,alvo);
+        linhas.push(Object.assign(base,{valor:d.valor,pg:acertado(l,alvo)||daFatura,
+          quando:dataAcerto(l,alvo)||(daFatura?f.ref.recebido[alvo||'']:''),l}));
       }
     });
     linhas.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||b.valor-a.valor);
@@ -4623,7 +4627,7 @@ const SUB={plano:'renda',analise:'graficos',ajustes:'conta'};
    Um link que leva direto a uma sub-aba escondida (um aviso de Hoje que diz
    "remanejar o teto") continua funcionando: a sub-aba aparece enquanto está
    aberta. Esconder a tela de quem foi mandado para ela seria um beco. */
-const SUBS_SIMPLES={plano:['renda'], analise:['graficos','hist'], ajustes:['conta','alertas','dados']};
+const SUBS_SIMPLES={plano:['renda'], analise:['graficos','hist','extratos'], ajustes:['conta','alertas','dados']};
 /* Nunca na barra, em modo nenhum: abre pelo menu do perfil. */
 const SUBS_FORA=['assinatura'];
 function modoCompleto(){
@@ -4692,7 +4696,7 @@ const MAIS_ITENS=[
   {ir:'plano:guardar',    ic:'certo',      t:'Cofre',                d:'Quanto já guardei', c:1},
   {ir:'plano:entrou',     ic:'raio',       t:'Dinheiro extra',       d:'Venda, freela, 13º', c:1},
   {ir:'analise:cortes',   ic:'tesoura',    t:'O que cortar',         d:'Onde dá para economizar', c:1},
-  {ir:'analise:extratos', ic:'nota',       t:'Extrato em PDF',       d:'Para mandar a quem divide comigo', c:1},
+  {ir:'analise:extratos', ic:'nota',       t:'Extrato em PDF',       d:'Quanto cada um me deve, por fatura'},
   {ir:'ajustes:extrato',  ic:'descendo',   t:'Importar do banco',    d:'Trazer gastos de um extrato', c:1},
   {ir:'ajustes:assinatura',ic:'festa',     t:'Assinatura',           d:'O que a versão paga traria', c:1}
 ];
@@ -4954,6 +4958,7 @@ function renderPlanilha(c){
   if(d) d.innerHTML=!sal?'Comece pelo <b>Salário</b> na primeira linha. Depois escreva cada gasto na última linha — ela está sempre vazia.'
     :'Na coluna <b>Vezes</b>: <b>12x</b> é parcelado, <b>3/12</b> é a parcela 3 de 12, <b>fixo</b> repete todo mês, vazio é compra única. Toque em ✎ para mudar a categoria.';
 
+  renderDevedores();
   Object.entries(novos).forEach(([k,v])=>{ const el=tab.querySelector(`[data-k="${CSS.escape(k)}"]`); if(el) el.value=v; });
   if(foco){
     let k=foco.k;
@@ -5136,6 +5141,92 @@ function plMudarCelula(el){
   });
 })();
 
+
+/* ══════════════════ QUEM ME DEVE (v11.1) ══════════════════
+
+   "Queria poder ter um extrato de quanto cada um deve me pagar." O extrato
+   por pessoa já existia (v10.14), mas morava em Análises e só no modo
+   completo — longe da planilha, onde a pessoa escreve "Pai paga". Agora o
+   quadro fica logo embaixo dela: uma linha por pessoa, com o que ela ainda
+   deve (de TUDO: o mês aberto e as faturas fechadas que não foram acertadas),
+   o que já pagou, e o extrato em PDF / em texto para mandar.
+
+   É o mesmo `extratoDe(id,'tudo')` do extrato — a soma que aparece aqui é a
+   mesma que sai no papel, porque é o mesmo objeto. "Recebi tudo" escreve nos
+   mesmos campos que os botões de sempre: `l.acerto` nos gastos do mês aberto
+   e `x.recebido` nas faturas fechadas. Nenhum valor do orçamento muda — é
+   reembolso, não renda (v10.14). */
+function quemDivide(){
+  const ids=pessoas().map(p=>p.id);
+  (S.hist||[]).forEach(x=>fatiasDoHist(x).forEach(f=>{ if(f.id&&!ids.includes(f.id)) ids.push(f.id); }));
+  doCiclo().concat(daProxima()).forEach(l=>divisoes(l).forEach(d=>{ if(d.id&&!ids.includes(d.id)) ids.push(d.id); }));
+  return ids;
+}
+function devedores(){
+  return quemDivide().map(id=>extratoDe(id,'tudo')).filter(e=>e.total>0.004)
+    .sort((a,b)=>b.aberto-a.aberto||b.total-a.total);
+}
+function renderDevedores(){
+  const el=$('#plDeve'); if(!el) return;
+  const ds=devedores();
+  if(!ds.length){
+    el.innerHTML=pessoas().length?'':`<p class="pl-dica">Quando alguém dividir um gasto com você (coluna <b>Quem paga</b>), aparece aqui quanto essa pessoa te deve, com o extrato para mandar.</p>`;
+    return;
+  }
+  const tot=ds.reduce((t,e)=>t+e.aberto,0);
+  el.innerHTML=`<h2 class="pl-tit">Quem me deve</h2>
+    <div class="pl-folha"><div class="pl-rola"><table class="pl pl-deve">
+    <thead><tr><th class="pl-desc">Pessoa</th><th class="pl-num">Deve R$</th><th>Extrato</th><th class="pl-num">Já pagou R$</th></tr></thead>
+    <tbody>${ds.map(e=>`<tr>
+      <td class="pl-desc pl-rot"><span class="pt" style="background:${e.cor}"></span>${esc(e.nome)}
+        <small class="pl-mudo">${e.n} gasto${e.n===1?'':'s'}</small></td>
+      <td class="pl-num pl-saldo${e.aberto>0.004?' pl-deve-v':''}">${numCel(e.aberto)}</td>
+      <td class="pl-acoes-deve">
+        <button type="button" class="pl-btn-cel" data-deve-pdf="${esc(e.alvo)}">PDF</button>
+        <button type="button" class="pl-btn-cel" data-deve-env="${esc(e.alvo)}">Enviar</button>
+        ${e.aberto>0.004?`<button type="button" class="pl-btn-cel" data-deve-ok="${esc(e.alvo)}">Recebi tudo</button>`:'<span class="pl-mudo">tudo pago ✓</span>'}
+      </td>
+      <td class="pl-num pl-saldo">${numCel(e.pago)}</td>
+    </tr>`).join('')}</tbody>
+    <tfoot><tr><td class="pl-desc">Falta receber</td><td class="pl-num">${brl(tot)}</td><td colspan="2" class="pl-nota">não entra no "posso gastar" — é reembolso</td></tr></tfoot>
+    </table></div></div>`;
+}
+async function enviarExtrato(e){
+  const txt=textoExtrato(e);
+  if(navigator.share){
+    try{ await navigator.share({text:txt}); return; }
+    catch(err){ if(err&&err.name==='AbortError') return; }
+  }
+  const ok=await copiar(txt);
+  toast(ok?'Extrato de '+e.nome+' copiado':'Não consegui copiar aqui',!ok);
+}
+/* Marca como pago tudo que ainda está em aberto com essa pessoa. Guarda o que
+   mudou para o Desfazer devolver exatamente o estado de antes. */
+function receberTudo(id){
+  const e=extratoDe(id,'tudo');
+  if(!(e.aberto>0.004)) return;
+  if(!confirm(e.nome+' te pagou '+brl(e.aberto)+'?\n\nTudo que está em aberto com '+e.nome+' fica marcado como pago. Isso não muda o seu orçamento.')) return;
+  const desfaz=[];
+  fontesExtrato('tudo').forEach(f=>{
+    if(f.ref){
+      const tem=(f.itens||[]).some(l=>divisoes(l).some(d=>String(d.id)===String(id))&&!acertado(l,id));
+      if(tem&&!recebeuDe(f.ref,id)){ f.ref.recebido=f.ref.recebido||{}; f.ref.recebido[id||'']=iso(hojeD()); desfaz.push(()=>{ delete f.ref.recebido[id||'']; }); }
+    }else (f.itens||[]).forEach(l=>{
+      if(divisoes(l).some(d=>String(d.id)===String(id))&&!acertado(l,id)){ marcarAcerto(l,id,true); desfaz.push(()=>marcarAcerto(l,id,false)); }
+    });
+  });
+  render(); salvar(); vibrar(14);
+  snack(e.nome+' · '+brl(e.aberto)+' recebido','Desfazer',()=>{ desfaz.forEach(f=>f()); render(); salvar(); toast('Desfeito'); });
+}
+(function ligarDevedores(){
+  const el=$('#plDeve'); if(!el) return;
+  el.addEventListener('click',e=>{
+    const b=e.target.closest('[data-deve-pdf],[data-deve-env],[data-deve-ok]'); if(!b) return;
+    if(b.dataset.devePdf!==undefined) abrirRecibo(extratoDe(b.dataset.devePdf,'tudo'));
+    else if(b.dataset.deveEnv!==undefined) enviarExtrato(extratoDe(b.dataset.deveEnv,'tudo'));
+    else receberTudo(b.dataset.deveOk);
+  });
+})();
 /* ---------- feedback: toast, vibração, snackbar de desfazer ---------- */
 let toastT=null;
 function toast(msg,ruim){

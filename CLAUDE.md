@@ -2209,3 +2209,30 @@ nele: "tv 1200 10x pix" funciona numa célula só — `meioDoTexto`, o `10x` e
 `lerRapido`). `plRemap` troca `novo|coluna` pelo id do gasto recém-criado, para
 o foco seguir no gasto e não voltar à linha vazia. Enter desce na mesma coluna;
 na linha nova, salva e volta para o nome.
+
+## Quem me deve, embaixo da planilha (v11.1)
+
+O pedido: *"queria poder ter um extrato de quanto cada um deve me pagar"*. O
+extrato por pessoa existia desde a v10.14, mas em Análises e só no modo
+completo — longe da coluna *Quem paga*, onde a divisão nasce.
+
+`renderDevedores()` (chamada por `renderPlanilha`) desenha, logo abaixo da
+planilha, uma linha por pessoa: **Deve** (em aberto), **Extrato** (PDF,
+Enviar, Recebi tudo) e **Já pagou**. O período é **tudo** — o mês aberto e as
+faturas fechadas —, porque dívida não some quando a fatura fecha. Cada número
+vem de `extratoDe(id,'tudo')`, o mesmo objeto que desenha o PDF: a soma do
+quadro e a do papel não têm como discordar. Quem foi apagado do cadastro mas
+ainda tem gasto dividido continua no quadro (`quemDivide()`).
+
+**Defeito corrigido junto:** o extrato só olhava o acerto POR GASTO
+(`l.acerto`) e ignorava o *Já recebi* da fatura fechada (`x.recebido`) — quem
+marcava a fatura de setembro como recebida continuava vendo a cobrança no
+extrato "tudo". Agora `fontesExtrato` leva a fatura em `ref`, e a linha conta
+como paga por qualquer uma das duas marcas.
+
+**"Recebi tudo" escreve nos campos de sempre**: `l.acerto` nos gastos do mês
+aberto, `x.recebido` nas faturas fechadas — e só nas faturas onde havia algo
+em aberto com aquela pessoa. O Desfazer devolve exatamente o que mudou. Nada do
+orçamento se mexe (reembolso não é renda, v10.14); há teste para isso.
+
+*Extrato em PDF* também entrou no modo simples, em Mais.

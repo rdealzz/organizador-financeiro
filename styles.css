@@ -3478,3 +3478,18 @@ body[data-area="planilha"] .fab{display:none}
   .pl-conta .pl-res{flex-basis:100%;flex-direction:row;justify-content:space-between;align-items:baseline;
     border-top:1px solid var(--sep);padding-top:6px;margin-top:2px}
 }
+
+/* Quem me deve (v11.1) — a mesma grade da planilha, mais estreita. */
+.pl-deve-box{margin-top:22px}
+.pl-tit{font-size:var(--t-md);margin:0 4px 8px}
+.pl.pl-deve{min-width:520px}
+@media(max-width:520px){.pl.pl-deve .pl-rot small{display:none}.pl.pl-deve .pl-desc{min-width:96px;width:96px}}
+.pl.pl-deve .pl-desc{width:auto;left:0}
+.pl.pl-deve .pl-rot{display:flex;align-items:center;gap:8px;height:40px}
+.pl.pl-deve .pl-rot small{font-weight:400}
+.pl.pl-deve .pt{width:9px;height:9px;border-radius:50%;flex:none}
+.pl .pl-deve-v{color:var(--laranja-txt);font-weight:700}
+.pl .pl-acoes-deve{white-space:nowrap;padding:0 4px}
+.pl .pl-acoes-deve .pl-btn-cel{display:inline-block;padding:0 7px;height:30px;line-height:30px;border-radius:6px}
+.pl .pl-acoes-deve .pl-btn-cel:hover,.pl .pl-acoes-deve .pl-btn-cel:focus-visible{background:var(--azul-fraco)}
+.pl .pl-acoes-deve .pl-mudo{padding:0 7px}
