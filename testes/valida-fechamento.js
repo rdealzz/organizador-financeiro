@@ -89,6 +89,19 @@ const cmp=(n,a,b)=>eh(n,JSON.stringify(a)===JSON.stringify(b),[a,b]);
  await p.locator('#plTab tr.pl-guarda [data-metavolta]').click(); await p.clock.runFor(100);
  cmp('"voltar a 1.150" desfaz o ajuste do mês', await p.evaluate(()=>[calc().meta,!!S.metaCiclo]),[1150,false]);
 
+ // ── o botão de definir o fixo (cada conta define o seu)
+ await p.evaluate(()=>{ S.metaVal=0; S.metaPct=20; delete S.metaCiclo; render(); });
+ eh('sem fixo: a linha oferece "definir um valor fixo"', await p.evaluate(()=>!!document.querySelector('#plTab tr.pl-guarda [data-metafixo]')));
+ p.once('dialog',d=>d.accept('1.150'));
+ await p.locator('#plTab tr.pl-guarda [data-metafixo]').click(); await p.clock.runFor(100);
+ cmp('botão grava o fixo: 1.150, sem %', await p.evaluate(()=>[S.metaVal,S.metaPct,calc().meta]),[1150,0,1150]);
+ await cel('renda|guardar').fill('800'); await cel('renda|guardar').press('Enter'); await p.clock.runFor(100);
+ p.once('dialog',d=>d.accept('1200'));
+ await p.locator('#plTab tr.pl-guarda [data-metafixo]').first().click(); await p.clock.runFor(100);
+ cmp('mudar o fixo mantém o ajuste do mês', await p.evaluate(()=>[S.metaVal,calc().meta,calc().metaPadrao]),[1200,800,1200]);
+ p.once('dialog',d=>d.dismiss());
+ await p.locator('#plTab tr.pl-guarda [data-metafixo]').first().click(); await p.clock.runFor(100);
+ eh('cancelar não muda nada', await p.evaluate(()=>S.metaVal===1200&&calc().meta===800));
  eh('sem erro de página', errs.length===0, errs);
  await b.close();
  console.log(ok.length+' ok, '+bad.length+' falharam'); bad.forEach(x=>console.log('  ✗ '+x));

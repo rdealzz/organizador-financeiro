@@ -2273,3 +2273,16 @@ navegador (`p.clock`) e passa pela meia-noite do dia 5 com o app aberto.
 `valida-motor.js` deixou de falhar todo mês: a verificação do "dia 31
 guardado" contava fechamentos até HOJE; agora confere a forma (todo dia 28, um
 mês depois do outro).
+
+### O fixo de cada um tem botão próprio (v11.3)
+
+Cada pessoa usa a PRÓPRIA conta (o próprio e-mail), então o valor fixo de
+guardar já é de cada um — `S.metaVal` mora no estado da conta. O que faltava
+era dizer isso na tela: antes, o fixo nascia do "primeiro número escrito" na
+célula, sem ninguém saber que era essa a regra.
+
+Agora a linha Guardar tem o botão **definir um valor fixo por mês** / **mudar
+o fixo** (`definirMetaFixa()`, `data-metafixo`), que pergunta o valor e grava
+`S.metaVal` (zerando `S.metaPct`). A célula continua sendo o ajuste SÓ do
+mês. Mudar o fixo não apaga o ajuste do mês em curso — só quando os dois
+passam a valer o mesmo número. `valida-fechamento.js`: 25 verificações.

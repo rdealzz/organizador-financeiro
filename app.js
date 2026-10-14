@@ -830,7 +830,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v11.2';
+const VERSAO_APP='v11.3';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -2778,7 +2778,24 @@ function ajustarMetaCiclo(valor){
   render(); salvar(); vibrar(10);
   toast(S.metaCiclo?'Só neste ciclo: guardar '+brl(v):'Meta de volta ao normal');
 }
+/* O valor FIXO de guardar é de cada conta — cada pessoa entra com o próprio
+   e-mail e define o seu. Ele é a regra de todo mês (`S.metaVal`); a célula da
+   planilha mexe só no mês (`S.metaCiclo`). Mudar o fixo não apaga o ajuste do
+   mês em curso, a não ser que os dois passem a ser o mesmo número. */
+function definirMetaFixa(){
+  const atual=+S.metaVal>0?fmtCel(+S.metaVal):'';
+  const r=prompt('Quanto você quer guardar TODO mês?\n\nEsse valor volta sozinho a cada fechamento. Num mês apertado, mude só aquele mês na própria planilha.',atual);
+  if(r===null) return;
+  const v=valorDe(r);
+  if(!(v>0)){ toast('Escreva um valor maior que zero',true); return; }
+  S.metaVal=v; S.metaPct=0;
+  const a=ajusteDoCiclo(); if(a&&Math.abs((+a.valor||0)-v)<0.005) delete S.metaCiclo;
+  if(typeof preencherCampos==='function') preencherCampos();
+  render(); salvar(); vibrar(10);
+  toast('Fixo: guardar '+brl(v)+' todo mês');
+}
 document.addEventListener('click',e=>{
+  if(e.target.closest('[data-metafixo]')){ definirMetaFixa(); return; }
   const mais=e.target.closest('[data-metamais]');
   if(mais) ajustarMetaCiclo(metaEmVigor()+(+mais.dataset.metamais||0));
   if(e.target.closest('[data-metavolta]')) ajustarMetaCiclo(metaBase());
@@ -4921,10 +4938,10 @@ function renderPlanilha(c){
   const extraG=c.entrouGuardar>0?` · +${brl(c.entrouGuardar)} do extra`:'';
   linhas+=linRenda('Guardar','guardar',c.meta,
     c.ajustada
-      ?`<b>só este mês</b> · todo mês é ${brl(c.metaPadrao)}, volta sozinho em ${dataBR(iso(faturaAberta().fecha))}${extraG} <button type="button" class="link" data-metavolta>voltar a ${brl(c.metaPadrao)}</button>`
+      ?`<b>só este mês</b> · seu fixo é ${brl(c.metaPadrao)} e volta sozinho em ${dataBR(iso(faturaAberta().fecha))}${extraG} <button type="button" class="link" data-metavolta>voltar a ${brl(c.metaPadrao)}</button> <button type="button" class="link" data-metafixo>mudar o fixo</button>`
       :(+S.metaVal>0
-        ?`todo mês · apertou? mude aqui só este mês${extraG} <button type="button" class="link" data-ir="plano:renda">mudar o fixo</button>`
-        :`sai antes dos gastos${extraG}`),'pl-guarda');
+        ?`<b>seu fixo, todo mês</b> · apertou? mude aqui, vale só este mês${extraG} <button type="button" class="link" data-metafixo>mudar o fixo</button>`
+        :`sai antes dos gastos${extraG} <button type="button" class="link" data-metafixo>definir um valor fixo por mês</button>`),'pl-guarda');
   linhas+=`<tr class="pl-sep"><td class="pl-n"></td><td colspan="7">Gastos do mês <small>· fatura fecha ${dataBR(iso(faturaAberta().fecha))}</small></td></tr>`;
   its.forEach(l=>{ n++; saldo-=meuValor(l); linhas+=linhaPlanilha(l,n,saldo,false); });
   n++;
