@@ -189,8 +189,12 @@ const eh=(nome,v)=>{(v?ok:bad).push(nome+(v?'':'  →  falso'));};
  eh('parcela anda uma casa (8→7)',r.fechou.lancDepois.some(x=>x==='moto:parc:7:prox0'));
  eh('guardado pra próxima entra na fatura agora',r.fechou.lancDepois.some(x=>x==='presente:unico:0:prox0'));
 
- cmp('dia 31 guardado não pula mês nenhum: 7 fechamentos, todo dia 28',
-     [r.reguaCom31.faturas,r.reguaCom31.datas[0],r.reguaCom31.datas[6]],[7,'2026-02-28','2026-08-28']);
+ /* Conta até HOJE, então o número de fechamentos cresce todo mês: o que se
+    confere é a forma — começa em 28/02, todo dia 28, um mês depois do outro. */
+ {const ds=r.reguaCom31.datas, seq=ds.every((d,i)=>{const m=2+i, y=2026+Math.floor((m-1)/12);
+    return d===y+'-'+String((m-1)%12+1).padStart(2,'0')+'-28';});
+  eh('dia 31 guardado não pula mês nenhum: todo dia 28, um mês depois do outro',
+     ds.length>=7&&ds.length===r.reguaCom31.faturas&&seq,ds);}
  cmp('motor e calendário dão a MESMA data de vencimento',
      r.fatura31.vence,r.fatura31.noCalendario);
  cmp('"todo mês, valor muda" sai do fechamento sem divisão pendurada',

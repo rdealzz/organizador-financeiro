@@ -830,7 +830,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v11.1';
+const VERSAO_APP='v11.2';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -4918,8 +4918,13 @@ function renderPlanilha(c){
       <td class="pl-num">${numCel(c.entrou)}</td><td class="pl-num pl-saldo">${numCel(saldo)}</td>
       <td class="pl-nota" colspan="4">venda, 13º… <button type="button" class="link" data-ir="plano:entrou">ver</button></td></tr>`; }
   saldo-=c.metaMes;
+  const extraG=c.entrouGuardar>0?` · +${brl(c.entrouGuardar)} do extra`:'';
   linhas+=linRenda('Guardar','guardar',c.meta,
-    c.entrouGuardar>0?`sai antes dos gastos · +${brl(c.entrouGuardar)} do extra`:'sai antes dos gastos','pl-guarda');
+    c.ajustada
+      ?`<b>só este mês</b> · todo mês é ${brl(c.metaPadrao)}, volta sozinho em ${dataBR(iso(faturaAberta().fecha))}${extraG} <button type="button" class="link" data-metavolta>voltar a ${brl(c.metaPadrao)}</button>`
+      :(+S.metaVal>0
+        ?`todo mês · apertou? mude aqui só este mês${extraG} <button type="button" class="link" data-ir="plano:renda">mudar o fixo</button>`
+        :`sai antes dos gastos${extraG}`),'pl-guarda');
   linhas+=`<tr class="pl-sep"><td class="pl-n"></td><td colspan="7">Gastos do mês <small>· fatura fecha ${dataBR(iso(faturaAberta().fecha))}</small></td></tr>`;
   its.forEach(l=>{ n++; saldo-=meuValor(l); linhas+=linhaPlanilha(l,n,saldo,false); });
   n++;
@@ -5042,11 +5047,18 @@ function plMudarCelula(el){
     if(col==='salario') S.salario=v;
     else if(col==='extra') S.extra=v;
     else if(col==='guardar'){
-      /* A célula é a regra: o número fica até alguém trocar, como o salário.
-         Um ajuste só deste ciclo (v10.17) perde o sentido quando a pessoa
-         escreve o valor por cima dele. Zero tem que valer zero — sem zerar o
-         percentual, a meta cairia de volta nos 20% da renda. */
-      delete S.metaCiclo; S.metaVal=v; if(!(v>0)) S.metaPct=0;
+      /* Com um valor fixo já combinado (ex.: R$ 1.150 todo mês), a célula
+         mexe SÓ NESTE MÊS: "se um mês eu gastar demais, diminuo à mão" — e no
+         mês seguinte tem que voltar sozinho para os R$ 1.150. É o ajuste da
+         v10.17 (`S.metaCiclo`, que morre no fechamento), agora a um toque.
+         A regra permanente muda em Mais → Minha renda.
+         Sem valor fixo ainda (meta em %), a célula É a regra: o primeiro
+         número escrito vira o valor de todo mês. Zero tem que valer zero —
+         sem zerar o percentual, a meta cairia de volta nos 20% da renda. */
+      if(+S.metaVal>0){
+        if(Math.abs(v-metaBase())<0.005) delete S.metaCiclo;
+        else S.metaCiclo={ate:iso(proximoFech()),valor:v};
+      } else { delete S.metaCiclo; S.metaVal=v; if(!(v>0)) S.metaPct=0; }
     }
     if(typeof preencherCampos==='function') preencherCampos();
     plAtualizar(el); return;
@@ -6155,6 +6167,14 @@ $('#addHorario').onclick=()=>{
 /* checagens periódicas */
 setInterval(()=>{ if(Auth.logado()) checarAgenda(false); },60*1000);   // o minuto do horário marcado
 setInterval(()=>{ if(Auth.logado()) checarAlertas(false); },30*60*1000); // os alertas de situação
+/* O fechamento rodava só ao abrir o app ou ao voltar para ele. Com o app
+   aberto na tela virando a meia-noite do dia do fechamento, a fatura antiga
+   continuava aberta até alguém trocar de aba. De minuto em minuto, e só
+   redesenha quando um ciclo de fato fechou. Não chama `salvar()`, pelo mesmo
+   motivo do `carregar()` (v10.18): o fechamento é refeito igual em qualquer
+   aparelho, e gravá-lo sozinho carimbaria `_ts` sem ninguém ter mexido. */
+setInterval(()=>{ if(!Auth.logado()) return;
+  const antes=S.ultimoFech; rodarCiclos(); if(S.ultimoFech!==antes) render(); },60*1000);
 
 /* ==========================================================================
    v4 — sessão, sincronização e atualização do app

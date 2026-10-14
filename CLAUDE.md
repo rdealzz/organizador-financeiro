@@ -2236,3 +2236,40 @@ em aberto com aquela pessoa. O Desfazer devolve exatamente o que mudou. Nada do
 orçamento se mexe (reembolso não é renda, v10.14); há teste para isso.
 
 *Extrato em PDF* também entrou no modo simples, em Mais.
+
+## A meta fixa e o mês apertado, pela planilha (v11.2)
+
+O pedido: *"o valor pra guardar todo mês deve ser R$ 1.150 fixo; se um mês
+gastar demais, eu diminuo manualmente"*. O motor já sabia isso desde a v10.17
+(`S.metaVal` é a regra, `S.metaCiclo` o ajuste de um ciclo que morre no
+fechamento) — mas a célula **Guardar** da planilha escrevia sempre na REGRA e
+apagava o ajuste. Quem diminuísse em dezembro continuaria diminuído em março.
+
+Agora a célula decide pelo que já existe:
+
+* **com valor fixo (`S.metaVal > 0`)** ela mexe **só neste mês**
+  (`S.metaCiclo`, `ate` = o próximo fechamento). A nota da linha diz "só este
+  mês · todo mês é R$ 1.150, volta sozinho em 05/11", com *voltar a R$ 1.150*.
+  Escrever o próprio valor fixo desfaz o ajuste. O fixo muda em Mais → Minha
+  renda (link *mudar o fixo* na mesma linha).
+* **sem valor fixo** (meta em %), o primeiro número escrito vira a regra, como
+  antes — é assim que se põe os R$ 1.150 uma vez.
+
+O valor não foi gravado no código: é dado da conta, e a mãe usa o mesmo app.
+
+### O fechamento com o app aberto
+
+`rodarCiclos()` só rodava ao abrir o app e ao voltar para ele
+(`visibilitychange`). Com o app aberto na tela virando a meia-noite do dia 5, a
+fatura de setembro continuava aberta — e a tela já dizia "fecha 05/11",
+porque `faturaAberta()` olha o relógio e não o estado. Agora há um
+`setInterval` de minuto que roda o fechamento e redesenha só quando um ciclo
+fechou. Ele **não chama `salvar()`**, pelo motivo da v10.18: o fechamento é
+refeito igual em qualquer aparelho, e gravá-lo sozinho carimbaria `_ts`.
+
+`testes/valida-fechamento.js` (21 verificações) controla o relógio do
+navegador (`p.clock`) e passa pela meia-noite do dia 5 com o app aberto.
+
+`valida-motor.js` deixou de falhar todo mês: a verificação do "dia 31
+guardado" contava fechamentos até HOJE; agora confere a forma (todo dia 28, um
+mês depois do outro).

@@ -23,6 +23,12 @@ falhar.
   uma planilha: salário, guardar, gasto novo na última linha, Tab e Enter, `12x`,
   `3/12`, `fixo`, "Pai paga", a coluna Sobra batendo com `calc()`, apagar e
   desfazer, e o render vindo da nuvem sem apagar o que está sendo digitado.
+* **`valida-fechamento.js`** — o fechamento do dia 5 com o relógio do
+  navegador controlado: nada fecha às 23h58 do dia 4; com o app ABERTO, a
+  fatura fecha sozinha depois da meia-noite (o que é arquivado, o que fica, o
+  Pix fora da fatura, a parcela andando); reabrir não fecha duas vezes; dois
+  meses parado fecham um ciclo por mês. E a meta fixa de R$ 1.150 diminuída só
+  num mês pela planilha, voltando sozinha no fechamento.
 * **`valida-ui.js`** — as quatro áreas e todas as sub-abas, cada botão e select
   da linha da tabela, a folha de edição inteira, a lista de quem divide, o
   calendário pelas três portas com navegação e editor de fatura, menu de
