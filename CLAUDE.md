@@ -2303,3 +2303,17 @@ papel diz o mesmo número que o quadro.
 `l.acerto` e `x.recebido` **não foram apagados de lugar nenhum**: continuam no
 estado, na cobrança da fatura fechada e no extrato de Mais → Extrato, que
 segue com o período escolhível. Só não entram neste quadro.
+
+### Quando a Vercel não publica (21/10/2026)
+
+O commit da v11.4 entrou no `main` e a Vercel não criou deploy nenhum — nem a
+prévia do branch. Um deploy manual pelo painel saiu como **Preview**, e o
+endereço do app continuou na v11.3. Para saber o que está publicado sem acesso
+à Vercel (a rede daqui bloqueia `*.vercel.app`), a API pública do GitHub
+mostra cada deploy com commit e ambiente:
+
+    curl -sS "https://api.github.com/repos/rdealzz/organizador-financeiro/deployments?per_page=3"
+
+Se o commit mais novo do `main` não aparece ali como `Production`, o código
+está certo e a publicação é que não aconteceu: o caminho é *Promote to
+Production* no painel e conferir *Settings → Git → Production Branch*.
