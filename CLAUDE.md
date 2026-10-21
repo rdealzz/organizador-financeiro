@@ -2286,3 +2286,20 @@ o fixo** (`definirMetaFixa()`, `data-metafixo`), que pergunta o valor e grava
 `S.metaVal` (zerando `S.metaPct`). A célula continua sendo o ajuste SÓ do
 mês. Mudar o fixo não apaga o ajuste do mês em curso — só quando os dois
 passam a valer o mesmo número. `valida-fechamento.js`: 25 verificações.
+
+## "Quem me deve" é só o aviso do MÊS (v11.4)
+
+O pedido: *"não temos que colocar se ele pagou ou não, esse é só o aviso; o
+que passou passou, eu cobrei e tá tudo certo — agora o do mês tem que cobrar,
+mas não os meses que passaram, senão me perco"*.
+
+O quadro embaixo da planilha olha **só a fatura em formação**
+(`extratoDoMes(id)` = `extratoDe(id,'aberto',true)`), e o terceiro argumento,
+`soAviso`, faz o extrato **ignorar as marcas de acerto**: tudo do mês conta
+como a cobrar. Saíram a coluna *Já pagou* e o botão *Recebi tudo*
+(`receberTudo` deixou de existir). PDF e Enviar usam o mesmo objeto, então o
+papel diz o mesmo número que o quadro.
+
+`l.acerto` e `x.recebido` **não foram apagados de lugar nenhum**: continuam no
+estado, na cobrança da fatura fechada e no extrato de Mais → Extrato, que
+segue com o período escolhível. Só não entram neste quadro.

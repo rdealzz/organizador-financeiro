@@ -830,7 +830,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v11.3';
+const VERSAO_APP='v11.4';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -4118,7 +4118,9 @@ function nomeNoExtrato(alvo,fontes){
   }
   return nomePessoa(alvo);
 }
-function extratoDe(alvo,escopo){
+/* `soAviso`: o extrato do quadro "Quem me deve" (v11.4) não olha quem já
+   pagou — ele é o aviso do mês, e tudo nele conta como a cobrar. */
+function extratoDe(alvo,escopo,soAviso){
   const eu=(alvo==='eu');
   const fontes=fontesExtrato(escopo);
   const blocos=fontes.map(f=>{
@@ -4139,9 +4141,10 @@ function extratoDe(alvo,escopo){
         /* Numa fatura fechada, "Já recebi" marca a FATURA inteira
            (`x.recebido`), não cada gasto. Sem olhar para ela, o extrato
            cobraria de novo o que a pessoa já tinha dado por pago lá. */
-        const daFatura=f.ref&&recebeuDe(f.ref,alvo);
-        linhas.push(Object.assign(base,{valor:d.valor,pg:acertado(l,alvo)||daFatura,
-          quando:dataAcerto(l,alvo)||(daFatura?f.ref.recebido[alvo||'']:''),l}));
+        const daFatura=!soAviso&&f.ref&&recebeuDe(f.ref,alvo);
+        const pg=!soAviso&&(acertado(l,alvo)||daFatura);
+        linhas.push(Object.assign(base,{valor:d.valor,pg,
+          quando:pg?(dataAcerto(l,alvo)||(daFatura?f.ref.recebido[alvo||'']:'')):'',l}));
       }
     });
     linhas.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||b.valor-a.valor);
@@ -5171,53 +5174,50 @@ function plMudarCelula(el){
 })();
 
 
-/* ══════════════════ QUEM ME DEVE (v11.1) ══════════════════
+/* ══════════════════ QUEM ME DEVE (v11.1, só o mês desde a v11.4) ══════════════════
 
-   "Queria poder ter um extrato de quanto cada um deve me pagar." O extrato
-   por pessoa já existia (v10.14), mas morava em Análises e só no modo
-   completo — longe da planilha, onde a pessoa escreve "Pai paga". Agora o
-   quadro fica logo embaixo dela: uma linha por pessoa, com o que ela ainda
-   deve (de TUDO: o mês aberto e as faturas fechadas que não foram acertadas),
-   o que já pagou, e o extrato em PDF / em texto para mandar.
+   "Queria poder ter um extrato de quanto cada um deve me pagar." O quadro fica
+   logo embaixo da planilha: uma linha por pessoa, com quanto ela deve NESTE
+   mês e o extrato em PDF / em texto para mandar.
 
-   É o mesmo `extratoDe(id,'tudo')` do extrato — a soma que aparece aqui é a
-   mesma que sai no papel, porque é o mesmo objeto. "Recebi tudo" escreve nos
-   mesmos campos que os botões de sempre: `l.acerto` nos gastos do mês aberto
-   e `x.recebido` nas faturas fechadas. Nenhum valor do orçamento muda — é
-   reembolso, não renda (v10.14). */
+   v11.4: "o que passou passou, eu cobrei e tá tudo certo — agora o do mês tem
+   que cobrar, mas não os meses que passaram, senão me perco". Por isso o
+   quadro olha só a fatura em formação (`'aberto'`) e não pergunta quem já
+   pagou: é o aviso do que cobrar, não um livro de contas. As marcas de acerto
+   (`l.acerto`, `x.recebido`) continuam existindo e continuam valendo no
+   extrato de Mais — só não entram aqui. */
 function quemDivide(){
   const ids=pessoas().map(p=>p.id);
-  (S.hist||[]).forEach(x=>fatiasDoHist(x).forEach(f=>{ if(f.id&&!ids.includes(f.id)) ids.push(f.id); }));
-  doCiclo().concat(daProxima()).forEach(l=>divisoes(l).forEach(d=>{ if(d.id&&!ids.includes(d.id)) ids.push(d.id); }));
+  doCiclo().forEach(l=>divisoes(l).forEach(d=>{ if(d.id&&!ids.includes(d.id)) ids.push(d.id); }));
   return ids;
 }
+const extratoDoMes=id=>extratoDe(id,'aberto',true);
 function devedores(){
-  return quemDivide().map(id=>extratoDe(id,'tudo')).filter(e=>e.total>0.004)
-    .sort((a,b)=>b.aberto-a.aberto||b.total-a.total);
+  return quemDivide().map(extratoDoMes).filter(e=>e.total>0.004)
+    .sort((a,b)=>b.total-a.total);
 }
 function renderDevedores(){
   const el=$('#plDeve'); if(!el) return;
   const ds=devedores();
   if(!ds.length){
-    el.innerHTML=pessoas().length?'':`<p class="pl-dica">Quando alguém dividir um gasto com você (coluna <b>Quem paga</b>), aparece aqui quanto essa pessoa te deve, com o extrato para mandar.</p>`;
+    el.innerHTML=pessoas().length?'':`<p class="pl-dica">Quando alguém dividir um gasto com você (coluna <b>Quem paga</b>), aparece aqui quanto essa pessoa te deve no mês, com o extrato para mandar.</p>`;
     return;
   }
-  const tot=ds.reduce((t,e)=>t+e.aberto,0);
-  el.innerHTML=`<h2 class="pl-tit">Quem me deve</h2>
+  const tot=ds.reduce((t,e)=>t+e.total,0);
+  const f=faturaAberta();
+  el.innerHTML=`<h2 class="pl-tit">Quem me deve este mês</h2>
     <div class="pl-folha"><div class="pl-rola"><table class="pl pl-deve">
-    <thead><tr><th class="pl-desc">Pessoa</th><th class="pl-num">Deve R$</th><th>Extrato</th><th class="pl-num">Já pagou R$</th></tr></thead>
+    <thead><tr><th class="pl-desc">Pessoa</th><th class="pl-num">Deve R$</th><th>Extrato</th></tr></thead>
     <tbody>${ds.map(e=>`<tr>
       <td class="pl-desc pl-rot"><span class="pt" style="background:${e.cor}"></span>${esc(e.nome)}
         <small class="pl-mudo">${e.n} gasto${e.n===1?'':'s'}</small></td>
-      <td class="pl-num pl-saldo${e.aberto>0.004?' pl-deve-v':''}">${numCel(e.aberto)}</td>
+      <td class="pl-num pl-saldo pl-deve-v">${numCel(e.total)}</td>
       <td class="pl-acoes-deve">
         <button type="button" class="pl-btn-cel" data-deve-pdf="${esc(e.alvo)}">PDF</button>
         <button type="button" class="pl-btn-cel" data-deve-env="${esc(e.alvo)}">Enviar</button>
-        ${e.aberto>0.004?`<button type="button" class="pl-btn-cel" data-deve-ok="${esc(e.alvo)}">Recebi tudo</button>`:'<span class="pl-mudo">tudo pago ✓</span>'}
       </td>
-      <td class="pl-num pl-saldo">${numCel(e.pago)}</td>
     </tr>`).join('')}</tbody>
-    <tfoot><tr><td class="pl-desc">Falta receber</td><td class="pl-num">${brl(tot)}</td><td colspan="2" class="pl-nota">não entra no "posso gastar" — é reembolso</td></tr></tfoot>
+    <tfoot><tr><td class="pl-desc">Total a cobrar</td><td class="pl-num">${brl(tot)}</td><td class="pl-nota">fatura que fecha em ${dataBR(iso(f.fecha))} · não entra no "posso gastar" — é reembolso</td></tr></tfoot>
     </table></div></div>`;
 }
 async function enviarExtrato(e){
@@ -5229,31 +5229,12 @@ async function enviarExtrato(e){
   const ok=await copiar(txt);
   toast(ok?'Extrato de '+e.nome+' copiado':'Não consegui copiar aqui',!ok);
 }
-/* Marca como pago tudo que ainda está em aberto com essa pessoa. Guarda o que
-   mudou para o Desfazer devolver exatamente o estado de antes. */
-function receberTudo(id){
-  const e=extratoDe(id,'tudo');
-  if(!(e.aberto>0.004)) return;
-  if(!confirm(e.nome+' te pagou '+brl(e.aberto)+'?\n\nTudo que está em aberto com '+e.nome+' fica marcado como pago. Isso não muda o seu orçamento.')) return;
-  const desfaz=[];
-  fontesExtrato('tudo').forEach(f=>{
-    if(f.ref){
-      const tem=(f.itens||[]).some(l=>divisoes(l).some(d=>String(d.id)===String(id))&&!acertado(l,id));
-      if(tem&&!recebeuDe(f.ref,id)){ f.ref.recebido=f.ref.recebido||{}; f.ref.recebido[id||'']=iso(hojeD()); desfaz.push(()=>{ delete f.ref.recebido[id||'']; }); }
-    }else (f.itens||[]).forEach(l=>{
-      if(divisoes(l).some(d=>String(d.id)===String(id))&&!acertado(l,id)){ marcarAcerto(l,id,true); desfaz.push(()=>marcarAcerto(l,id,false)); }
-    });
-  });
-  render(); salvar(); vibrar(14);
-  snack(e.nome+' · '+brl(e.aberto)+' recebido','Desfazer',()=>{ desfaz.forEach(f=>f()); render(); salvar(); toast('Desfeito'); });
-}
 (function ligarDevedores(){
   const el=$('#plDeve'); if(!el) return;
   el.addEventListener('click',e=>{
-    const b=e.target.closest('[data-deve-pdf],[data-deve-env],[data-deve-ok]'); if(!b) return;
-    if(b.dataset.devePdf!==undefined) abrirRecibo(extratoDe(b.dataset.devePdf,'tudo'));
-    else if(b.dataset.deveEnv!==undefined) enviarExtrato(extratoDe(b.dataset.deveEnv,'tudo'));
-    else receberTudo(b.dataset.deveOk);
+    const b=e.target.closest('[data-deve-pdf],[data-deve-env]'); if(!b) return;
+    if(b.dataset.devePdf!==undefined) abrirRecibo(extratoDoMes(b.dataset.devePdf));
+    else enviarExtrato(extratoDoMes(b.dataset.deveEnv));
   });
 })();
 /* ---------- feedback: toast, vibração, snackbar de desfazer ---------- */

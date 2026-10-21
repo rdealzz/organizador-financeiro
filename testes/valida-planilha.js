@@ -117,24 +117,18 @@ const SHOT=process.env.SHOT;
    render(); });
  const deve=await p.evaluate(()=>[...document.querySelectorAll('#plDeve tbody tr')].map(t=>t.innerText.replace(/\s+/g,' ').trim()));
  eh(pre+'quadro lista as duas pessoas', deve.length===2, deve);
- const valores=await p.evaluate(()=>Object.fromEntries(devedores().map(e=>[e.nome,[e.aberto,e.pago]])));
- eh(pre+'Pai deve geladeira (300) + jantar (100); Mãe deve jantar (100) + fatura de setembro (200)',
-    JSON.stringify(valores)===JSON.stringify({'Pai':[400,0],'Mãe':[300,0]}), valores);
- const gastoAntes=await p.evaluate(()=>{const c=calc();return [c.gasto,c.disponivel];});
- await p.evaluate(()=>{ window.confirm=()=>true; });
- await p.locator('#plDeve [data-deve-ok="mae"]').click(); await p.waitForTimeout(80);
- const depois=await p.evaluate(()=>Object.fromEntries(devedores().map(e=>[e.nome,[e.aberto,e.pago]])));
- eh(pre+'"Recebi tudo" zera o que a Mãe deve, nos dois lugares', JSON.stringify(depois['Mãe'])==='[0,300]', depois);
- eh(pre+'Pai continua devendo', JSON.stringify(depois['Pai'])==='[400,0]', depois);
- eh(pre+'receber não muda o orçamento', JSON.stringify(await p.evaluate(()=>{const c=calc();return [c.gasto,c.disponivel];}))===JSON.stringify(gastoAntes));
- eh(pre+'fatura de setembro marcada como recebida da Mãe', await p.evaluate(()=>!!(S.hist[0].recebido&&S.hist[0].recebido.mae)));
- await p.locator('#snack button').first().click().catch(()=>{}); await p.waitForTimeout(60);
- eh(pre+'Desfazer devolve a dívida da Mãe', await p.evaluate(()=>devedores().find(e=>e.nome==='Mãe').aberto===300));
+ const valores=await p.evaluate(()=>Object.fromEntries(devedores().map(e=>[e.nome,e.total])));
+ eh(pre+'só o mês: Pai deve geladeira (300) + jantar (100); Mãe só o jantar (100), setembro não entra',
+    JSON.stringify(valores)===JSON.stringify({'Pai':400,'Mãe':100}), valores);
+ eh(pre+'quadro sem "Já pagou" nem "Recebi tudo"', await p.evaluate(()=>{const t=document.querySelector('#plDeve').innerText;return !/Já pagou|Recebi tudo/i.test(t)&&!document.querySelector('[data-deve-ok]');}));
+ await p.evaluate(()=>{ const l=S.lanc.find(x=>x.id==='jantar'); marcarAcerto(l,'mae',true); render(); });
+ eh(pre+'marca de acerto não tira do aviso do mês', await p.evaluate(()=>devedores().find(e=>e.nome==='Mãe').total===100));
+ await p.evaluate(()=>{ const l=S.lanc.find(x=>x.id==='jantar'); marcarAcerto(l,'mae',false); render(); });
  await p.locator('#plDeve [data-deve-pdf="pai"]').click(); await p.waitForTimeout(80);
  eh(pre+'PDF abre o extrato do Pai', await p.evaluate(()=>!document.querySelector('#recibo').hidden&&/Extrato de Pai/.test(document.querySelector('#recFolha').innerText)&&/400,00/.test(document.querySelector('#recFolha').innerText)));
  await p.evaluate(()=>fecharRecibo());
- const txt=await p.evaluate(()=>textoExtrato(extratoDe('mae','tudo')));
- eh(pre+'texto do extrato termina em "Em aberto: R$ 300"', /Em aberto: R\$\s300,00$/.test(txt), txt);
+ const txt=await p.evaluate(()=>textoExtrato(extratoDoMes('mae')));
+ eh(pre+'texto do extrato do mês da Mãe: R$ 100, sem setembro', /Em aberto: R\$\s100,00$/.test(txt)&&!/Mercado set/.test(txt), txt);
  // texto com NaN/undefined
  eh(pre+'sem NaN/undefined na planilha', await p.evaluate(()=>!/NaN|undefined|Invalid/.test(document.querySelector('#a-planilha').innerText)));
  // Mais → Resumo do dia e Gastos por cartão continuam alcançáveis
