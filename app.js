@@ -830,7 +830,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v11.4';
+const VERSAO_APP='v12';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -882,6 +882,7 @@ function baixarBackup(){
   a.href=URL.createObjectURL(blob); a.download=nome; a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),2000);
   $('#status').textContent='Backup baixado: '+nome;
+  botaoFeito($('#btnBackup'),'Baixado');
 }
 /* Adotar um estado vindo de fora (arquivo de backup ou cópia automática).
 
@@ -2719,7 +2720,10 @@ $('#addLanc').onclick=()=>{
   render(); salvar(); vibrar(14);
   /* A folha FECHA depois de salvar (v10.21). Ficar aberta, com os campos
      limpos, deixava a dúvida "salvou?" — a resposta agora é a própria tela
-     de Hoje com o gasto no topo dos últimos lançamentos, mais o aviso. */
+     de Hoje com o gasto no topo dos últimos lançamentos, mais o aviso.
+     O botão vira a marca de "salvo" ENQUANTO a folha desce: confirma sem
+     atrasar o fechamento em um milissegundo. */
+  botaoFeito($('#addLanc'),'Salvo',900);
   fecharFolha();
   const f=faturaAberta();
   snack(l.nome+' · '+brl(l.valor)+(l.meio==='avista'?' · sem cartão':(cartoes().length>1?' · '+nomeCartao(l.cartao):'')+(l.prox?' · próxima fatura':'')),
@@ -4324,6 +4328,7 @@ function exportarCSV(){
   a.download='sobra-mais-'+iso(hojeD())+'.csv'; a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),2000);
   $('#status').textContent='CSV exportado com '+(lin.length+hist.length)+' linhas.';
+  botaoFeito($('#btnCSV'),'Exportado');
 }
 
 /* ==========================================================================
@@ -6590,7 +6595,8 @@ function avisoAuth(msg,tipo){
 function carregandoAuth(ligado,rotulo){
   const b=$a('authEnviar');
   b.disabled=ligado;
-  b.innerHTML=ligado?'<span class="girando"></span>':(rotulo||b.dataset.rotulo||'Entrar');
+  botaoEstado(b, ligado?'carregando':null);
+  if(!ligado) b.textContent=rotulo||b.dataset.rotulo||'Entrar';
 }
 function pintarModo(){
   const tit={entrar:'Entrar',cadastrar:'Criar conta',recuperar:'Recuperar senha',
@@ -7106,14 +7112,44 @@ if('serviceWorker' in navigator){
    Eventos da conta
    ========================================================================== */
 /* Um botão que espera precisa dizer que está esperando. */
+/* Os estados de um botão: 'carregando', 'sucesso', 'erro' ou null (repouso).
+   O conteúdo do botão NÃO é reescrito — entra uma camada por cima (`.btn-st`)
+   e o CSS esconde o resto. Reescrever o innerHTML do botão clicado é o defeito
+   da v10.1, e ainda fazia a largura pular a cada espera. */
+const BTN_ST='<span class="btn-gira"></span><span class="btn-ok"><svg viewBox="0 0 20 20"><path d="M5 10.5l3.5 3.5L15 6.5"/></svg><span class="btn-ok-txt"></span></span>';
+function botaoEstado(botao, estado, texto){
+  if(!botao) return;
+  clearTimeout(botao._estT);
+  let st=botao.querySelector(':scope > .btn-st');
+  if(!estado){
+    delete botao.dataset.estado; botao.removeAttribute('aria-busy');
+    if(st) st.remove();
+    return;
+  }
+  if(!st){
+    st=document.createElement('span'); st.className='btn-st'; st.setAttribute('aria-hidden','true');
+    st.innerHTML=BTN_ST; botao.appendChild(st);
+  }
+  st.querySelector('.btn-ok-txt').textContent=estado==='sucesso'?(texto||''):'';
+  botao.dataset.estado=estado;
+  if(estado==='carregando') botao.setAttribute('aria-busy','true'); else botao.removeAttribute('aria-busy');
+}
+/* A confirmação e a recusa passam sozinhas: ninguém precisa "fechar" um botão. */
+function botaoFeito(botao, texto, ms){
+  botaoEstado(botao,'sucesso',texto);
+  if(botao) botao._estT=setTimeout(()=>botaoEstado(botao,null), ms||1500);
+}
+function botaoFalhou(botao){
+  botaoEstado(botao,'erro');
+  if(botao) botao._estT=setTimeout(()=>botaoEstado(botao,null),340);
+}
+/* Um botão que espera precisa dizer que está esperando. */
 async function comCarregamento(botao, tarefa, rotuloFinal){
-  const rotulo=botao.textContent;
-  botao.disabled=true; botao.classList.add('ocupado');
-  botao.innerHTML='<span class="girando"></span>';
+  botao.disabled=true; botaoEstado(botao,'carregando');
   try{ return await tarefa(); }
   finally{
-    botao.disabled=false; botao.classList.remove('ocupado');
-    botao.textContent=rotuloFinal||rotulo;
+    botao.disabled=false; botaoEstado(botao,null);
+    if(rotuloFinal) botao.textContent=rotuloFinal;
   }
 }
 
@@ -7157,11 +7193,16 @@ $('#sinc').onclick=()=>{ if(Auth.logado()) puxarDaNuvem(); };
 $('#btnSincAgora').onclick=async()=>{
   /* Tentativa a pedido zera a espera: a pessoa não deve esperar o relógio de
      uma tentativa automática que estava marcada para daqui a cinco minutos. */
+  const b=$('#btnSincAgora');
+  if(b.dataset.estado) return;
   sincTentativa=0; sincProxima=0; clearTimeout(envioT);
-  await puxarDaNuvem(); await enviarParaNuvem();
-  // Dizer "Sincronizado" depois de falhar é mentir na cara de quem tocou.
-  if(sincEstado==='ok') toast('Sincronizado');
-  else toast(sincMotivo||'Não consegui sincronizar agora',true);
+  botaoEstado(b,'carregando');
+  try{ await puxarDaNuvem(); await enviarParaNuvem(); }
+  finally{
+    // Dizer "Sincronizado" depois de falhar é mentir na cara de quem tocou.
+    if(sincEstado==='ok'){ botaoFeito(b,'Sincronizado'); toast('Sincronizado'); }
+    else{ botaoFalhou(b); toast(sincMotivo||'Não consegui sincronizar agora',true); }
+  }
 };
 $('#btnSair').onclick=sairDaConta;
 $('#btnTrocarSenha').onclick=()=>{

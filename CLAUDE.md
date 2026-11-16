@@ -2317,3 +2317,40 @@ mostra cada deploy com commit e ambiente:
 Se o commit mais novo do `main` não aparece ali como `Production`, o código
 está certo e a publicação é que não aconteceu: o caminho é *Promote to
 Production* no painel e conferir *Settings → Git → Production Branch*.
+
+## Um sistema só de botões (v12)
+
+Todo `.btn` passou a ser o mesmo objeto, sem trocar o HTML: principal (degradê
+do `--azul`, fio de 1px mais claro no topo, halo da cor do azul), `.sec` (vidro
+com fio em degradê) e **`.perigo`** (vermelho discreto — *Sair da conta*,
+*Apagar tudo*, *Apagar gasto*). O bloco é "botões do app (v12)" no
+`styles.css`; hover é escala 1,02 em 200ms **só com ponteiro**
+(`@media (hover:hover)`, senão fica preso no toque), aperto é 0,96 em 100ms.
+
+As cores saem de `--azul`, `--txt` e `--vermelho` por `color-mix`, então os
+dois temas e a esfera acompanham sozinhos. O relevo 3D antigo do `.btn` saiu;
+`.btn3d`, `.tecla` e `.fab` não foram tocados.
+
+Três armadilhas que custaram captura de tela:
+
+1. **Regras antigas com peso maior ganhavam em silêncio.** `.btn.sec` (linha
+   ~990) valia mais que o `.btn` novo e apagava fio e cor; o
+   `.btn:not(:active):hover` também. Foram apagadas, não sobrepostas.
+2. **O `.btn` saiu da inclinação (`tilt-ativo`)**: ela usava `::before` para o
+   holofote, e o `::before` do botão agora é a lavagem verde do sucesso.
+3. **O fio do vidro vaza pelo preenchimento translúcido.** O fundo do `.sec`
+   tem três camadas — vidro, `--card` por baixo e o fio — senão o botão inteiro
+   vira um degradê cinza.
+
+### Estados: `botaoEstado(botao, 'carregando'|'sucesso'|'erro'|null)`
+
+**O conteúdo do botão não é reescrito** — entra uma camada (`.btn-st`) por
+cima e o CSS esconde o resto. O `comCarregamento()` antigo trocava o
+`innerHTML`, que é o defeito da v10.1 e fazia a largura pular.
+`botaoFeito()` e `botaoFalhou()` voltam sozinhos ao repouso.
+
+Ligados em: *Sincronizar agora* (gira, depois marca verde ou balanço),
+*Exportar CSV* e *Baixar backup* (marca verde), o botão de entrar e os
+`comCarregamento`. **Em *Salvar gasto* a marca aparece enquanto a folha
+desce** — não atrasa o fechamento em nada; o salvamento é local e inventar uma
+espera para mostrar um spinner seria deixar o app mais lento de propósito.

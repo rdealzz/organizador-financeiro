@@ -204,7 +204,6 @@ input[type=file]{background:transparent;padding-left:0}
 .btn{background:var(--azul);color:var(--sobre-azul);border:none;padding:12px 20px;font-weight:600;font-size:16px;
   cursor:pointer;border-radius:var(--r-s);letter-spacing:-.01em;transition:opacity .15s}
 .btn:active{opacity:.7}
-.btn.sec{background:var(--fill);color:var(--azul)}
 .btn:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
 .btn-x{background:none;border:none;color:var(--txt-3);cursor:pointer;font-size:22px;line-height:1;
   width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;
@@ -991,8 +990,6 @@ p.ajuda{color:var(--txt-2);font-size:var(--t-sm);line-height:1.55;
 }
 .btn:hover{filter:brightness(1.07)}
 .btn:active{transform:scale(.975)}
-.btn.sec{background:var(--fill);color:var(--azul-txt);border-color:transparent}
-.btn.sec:hover{background:var(--fill-2);filter:none}
 .btn[disabled],.btn.ocupado{opacity:.5;pointer-events:none}
 .btn:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
 /* ondinha ao tocar */
@@ -1856,7 +1853,6 @@ body.fundo-vivo .re-card::after{
              color var(--t-rapido) ease;
 }
 .btn:active, .sub:active, .aba:active, .chip-s:active{transform:scale(.965)}
-.btn:not(:active):hover{transform:translateY(-1px)}
 .btn{transition-timing-function:var(--elastico)}
 
 /* ---- Inputs: borda que cresce e brilho de acento ---- */
@@ -2248,43 +2244,122 @@ body.modo-foco .tabbar{
 .b3d-face svg{width:19px;height:19px;flex:none;fill:none;stroke:currentColor;
   stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
-/* Os botões comuns do app ganham o mesmo relevo, sem trocar o HTML de lugar
-   nenhum: a própria caixa vira a tampa e a base vem da sombra. */
+/* ------------------------------------------------ botões do app (v12)
+   Um sistema só para todo `.btn`, sem trocar o HTML de lugar nenhum.
+
+   * principal — degradê do azul de cima para baixo, fio de 1px mais claro no
+     topo, halo da cor do próprio azul;
+   * `.sec` — vidro: o preenchimento translúcido de sempre e um fio em degradê;
+   * `.perigo` — vermelho discreto, para o que apaga.
+
+   O fio de 1px é o segundo fundo (border-box) aparecendo pela borda
+   transparente. As cores saem de `--azul`, `--txt` e `--vermelho` por
+   color-mix, então os dois temas e o modo da esfera acompanham sozinhos — e o
+   texto sobre o azul continua sendo `--sobre-azul`, nunca branco fixo.
+
+   Só transform, sombra e opacidade se movem: o botão nunca muda de tamanho e
+   por isso nunca empurra o vizinho. */
 .btn{
-  position:relative; display:inline-flex; align-items:center; justify-content:center;
-  gap:var(--e2); border-radius:var(--r-sm); overflow:hidden;
-  background:linear-gradient(180deg,
-    color-mix(in srgb, var(--azul) 88%, #fff), var(--azul) 58%,
-    color-mix(in srgb, var(--azul) 90%, #000));
-  box-shadow:0 var(--b3d-curso) 0 var(--b3d-base), inset 0 1px 0 var(--b3d-luz),
-             0 10px 20px -10px var(--b3d-halo);
-  transition:transform 140ms var(--elastico), box-shadow 140ms ease;
+  --btn-fg:var(--sobre-azul);
+  --btn-fill:linear-gradient(180deg, color-mix(in srgb, var(--azul) 84%, #fff), color-mix(in srgb, var(--azul) 92%, #000));
+  --btn-edge:linear-gradient(180deg, color-mix(in srgb, var(--azul) 55%, #fff), color-mix(in srgb, var(--azul) 88%, #000));
+  --btn-halo:color-mix(in srgb, var(--azul) 42%, transparent);
+  --btn-sombra:inset 0 1px 0 var(--b3d-luz), 0 1px 2px var(--b3d-base), 0 8px 22px -10px var(--btn-halo);
+  --btn-sombra-cima:inset 0 1px 0 var(--b3d-luz), 0 2px 4px var(--b3d-base), 0 14px 30px -10px var(--btn-halo), 0 0 0 1px var(--btn-halo);
+  position:relative; isolation:isolate; overflow:hidden;
+  display:inline-flex; align-items:center; justify-content:center; gap:var(--e2);
+  border:1px solid transparent; border-radius:var(--r-sm);
+  color:var(--btn-fg);
+  background:var(--btn-fill) padding-box, var(--btn-edge) border-box;
+  box-shadow:var(--btn-sombra);
+  transform:none;
+  transition:transform 200ms var(--elastico), box-shadow 200ms var(--suave),
+             filter 200ms var(--suave), color 180ms var(--suave);
+  -webkit-tap-highlight-color:transparent;
 }
-.btn::after{
-  content:''; position:absolute; inset:0; pointer-events:none;
-  background:linear-gradient(115deg, transparent 34%, rgba(255,255,255,.40) 46%,
-             rgba(160,220,255,.28) 52%, transparent 64%);
-  background-size:260% 100%; background-position:130% 0; opacity:0;
-  transition:background-position .6s var(--suave), opacity .2s ease;
+/* hover só onde existe ponteiro: no toque ele ficaria preso depois do dedo sair */
+.btn:hover{transform:none; filter:none}
+@media (hover:hover){
+  .btn:hover{transform:translateY(-1px) scale(1.02); box-shadow:var(--btn-sombra-cima);
+    filter:brightness(1.06) saturate(1.08)}
 }
-.btn:hover{
-  transform:translateY(-2px);
-  box-shadow:0 calc(var(--b3d-curso) + 2px) 0 var(--b3d-base),
-             inset 0 1px 0 var(--b3d-luz), 0 14px 24px -10px var(--b3d-halo);
-}
-.btn:hover::after{opacity:1;background-position:-30% 0}
-.btn:active{
-  opacity:1;                                   /* o afundar substitui o antigo esmaecer */
-  transform:translateY(var(--b3d-curso));
-  box-shadow:0 0 0 var(--b3d-base), inset 0 1px 0 rgba(255,255,255,.12);
-  transition-duration:70ms;
-}
+.btn:active{opacity:1; transform:scale(.96); box-shadow:var(--btn-sombra);
+  transition-duration:100ms; transition-timing-function:ease-out}
+.btn:focus-visible{outline:none;
+  box-shadow:var(--btn-sombra), 0 0 0 2px var(--card), 0 0 0 4px var(--azul),
+             0 0 18px 4px color-mix(in srgb, var(--azul) 45%, transparent)}
+
 .btn.sec{
-  background:linear-gradient(180deg,
-    color-mix(in srgb, var(--fill) 60%, var(--card)), var(--fill-2));
-  color:var(--azul-txt);
-  box-shadow:0 var(--b3d-curso) 0 color-mix(in srgb, var(--b3d-base) 55%, transparent),
-             inset 0 1px 0 var(--b3d-luz);
+  --btn-fg:var(--azul-txt);
+  --btn-fill:linear-gradient(var(--fill), var(--fill));
+  --btn-edge:linear-gradient(180deg, color-mix(in srgb, var(--txt) 20%, transparent), color-mix(in srgb, var(--txt) 6%, transparent));
+  --btn-sombra:0 1px 2px color-mix(in srgb, var(--b3d-base) 45%, transparent);
+  --btn-sombra-cima:0 2px 4px color-mix(in srgb, var(--b3d-base) 55%, transparent), 0 10px 22px -12px var(--b3d-base);
+}
+/* Três camadas: o vidro, o cartão por baixo dele e o fio. Sem a do meio o
+   degradê do fio vazava pelo preenchimento translúcido e o botão inteiro
+   virava um degradê cinza. */
+.btn.sec, .btn.perigo{
+  background:var(--btn-fill) padding-box, linear-gradient(var(--card), var(--card)) padding-box,
+             var(--btn-edge) border-box}
+@media (hover:hover){ .btn.sec:hover{--btn-fill:linear-gradient(var(--fill-2), var(--fill-2))} }
+/* O desfoque só existe onde há o que desfocar: com a esfera atrás dos painéis. */
+body.fundo-vivo .btn.sec{-webkit-backdrop-filter:blur(14px) saturate(1.4); backdrop-filter:blur(14px) saturate(1.4)}
+
+.btn.perigo, .btn.sec.perigo{
+  --btn-fg:var(--vermelho-txt);
+  --btn-fill:linear-gradient(var(--vermelho-fraco), var(--vermelho-fraco));
+  --btn-edge:linear-gradient(180deg, color-mix(in srgb, var(--vermelho) 34%, transparent), color-mix(in srgb, var(--vermelho) 8%, transparent));
+  --btn-sombra:0 1px 2px color-mix(in srgb, var(--b3d-base) 45%, transparent);
+  --btn-sombra-cima:0 2px 4px color-mix(in srgb, var(--b3d-base) 55%, transparent), 0 10px 22px -12px color-mix(in srgb, var(--vermelho) 40%, transparent);
+}
+.btn.perigo:focus-visible{box-shadow:var(--btn-sombra), 0 0 0 2px var(--card), 0 0 0 4px var(--vermelho)}
+
+/* ---- estados: carregando → sucesso | erro (`botaoEstado()` no app.js) ----
+   O conteúdo do botão NÃO é reescrito: ele fica transparente e uma camada
+   (`.btn-st`) entra por cima. Reescrever o innerHTML de um botão durante o
+   clique é o defeito da v10.1, e ainda fazia a largura pular. */
+.btn[data-estado]{color:transparent; pointer-events:none; transform:none; filter:none}
+.btn[data-estado][disabled]{opacity:1}
+.btn[data-estado] > :not(.btn-st){opacity:0}
+.btn-st{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:6px;
+  color:var(--btn-fg); font-weight:inherit; pointer-events:none}
+.btn-st svg{width:19px; height:19px; flex:none; fill:none; stroke:currentColor; stroke-width:2.2;
+  stroke-linecap:round; stroke-linejoin:round}
+.btn-st path{stroke-dasharray:16; stroke-dashoffset:16}
+.btn-st .btn-gira{width:17px; height:17px; border-radius:50%;
+  border:2px solid color-mix(in srgb, currentColor 25%, transparent); border-top-color:currentColor;
+  animation:gira .7s linear infinite}
+.btn-st .btn-ok{display:none; align-items:center; gap:6px}
+.btn[data-estado="carregando"] .btn-st{animation:btnEntra 180ms var(--suave) 80ms both}
+/* a lavagem verde fica por baixo do conteúdo e por cima do azul */
+.btn::before{content:''; position:absolute; inset:0; z-index:-1; pointer-events:none;
+  background:linear-gradient(180deg, var(--verde), color-mix(in srgb, var(--verde) 82%, #000));
+  opacity:0; transition:opacity 240ms var(--suave)}
+.btn[data-estado="sucesso"]{
+  --btn-fg:var(--sobre-verde);
+  --btn-edge:linear-gradient(180deg, var(--verde), color-mix(in srgb, var(--verde) 82%, #000));
+  animation:btnPulso 500ms var(--suave) 120ms}
+.btn[data-estado="sucesso"]::before{opacity:1}
+.btn[data-estado="sucesso"] .btn-gira{display:none}
+.btn[data-estado="sucesso"] .btn-ok{display:inline-flex; animation:btnEntra 200ms var(--elastico) both}
+.btn[data-estado="sucesso"] .btn-st path{stroke-dashoffset:0; transition:stroke-dashoffset 320ms var(--suave) 80ms}
+.btn[data-estado="erro"]{color:var(--btn-fg); animation:btnTreme 320ms ease-in-out}
+.btn[data-estado="erro"] > :not(.btn-st){opacity:1}
+.btn[data-estado="erro"] .btn-st{display:none}
+:root{--sobre-verde:#FFFFFF}
+[data-tema="escuro"]{--sobre-verde:#03170C}
+[data-tema="claro"] .btn::before,
+:root:not([data-tema="escuro"]) .btn::before{
+  background:linear-gradient(180deg, var(--verde-txt), color-mix(in srgb, var(--verde-txt) 86%, #000))}
+@keyframes btnEntra{from{opacity:0; transform:translateY(8px) scale(.85)}}
+@keyframes btnPulso{from{box-shadow:0 0 0 0 color-mix(in srgb, var(--verde) 55%, transparent)} to{box-shadow:0 0 0 12px transparent}}
+@keyframes btnTreme{20%{translate:-4px} 40%{translate:4px} 60%{translate:-3px} 80%{translate:3px}}
+@media (prefers-reduced-motion:reduce){
+  .btn, .btn:hover, .btn:active{transform:none}
+  .btn[data-estado]{animation:none}
+  .btn[data-estado] .btn-st, .btn[data-estado] .btn-ok{animation:none}
+  .btn-st .btn-gira{animation-duration:1.6s}
 }
 
 /* O flutuante é redondo e por isso o relevo dele é anel, não faixa. */
@@ -2448,7 +2523,7 @@ body.com-portal:not(.fundo-vivo) .holo i{opacity:.5}
    só subindo 1 px, que é exatamente o "genérico" que se queria tirar. */
 .tecla.tilt-ativo:not(:active) .tecla-face,
 .btn3d.tilt-ativo:not(:active) .b3d-face,
-.btn.tilt-ativo:not(:active), .sub.tilt-ativo:not(:active),
+.sub.tilt-ativo:not(:active),
 .fab.tilt-ativo:not(:active), .tb.tilt-ativo:not(:active){
   transform:
     perspective(620px)
@@ -2466,7 +2541,7 @@ body.com-portal:not(.fundo-vivo) .holo i{opacity:.5}
 }
 .tecla.tilt-ativo .tecla-face::after,
 .btn3d.tilt-ativo .b3d-face::before{opacity:1}
-.btn.tilt-ativo::before, .fab.tilt-ativo::before, .sub.tilt-ativo::before{
+.fab.tilt-ativo::before, .sub.tilt-ativo::before{
   content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
   background:radial-gradient(140px circle at var(--mx,50%) var(--my,50%),
              rgba(255,255,255,.30), transparent 62%);
@@ -2617,10 +2692,8 @@ body.com-portal:not(.fundo-vivo) .holo i{opacity:.5}
   transform:translateY(var(--b3d-curso)) scale(.99) !important;
   transition-duration:70ms !important;
 }
-.btn:active{
-  transform:translateY(var(--b3d-curso)) !important;
-  transition-duration:70ms !important;
-}
+/* o .btn saiu daqui na v12: o toque dele é escala (.96), definido no bloco
+   "botões do app", que vem depois de todas as regras de hover dele. */
 .fab:active{transform:translateY(5px) scale(.97) !important;transition-duration:70ms !important}
 .tb:active{transform:translateY(2px) !important;transition-duration:70ms !important}
 

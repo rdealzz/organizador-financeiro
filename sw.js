@@ -1,7 +1,7 @@
 /* Sobra+ — service worker
    Objetivo: o app abre e funciona sem internet, e as notificações
    continuam sendo entregues pelo sistema mesmo com a aba fechada. */
-const VERSAO = 'sobra-v11.4-deve-do-mes';
+const VERSAO = 'sobra-v12-botoes';
 const CASCA = [
   '/', '/index.html', '/styles.css', '/tema.js', '/app.js', '/auth.js', '/intro.js', '/viz3d.js', '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png',

@@ -711,7 +711,7 @@ html[data-tema="escuro"] #splash{background:#000}
     <div class="acoes">
       <button class="btn sec" id="btnSincAgora">Sincronizar agora</button>
       <button class="btn sec" id="btnTrocarSenha">Trocar a senha</button>
-      <button class="btn sec" id="btnSair" style="color:var(--vermelho)">Sair da conta</button>
+      <button class="btn sec perigo" id="btnSair">Sair da conta</button>
     </div>
     <div class="alerta-linha" style="border-top:1px solid var(--sep);margin-top:var(--e4);padding-top:var(--e4)">
       <div class="ai"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.4"/><circle cx="12" cy="12" r="8.6"/></svg></div>
@@ -756,7 +756,7 @@ html[data-tema="escuro"] #splash{background:#000}
       <button class="btn sec" id="btnRestaurar">Restaurar backup</button>
       <input type="file" id="arqBackup" accept=".json,application/json" hidden>
       <button class="btn sec" id="btnCopias">Recuperar uma cópia</button>
-      <button class="btn sec" id="zerar" style="color:var(--vermelho)">Apagar tudo</button>
+      <button class="btn sec perigo" id="zerar">Apagar tudo</button>
     </div>
     <div id="copias" hidden></div>
     <details style="margin-top:18px">
@@ -920,7 +920,7 @@ html[data-tema="escuro"] #splash{background:#000}
     <p class="ajuda" id="eAviso" style="margin:10px 0 0"></p>
     <div class="acoes" style="margin-top:14px">
       <button class="btn" id="edSalvar">Salvar</button>
-      <button class="btn sec" id="edApagar">Apagar gasto</button>
+      <button class="btn sec perigo" id="edApagar">Apagar gasto</button>
     </div>
   </div>
 </div>
