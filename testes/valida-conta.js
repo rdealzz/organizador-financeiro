@@ -68,7 +68,10 @@ const eh=(n,v,d)=>{(v?ok:bad).push(n+(v?'':'  →  '+JSON.stringify(d)));};
    const e=document.getElementById('authErro'),k=document.getElementById('authOk');
    return {erro:e.hidden?'':e.innerText.trim(),ok:k.hidden?'':k.innerText.trim(),
            botoes:[...document.querySelectorAll('#authErro button')].map(b=>b.textContent.trim())};});
- const sair=async()=>{ await p.evaluate(()=>{try{Auth.sair();}catch(e){}}); await p.reload(); await p.waitForTimeout(900); };
+ /* Sair, para estes testes, é também esquecer a senha lembrada (v12.1): sem
+    isso o app entraria sozinho na recarga, que é a função nova fazendo o seu
+    trabalho — e ela tem verificação própria logo abaixo. */
+ const sair=async()=>{ await p.evaluate(async()=>{try{Auth.sair();}catch(e){} await esquecerSenha();}); await p.reload(); await p.waitForTimeout(900); };
 
  // ── canonização
  const can=await p.evaluate(([a,b,c])=>[Auth.canonizarEmail(a),Auth.canonizarEmail(b),Auth.canonizarEmail(c),
@@ -85,6 +88,13 @@ const eh=(n,v,d)=>{(v?ok:bad).push(n+(v?'':'  →  '+JSON.stringify(d)));};
  const criado=await p.evaluate(()=>Auth.logado()&&Auth.usuario().email);
  eh('conta criada e sessão aberta',!!criado,criado);
  eh('a conta nasce no e-mail CANÔNICO',criado===semPontos,criado);
+ // ── a senha lembrada neste aparelho (v12.1)
+ await p.waitForTimeout(300);
+ const lemb=await p.evaluate(async()=>({g:await senhaLembrada(),ls:JSON.stringify(localStorage)}));
+ eh('a senha fica lembrada no aparelho',!!(lemb.g&&lemb.g.email===semPontos&&lemb.g.senha),lemb.g&&lemb.g.email);
+ eh('  e nunca em localStorage',!!lemb.g&&!lemb.ls.includes(lemb.g.senha));
+ await p.evaluate(()=>{try{Auth.sair();}catch(e){}}); await p.reload(); await p.waitForTimeout(2500);
+ eh('sessão perdida: o app entra sozinho com a senha lembrada',await p.evaluate(()=>Auth.logado()&&Auth.usuario().email)===semPontos);
  await sair();
 
  // ── 2. a segunda conta é recusada, escreva-se como se escrever

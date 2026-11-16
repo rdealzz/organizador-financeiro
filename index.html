@@ -163,6 +163,11 @@ html[data-tema="escuro"] #splash{background:#000}
         <p class="ajuda" style="margin:6px 0 0">Pode colar o link inteiro — o app acha o código sozinho.</p>
       </div>
 
+      <label class="lembrar" id="authLembrarCx" for="authLembrar">
+        <input type="checkbox" id="authLembrar" checked>
+        <span>Lembrar minha senha neste aparelho</span>
+      </label>
+
       <button type="submit" class="btn auth-btn" id="authEnviar">Entrar</button>
     </form>
 
@@ -233,7 +238,20 @@ html[data-tema="escuro"] #splash{background:#000}
      linha, como numa planilha. A última linha está sempre vazia: é nela que
      se escreve o gasto novo. Tudo é montado por renderPlanilha(), no app.js. -->
 <div class="area" id="a-planilha">
-  <section class="pl-resumo" id="plResumo" aria-live="polite"></section>
+  <section class="mare" id="plResumo">
+    <canvas class="mare-agua" id="mareAgua" aria-hidden="true"></canvas>
+    <div class="mare-topo">
+      <span id="mareRot">Posso gastar</span>
+      <span class="mare-fecha" id="mareFecha"></span>
+    </div>
+    <div class="pl-res mare-res" id="mareRes" aria-live="polite"><b id="mareValor">R$ 0,00</b></div>
+    <p class="mare-dia" id="mareDia"></p>
+    <div class="mare-conta">
+      <span><small>Entrou</small><b id="mareRenda">0,00</b></span>
+      <span><small>Guardar</small><b id="mareGuardar">0,00</b></span>
+      <span><small>Gastos</small><b id="mareGastos">0,00</b></span>
+    </div>
+  </section>
   <section class="pl-folha">
     <div class="pl-rola"><table class="pl" id="plTab"></table></div>
   </section>

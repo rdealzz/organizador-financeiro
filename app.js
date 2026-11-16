@@ -830,7 +830,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v12';
+const VERSAO_APP='v12.1';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -4527,7 +4527,12 @@ if('serviceWorker' in navigator&&location.protocol!=='file:'&&!RESGATE){
       swReg=await navigator.serviceWorker.register('/sw.js',{scope:'/'});
       DIAG.sw='funciona';
       // Versão nova já esperando de uma visita anterior
-      if(swReg.waiting && navigator.serviceWorker.controller) mostrarAtualizacao(swReg);
+      /* (v12.1) Na ABERTURA ela é aplicada sozinha: ninguém digitou nada ainda,
+         o estado acabou de ser lido do aparelho, e o aviso de "atualizar" era
+         justamente o que fazia a versão publicada parecer que não tinha saído.
+         O `controllerchange` lá embaixo recarrega a página uma vez. Durante o
+         uso (updatefound) continua sendo o aviso, que salva antes de trocar. */
+      if(swReg.waiting && navigator.serviceWorker.controller) swReg.waiting.postMessage({tipo:'pular-espera'});
       swReg.addEventListener('updatefound',()=>{
         const novo=swReg.installing;
         if(novo) novo.addEventListener('statechange',()=>{
@@ -4917,6 +4922,98 @@ function linhaPlanilha(l,n,saldo,proxima){
     <td class="pl-ac"><button type="button" data-pled="${esc(k)}" aria-label="Mais opções de ${esc(l.nome)}" title="Mais opções">✎</button><button type="button" data-plx="${esc(k)}" aria-label="Apagar ${esc(l.nome)}" title="Apagar">×</button></td>
   </tr>`;
 }
+/* ══════════════════ A MARÉ (v12.1) ══════════════════
+   O topo da planilha é um tanque: o nível da água é quanto do dinheiro
+   gastável ainda está livre, e ele desce quando um gasto entra. É a mesma
+   informação do número — "vai diminuindo" — num olhar, antes de ler.
+
+   Canvas 2D escrito à mão, como o intro.js e o viz3d.js e pelos mesmos
+   motivos (CSP sem CDN, offline, nada de terceiros). Três regras de custo:
+   só anima com a tela à vista (aba visível + caixa na tela), para sozinha
+   quando o nível assenta sob movimento reduzido, e nunca é remontada pelo
+   render — `definir()` só troca o alvo. */
+const Mare={
+  cv:null,ctx:null,w:0,h:0,nivel:.5,alvo:.5,neg:false,t:0,agito:0,raf:0,visto:true,bolhas:[],
+  calmo:()=>window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  montar(){
+    if(this.cv) return true;
+    const cv=$('#mareAgua'); if(!cv||!cv.getContext) return false;
+    this.cv=cv; this.ctx=cv.getContext('2d');
+    const medir=()=>{
+      const r=cv.getBoundingClientRect(), d=Math.min(window.devicePixelRatio||1,2);
+      if(!r.width) return;
+      this.w=r.width; this.h=r.height; cv.width=Math.round(r.width*d); cv.height=Math.round(r.height*d);
+      this.ctx.setTransform(d,0,0,d,0,0); this.desenhar();
+    };
+    if(window.ResizeObserver) new ResizeObserver(medir).observe(cv); else window.addEventListener('resize',medir);
+    if(window.IntersectionObserver) new IntersectionObserver(es=>{ this.visto=es[0].isIntersecting; this.ligar(); }).observe(cv);
+    document.addEventListener('visibilitychange',()=>this.ligar());
+    // Tocar na água a agita: o retorno físico de que aquilo está vivo.
+    cv.parentNode.addEventListener('pointerdown',()=>{ this.agito=1; this.ligar(); });
+    for(let i=0;i<14;i++) this.bolhas.push({x:Math.random(),y:Math.random(),r:1+Math.random()*2.2,v:.05+Math.random()*.09});
+    medir();
+    return true;
+  },
+  definir(fr,neg){
+    if(!this.montar()) return;
+    /* O piso é 34%: abaixo disso a água ficaria escondida atrás das três
+       caixas do rodapé, e um tanque que parece vazio com dinheiro sobrando mente. */
+    const alvo=(neg?.3:.34)+.56*Math.max(0,Math.min(1,fr||0));
+    if(Math.abs(alvo-this.alvo)>.004) this.agito=Math.min(1,this.agito+.7);
+    this.alvo=alvo; this.neg=!!neg;
+    if(this.calmo()){ this.nivel=alvo; this.desenhar(); } else this.ligar();
+  },
+  ligar(){
+    const pode=this.cv&&this.visto&&!document.hidden&&!this.calmo()&&this.w>0;
+    if(pode&&!this.raf){
+      let ant=performance.now();
+      const passo=agora=>{
+        const dt=Math.min((agora-ant)/1000,.05); ant=agora;
+        this.t+=dt; this.nivel+=(this.alvo-this.nivel)*Math.min(1,dt*3.2); this.agito*=Math.pow(.25,dt);
+        this.desenhar();
+        this.raf=(this.visto&&!document.hidden)?requestAnimationFrame(passo):0;
+      };
+      this.raf=requestAnimationFrame(passo);
+    }
+    if(!pode&&this.raf){ cancelAnimationFrame(this.raf); this.raf=0; }
+  },
+  desenhar(){
+    const c=this.ctx,w=this.w,h=this.h; if(!c||!w) return;
+    c.clearRect(0,0,w,h);
+    const cor=this.neg?[255,107,94]:[92,189,255], fundo=this.neg?[150,30,24]:[12,79,168];
+    const y0=h*(1-this.nivel), amp=5+this.agito*11, t=this.t;
+    const onda=(fase,vel,comp,a,dy)=>{
+      c.beginPath(); c.moveTo(0,h);
+      for(let x=0;x<=w+6;x+=6){
+        const k=x/w*Math.PI*2;
+        c.lineTo(x,y0+dy+Math.sin(k*comp+t*vel+fase)*a+Math.sin(k*comp*2.3-t*vel*.7+fase)*a*.35);
+      }
+      c.lineTo(w,h); c.closePath();
+    };
+    const camadas=[[1.7,.55,1.1,amp*.9,-7,.16],[4.1,.8,1.6,amp*.7,-3,.24],[0,1.15,1.25,amp,0,.5]];
+    camadas.forEach(([f,v,cp,a,dy,al],i)=>{
+      onda(f,v,cp,a,dy);
+      const g=c.createLinearGradient(0,y0-amp,0,h);
+      g.addColorStop(0,`rgba(${cor},${al})`); g.addColorStop(1,`rgba(${fundo},${al*.55})`);
+      c.fillStyle=g; c.fill();
+      if(i===2){ c.save(); c.clip();
+        this.bolhas.forEach(b=>{
+          b.y-=b.v*.016*(1+this.agito*3); if(b.y<0){ b.y=1; b.x=Math.random(); }
+          const by=y0+b.y*(h-y0), bx=b.x*w+Math.sin(t*1.3+b.x*20)*4;
+          c.beginPath(); c.arc(bx,by,b.r,0,6.3); c.fillStyle='rgba(255,255,255,.22)'; c.fill();
+        });
+        c.restore(); }
+    });
+    // o fio de luz na superfície
+    c.beginPath();
+    for(let x=0;x<=w+6;x+=6){
+      const k=x/w*Math.PI*2, y=y0+Math.sin(k*1.25+t*1.15)*amp+Math.sin(k*1.25*2.3-t*1.15*.7)*amp*.35;
+      x?c.lineTo(x,y):c.moveTo(x,y);
+    }
+    c.strokeStyle='rgba(255,255,255,.6)'; c.lineWidth=1.3; c.shadowColor=`rgba(${cor},.9)`; c.shadowBlur=14; c.stroke(); c.shadowBlur=0;
+  }
+};
+
 function renderPlanilha(c){
   const tab=$('#plTab'); if(!tab) return;
   /* O que está sendo digitado sobrevive ao redesenho (regra 3). */
@@ -4977,13 +5074,29 @@ function renderPlanilha(c){
         <td colspan="4" class="pl-nota">${saldo>0?brl(saldo/dias)+' por dia até a fatura fechar ('+dias+' dia'+(dias===1?'':'s')+')':''}</td></tr>
     </tfoot>`;
 
-  const r=$('#plResumo');
-  if(r) r.innerHTML=`<div class="pl-conta">
-      <span><small>Renda</small><b>${brl(sal+ext+c.entrou)}</b></span><i>−</i>
-      <span><small>Guardar</small><b>${brl(c.metaMes)}</b></span><i>−</i>
-      <span><small>Gastos</small><b>${brl(meu)}</b></span><i>=</i>
-      <span class="pl-res${saldo<0?' neg':''}"><small>${saldo<0?'Passou':'Posso gastar'}</small><b>${brl(saldo)}</b></span>
-    </div>`;
+  /* O topo (v12.1): a "maré". Os textos são trocados nó a nó — a caixa e o
+     canvas não são reescritos, senão a água recomeçaria a cada tecla. */
+  const escreve=(id,t)=>{ const el=$('#'+id); if(el&&el.textContent!==t) el.textContent=t; return el; };
+  escreve('mareRot',saldo<0?'Passou do limite':'Posso gastar');
+  const mv=$('#mareValor'), antes=mv?mv.textContent:'';
+  escreve('mareValor',brl(saldo));
+  if(mv&&antes&&antes!==brl(saldo)){ mv.classList.remove('pulo'); void mv.offsetWidth; mv.classList.add('pulo'); }
+  const mr=$('#mareRes'); if(mr) mr.classList.toggle('neg',saldo<0);
+  escreve('mareDia',saldo>0?brl(saldo/dias)+' por dia':(saldo<0?'os gastos passaram do que sobrou depois de guardar':''));
+  escreve('mareFecha','fecha em '+dias+' dia'+(dias===1?'':'s'));
+  const semRS=v=>brl(v).replace(/^R\$\s*/,'');   // o rótulo da caixa já diz o que é; sem o R$ o número cabe em 390px
+  escreve('mareRenda',semRS(sal+ext+c.entrou));
+  escreve('mareGuardar',semRS(c.metaMes));
+  escreve('mareGastos',semRS(meu));
+  const livre=Math.max(sal+ext+c.entrou-c.metaMes,0);
+  Mare.definir(livre>0?saldo/livre:(saldo<0?0:.5), saldo<0);
+  /* A coluna Sobra ganha uma barra que encolhe linha a linha: é o "vai
+     diminuindo" do pedido, visto sem ler número nenhum. */
+  const topo=sal+ext+c.entrou;
+  tab.querySelectorAll('tbody td.pl-saldo').forEach(td=>{
+    const v=valorDe(td.textContent);
+    if(topo>0&&v>0&&!td.classList.contains('neg')) td.style.setProperty('--f',Math.min(v/topo,1).toFixed(3));
+  });
   const d=$('#plDica');
   if(d) d.innerHTML=!sal?'Comece pelo <b>Salário</b> na primeira linha. Depois escreva cada gasto na última linha — ela está sempre vazia.'
     :'Na coluna <b>Vezes</b>: <b>12x</b> é parcelado, <b>3/12</b> é a parcela 3 de 12, <b>fixo</b> repete todo mês, vazio é compra única. Toque em ✎ para mudar a categoria.';
@@ -6611,6 +6724,8 @@ function pintarModo(){
   const rotulo={entrar:'Entrar',cadastrar:'Criar minha conta',recuperar:'Enviar o código',
                 novaSenha:'Salvar nova senha',codigo:'Salvar nova senha'}[modoAuth];
   $a('authTit').textContent=tit;
+  const lc=$a('authLembrarCx');
+  if(lc){ lc.hidden=(modoAuth==='recuperar'); $a('authLembrar').checked=lembrarLigado(); }
   $a('authSub').textContent=sub;
   $a('authEnviar').dataset.rotulo=rotulo;
   $a('authEnviar').textContent=rotulo;
@@ -6724,6 +6839,7 @@ async function enviarAuth(ev){
       toast('Senha trocada. Você já está com a conta aberta.');
     }else if(modoAuth==='novaSenha'){
       await Auth.trocarSenhaComCodigo(codigoRecuperacao,senha);
+      lembrarSenha((Auth.usuario()||{}).email,senha);
       codigoRecuperacao=null;
       history.replaceState(null,'',location.pathname);
       await abrirApp(true,false);
@@ -6749,6 +6865,15 @@ async function enviarAuth(ev){
     }
   }catch(e){
     const cru=String(e.codigo||e.message||'');
+    /* A senha lembrada foi recusada (trocada em outro aparelho): esquecê-la,
+       senão o app tentaria a mesma senha errada a cada abertura. */
+    if(entradaSozinha){
+      /* Só a recusa da CREDENCIAL apaga: um 500, um limite de tentativas ou a
+         falta de rede não dizem nada sobre a senha estar certa. */
+      if(/INVALID_LOGIN_CREDENTIALS|INVALID_PASSWORD|EMAIL_NOT_FOUND|USER_DISABLED/i.test(cru)) esquecerSenha();
+      $a('authSenha').value='';
+    }
+    entradaSozinha=false;
     if(/EMAIL_EXISTS|EMAIL_ALREADY/i.test(cru)){
       /* Dizer "já existe" e parar ali é empurrar o problema de volta: quem
          está tentando criar conta de novo quase sempre é dono da conta e não
@@ -6783,6 +6908,10 @@ async function enviarAuth(ev){
 
 function ligarAuth(){
   $a('authForm').addEventListener('submit',enviarAuth);
+  $a('authLembrar').addEventListener('change',e=>{
+    try{ localStorage.setItem('sobra:lembrar',e.target.checked?'1':'0'); }catch(x){}
+    if(!e.target.checked) esquecerSenha();
+  });
   $a('authTroca').onclick=()=>trocarModo(modoAuth==='entrar'?'cadastrar':'entrar');
   $a('authEsqueci').onclick=()=>trocarModo('recuperar');
   $a('authTenhoCodigo').onclick=()=>trocarModo('codigo');
@@ -6836,28 +6965,91 @@ function mostrarAuth(){
    campos) é cifrado e é o lugar certo. Aqui só pedimos que ele guarde, e na
    volta que ele devolva — aí a entrada é um toque, ou nenhum. */
 function guardarCredencial(email,senha,nome){
+  lembrarSenha(email,senha);
   try{
     if(!window.PasswordCredential||!navigator.credentials||!email||!senha) return;
     const c=new PasswordCredential({id:email,password:senha,name:nome||email});
     navigator.credentials.store(c).catch(()=>{});
   }catch(e){}
 }
-let credencialOferecida=false;
+/* ---------- a senha lembrada NESTE aparelho (v12.1) ----------
+   O pedido: "salvar a senha, não ter que colocar toda hora". O cofre do
+   navegador (acima) só existe no Chrome/Android; no iPhone e no app instalado
+   a pessoa digitava de novo sempre que a sessão caía.
+
+   A senha continua FORA do localStorage. Ela é cifrada com AES-GCM por uma
+   chave que o navegador gera como NÃO-EXTRAÍVEL (nenhum script consegue ler
+   os bytes dela, só pedir que cifre e decifre) e as duas ficam num IndexedDB
+   próprio, `sobra-cofre` — separado do banco do app, para que sair da conta
+   e limpar os dados não levem a senha junto sem a pessoa pedir.
+   Quem não quer isso (aparelho emprestado) desmarca a caixa na tela de
+   entrada: desmarcar APAGA o que estava guardado. */
+function cofreAbrir(){
+  return new Promise((ok,no)=>{
+    const r=indexedDB.open('sobra-cofre',1);
+    r.onupgradeneeded=()=>r.result.createObjectStore('k');
+    r.onsuccess=()=>ok(r.result); r.onerror=()=>no(r.error);
+  });
+}
+async function cofreOp(modo,fn){
+  const db=await cofreAbrir();
+  return new Promise((ok,no)=>{
+    const t=db.transaction('k',modo), q=fn(t.objectStore('k'));
+    t.oncomplete=()=>{ db.close(); ok(q&&q.result); };
+    t.onerror=t.onabort=()=>{ db.close(); no(t.error); };
+  });
+}
+const lembrarLigado=()=>{ try{ return localStorage.getItem('sobra:lembrar')!=='0'; }catch(e){ return true; } };
+async function lembrarSenha(email,senha){
+  try{
+    if(!lembrarLigado()||!email||!senha||!window.crypto||!crypto.subtle) return;
+    let chave=await cofreOp('readonly',s=>s.get('chave'));
+    if(!chave){
+      chave=await crypto.subtle.generateKey({name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+      await cofreOp('readwrite',s=>s.put(chave,'chave'));
+    }
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const dados=await crypto.subtle.encrypt({name:'AES-GCM',iv},chave,new TextEncoder().encode(senha));
+    await cofreOp('readwrite',s=>s.put({email,iv,dados},'senha'));
+  }catch(e){}
+}
+async function senhaLembrada(){
+  try{
+    if(!lembrarLigado()||!window.crypto||!crypto.subtle) return null;
+    const chave=await cofreOp('readonly',s=>s.get('chave'));
+    const g=await cofreOp('readonly',s=>s.get('senha'));
+    if(!chave||!g) return null;
+    const claro=await crypto.subtle.decrypt({name:'AES-GCM',iv:g.iv},chave,g.dados);
+    return {email:g.email,senha:new TextDecoder().decode(claro)};
+  }catch(e){ return null; }
+}
+async function esquecerSenha(){ try{ await cofreOp('readwrite',s=>s.delete('senha')); }catch(e){} }
+
+let credencialOferecida=false, entradaSozinha=false;
 async function oferecerCredencial(){
   if(credencialOferecida||modoAuth!=='entrar') return;
   credencialOferecida=true;
   /* Logo depois de "Sair" não entra sozinho de novo — a pessoa acabou de
-     pedir para sair. */
+     pedir para sair. Os campos vêm preenchidos e entrar custa um toque. */
   let acabouDeSair=false;
   try{ acabouDeSair=sessionStorage.getItem('sobra:saiu')==='1'; sessionStorage.removeItem('sobra:saiu'); }catch(e){}
-  if(acabouDeSair) return;
-  try{
-    if(!window.PasswordCredential||!navigator.credentials) return;
-    const c=await navigator.credentials.get({password:true,mediation:'optional'});
-    if(!c||!c.password||Auth.logado()||$('#auth').hidden||modoAuth!=='entrar') return;
-    $a('authEmail').value=c.id; $a('authSenha').value=c.password;
-    enviarAuth();
-  }catch(e){}
+  const livre=()=>!Auth.logado()&&!$('#auth').hidden&&modoAuth==='entrar';
+  if(!acabouDeSair){
+    try{
+      if(window.PasswordCredential&&navigator.credentials){
+        const c=await navigator.credentials.get({password:true,mediation:'optional'});
+        if(c&&c.password&&livre()){
+          $a('authEmail').value=c.id; $a('authSenha').value=c.password;
+          enviarAuth(); return;
+        }
+      }
+    }catch(e){}
+  }
+  const g=await senhaLembrada();
+  // Valor escrito pela pessoa nunca é trocado por palpite.
+  if(!g||!livre()||$a('authSenha').value) return;
+  $a('authEmail').value=g.email; $a('authSenha').value=g.senha;
+  if(!acabouDeSair){ entradaSozinha=true; enviarAuth(); }
 }
 
 /* Coloca o cursor no primeiro campo — mas nunca por trás da capa, senão o
@@ -7215,6 +7407,7 @@ $('#salvarSenha').onclick=async e=>{
   await comCarregamento(e.currentTarget, async()=>{
     try{
       await Auth.definirNovaSenha(v);
+      lembrarSenha((Auth.usuario()||{}).email,v);
       $('#novaSenha').value=''; $('#trocaSenha').hidden=true;
       toast('Senha alterada');
     }catch(err){ toast(Auth.mensagemDeErro(err),true); }

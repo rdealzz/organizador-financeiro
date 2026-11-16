@@ -2354,3 +2354,74 @@ Ligados em: *Sincronizar agora* (gira, depois marca verde ou balanço),
 `comCarregamento`. **Em *Salvar gasto* a marca aparece enquanto a folha
 desce** — não atrasa o fechamento em nada; o salvamento é local e inventar uma
 espera para mostrar um spinner seria deixar o app mais lento de propósito.
+
+## A maré, a senha lembrada e a atualização sozinha (v12.1)
+
+Três pedidos de uma vez: *"visual surreal, mas fácil de usar"*, *"salvar a
+senha, não ter que colocar toda hora"* e *"não publicou na Vercel"*.
+
+### "Não publicou" — tinha publicado
+
+A API de deployments do GitHub mostrava a v12 em `Production`, com sucesso. O
+que segurava a versão antiga era o próprio app: o service worker novo ficava
+**em espera** até alguém tocar em *Atualizar agora*, e quem dispensava o aviso
+ficava na versão velha achando que nada tinha saído.
+
+Agora, **na abertura**, a versão em espera é aplicada sozinha
+(`pular-espera` direto no registro, e o `controllerchange` recarrega uma vez).
+Na abertura ninguém digitou nada e o estado acabou de ser lido do aparelho,
+então não há o que perder. **Durante o uso continua sendo o aviso**, que salva
+e sobe para a nuvem antes de trocar — a regra da v10.14 não mudou.
+
+Quem está numa versão anterior a esta ainda precisa do toque em *Atualizar
+agora* (ou fechar e abrir o app duas vezes) **uma última vez**: o código que
+atualiza sozinho só existe a partir daqui.
+
+### A maré — o topo da planilha
+
+A faixa "Renda − Guardar − Gastos = Posso gastar" virou um cartão com água
+dentro (`Mare`, no `app.js`): o nível é quanto do dinheiro gastável
+(`renda − guardar`) ainda está livre, e desce quando um gasto entra. A coluna
+**Sobra** ganhou uma barra que encolhe linha a linha (`--f` no `td.pl-saldo`).
+As duas coisas dizem "vai diminuindo" sem ler número.
+
+* **O cartão é escuro nos DOIS temas, de propósito**: é um objeto, como um
+  cartão de banco, não um painel. As cores dele são fixas e nada ali usa
+  `--txt`. É opaco, então a esfera ligada não o atravessa.
+* **Os textos são trocados nó a nó** (`escreve()`), nunca por `innerHTML`: o
+  canvas não pode ser recriado a cada tecla. `#plResumo .pl-res b` continua
+  sendo o número — `valida-planilha.js` lê por esse seletor.
+* **Não há contagem animada no número.** Um valor intermediário na tela é um
+  valor errado na tela (e quebraria o teste que confere com `calc()`); a troca
+  é marcada por um pulo curto (`.pulo`).
+* **O piso do nível é 34%**: abaixo disso a água ficava escondida atrás das
+  três caixas do rodapé, e um tanque que parece vazio com dinheiro sobrando
+  mente. As caixas mostram o número sem "R$" — com ele, "R$ 5.200,00" era
+  cortado em 390px.
+* Custo: só anima com a aba visível e o cartão na tela; com movimento
+  reduzido desenha um quadro parado.
+
+O fundo do app ganhou uma aurora parada (`body:not(.fundo-vivo)::before`,
+`z-index:-1`) — com a esfera ligada quem faz o fundo é ela.
+
+### A senha lembrada neste aparelho
+
+O cofre do navegador (v10.20) só existe no Chrome/Android. No iPhone e no app
+instalado, sessão perdida era senha digitada de novo.
+
+`lembrarSenha()` cifra a senha com **AES-GCM e uma chave não-extraível**
+(nenhum script lê os bytes dela) e guarda as duas num IndexedDB próprio,
+**`sobra-cofre`** — fora do banco do app, para que sair da conta e
+`limparDadosLocais` não a levem junto. **Ela continua fora do
+`localStorage`** (`valida-sessao.js` e `valida-conta.js` conferem).
+
+* Sessão perdida → `oferecerCredencial()` preenche e **entra sozinho**.
+* Logo depois de *Sair* → só preenche; entrar custa um toque.
+* Senha recusada (trocada em outro aparelho) → é esquecida, senão o app
+  tentaria a senha errada a cada abertura. **Só a recusa da credencial apaga**;
+  500, limite de tentativas e falta de rede não dizem nada sobre a senha.
+* A caixa *Lembrar minha senha neste aparelho* (`sobra:lembrar`) vem marcada;
+  desmarcar **apaga** o que estava guardado.
+
+O limite honesto: se o navegador esvaziar TODO o armazenamento do site, o
+cofre vai junto — aí só o gerenciador de senhas do próprio aparelho resolve.
