@@ -830,7 +830,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v12.1';
+const VERSAO_APP='v12.2';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -5093,6 +5093,9 @@ function renderPlanilha(c){
   /* A coluna Sobra ganha uma barra que encolhe linha a linha: é o "vai
      diminuindo" do pedido, visto sem ler número nenhum. */
   const topo=sal+ext+c.entrou;
+  /* "Só eu" e "Cartão" são o caso comum e ficam apagados; o que foge disso
+     (dividido, pai paga, sem cartão) acende — a linha diferente se acha no olho. */
+  tab.querySelectorAll('td select').forEach(se=>se.classList.toggle('pl-padrao',se.selectedIndex<=0));
   tab.querySelectorAll('tbody td.pl-saldo').forEach(td=>{
     const v=valorDe(td.textContent);
     if(topo>0&&v>0&&!td.classList.contains('neg')) td.style.setProperty('--f',Math.min(v/topo,1).toFixed(3));

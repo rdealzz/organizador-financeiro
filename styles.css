@@ -3558,7 +3558,9 @@ body[data-area="planilha"] .fab{display:none}
 .pl.pl-deve{min-width:520px}
 @media(max-width:520px){.pl.pl-deve .pl-rot small{display:none}.pl.pl-deve .pl-desc{min-width:96px;width:96px}}
 .pl.pl-deve .pl-desc{width:auto;left:0}
-.pl.pl-deve .pl-rot{display:flex;align-items:center;gap:8px;height:40px}
+/* (v12.2) era display:flex com altura fixa NA CÉLULA: um <td> que vira flex deixa de
+   ser célula e não acompanha a altura da linha — sobrava uma caixa solta. */
+.pl.pl-deve .pl-rot{white-space:nowrap}
 .pl.pl-deve .pl-rot small{font-weight:400}
 .pl.pl-deve .pt{width:9px;height:9px;border-radius:50%;flex:none}
 .pl .pl-deve-v{color:var(--laranja-txt);font-weight:700}
@@ -3608,8 +3610,12 @@ body[data-area="planilha"] .fab{display:none}
 @media (prefers-reduced-motion:reduce){ .mare-res b.pulo{animation:none} }
 
 /* a barra que encolhe na coluna Sobra */
+/* (v12.2) Era uma faixa encostada à direita: com pouco dinheiro sobrando virava
+   uma lasca que parecia defeito de pintura. Agora é um medidor fino no pé da
+   célula, da esquerda para a direita. */
 .pl tbody td.pl-saldo{
-  background-image:linear-gradient(to left, color-mix(in srgb, var(--azul) 16%, transparent) calc(var(--f,0)*100%), transparent 0)}
+  background-image:linear-gradient(90deg, color-mix(in srgb, var(--azul) 70%, transparent), color-mix(in srgb, var(--azul) 35%, transparent));
+  background-repeat:no-repeat; background-position:left bottom; background-size:calc(var(--f,0)*100%) 3px}
 
 /* a folha da planilha deixa de ser uma caixa reta */
 .pl-folha{border-radius:22px; box-shadow:0 22px 44px -32px var(--b3d-halo)}
@@ -3636,3 +3642,66 @@ body:not(.fundo-vivo)::before{content:''; position:fixed; inset:0; z-index:-1; p
 .lembrar input:checked{background:var(--azul); border-color:var(--azul)}
 .lembrar input:checked::after{transform:rotate(-45deg) scale(1)}
 .lembrar input:focus-visible{outline:2px solid var(--azul); outline-offset:2px}
+
+
+/* ══════════════════ A planilha mais limpa (v12.2) ══════════════════
+   Continua sendo planilha — número de linha, célula que é campo, coluna que
+   desce —, mas a grade deixou de gritar: as linhas verticais ficam quase
+   invisíveis, as horizontais guiam o olho, e o que é padrão se apaga. */
+.pl th,.pl td{border-left-color:color-mix(in srgb, var(--sep) 38%, transparent);
+  border-right-color:color-mix(in srgb, var(--sep) 38%, transparent); height:42px}
+.pl input,.pl select{min-height:42px}
+.pl select{line-height:42px}
+.pl th{height:36px; text-transform:none; letter-spacing:0; font-size:12.5px; font-weight:600;
+  background:color-mix(in srgb, var(--card-2) 70%, var(--card))}
+.pl .pl-n{background:transparent; background:color-mix(in srgb, var(--card-2) 55%, var(--card))}
+.pl .pl-desc input{font-weight:500}
+.pl select.pl-padrao{color:var(--txt-3)}
+.pl select:not(.pl-padrao){color:var(--azul-txt); font-weight:600}
+.pl .pl-vez input:not(:placeholder-shown){color:var(--azul-txt); font-weight:600}
+.pl .pl-sep td{text-transform:none; letter-spacing:0; font-size:13px; height:34px}
+@media (hover:hover){
+  .pl tbody tr:not(.pl-sep):hover td{background-color:color-mix(in srgb, var(--azul) 5%, var(--card))}
+  .pl .pl-ac button{opacity:.45; transition:opacity .15s, background .15s, color .15s}
+  .pl tr:hover .pl-ac button,.pl .pl-ac button:focus-visible{opacity:1}
+}
+.pl .pl-ac{width:72px; min-width:72px}
+.pl .pl-ac button{width:30px; height:30px; line-height:30px; border-radius:9px; font-size:16px}
+.pl .pl-final td{height:56px}
+.pl .pl-final .pl-num{font-size:22px; letter-spacing:-.02em}
+.pl-tit{font-size:20px; letter-spacing:-.02em; margin:28px 4px 12px}
+
+/* Quem me deve: os dois caminhos viram botões de verdade, não texto azul. */
+.pl-deve{min-width:0}
+.pl-deve td{height:52px}
+.pl.pl-deve .pt{width:10px; height:10px; display:inline-block; border-radius:50%; margin-right:10px; vertical-align:middle}
+.pl-deve .pl-mudo{margin-left:8px}
+.pl-deve .pl-deve-v{font-weight:700; font-size:15px}
+.pl-acoes-deve{padding:0 8px; white-space:nowrap}
+.pl .pl-acoes-deve .pl-btn-cel{display:inline-flex; align-items:center; height:32px; line-height:1; padding:0 14px; margin-right:6px;
+  border-radius:999px; font-size:13.5px; font-weight:600; color:var(--azul-txt);
+  background:var(--azul-fraco); transition:background .15s, transform .1s}
+.pl .pl-acoes-deve .pl-btn-cel:active{transform:scale(.96)}
+.pl-deve .pl-btn-cel:focus-visible{outline:2px solid var(--azul); outline-offset:2px}
+@media (hover:hover){ .pl .pl-acoes-deve .pl-btn-cel:hover{background:color-mix(in srgb, var(--azul) 22%, transparent)} }
+
+/* ---- a barra de abas é vidro, e no computador é uma pílula pequena ----
+   Ela era uma faixa de 1040px presa no topo, quase opaca: rolando a planilha,
+   cobria uma linha inteira de gastos. Com duas abas não há por que ocupar a
+   largura toda. */
+.tabbar{-webkit-backdrop-filter:blur(18px) saturate(1.5); backdrop-filter:blur(18px) saturate(1.5);
+  background:color-mix(in srgb, var(--card) 78%, transparent)}
+@media(min-width:900px){
+  .tabbar{width:340px; border-radius:999px; padding:5px; gap:4px;
+    background:color-mix(in srgb, var(--card) 72%, transparent);
+    box-shadow:0 1px 0 var(--b3d-luz) inset, 0 14px 34px -18px var(--b3d-halo), 0 0 0 1px var(--sep)}
+  .tb{flex:1 1 0; padding:9px 22px; min-height:40px; border-radius:999px}
+  .tb::before{border-radius:999px}
+  .tb, .tb:hover, .tb:active{transform:none !important; box-shadow:none}
+  .tb[aria-selected="true"]{color:var(--sobre-azul)}
+  .tb[aria-selected="true"]:hover{color:var(--sobre-azul)}
+  .tb[aria-selected="true"]::before{background:var(--azul)}
+}
+/* a aba escolhida é chapada nos dois tamanhos: o relevo antigo desenhava uma
+   laje cinza embaixo dela, que no vidro lê-se como sujeira */
+.tb[aria-selected="true"]::before{box-shadow:none; transform:none}

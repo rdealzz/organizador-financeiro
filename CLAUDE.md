@@ -2425,3 +2425,24 @@ instalado, sessão perdida era senha digitada de novo.
 
 O limite honesto: se o navegador esvaziar TODO o armazenamento do site, o
 cofre vai junto — aí só o gerenciador de senhas do próprio aparelho resolve.
+
+## A planilha mais limpa e a barra que não cobre a tabela (v12.2)
+
+Veio de um print no computador: a barra de abas cobria uma linha inteira de
+gastos, e a coluna Sobra tinha uma lasca azul que parecia defeito.
+
+* **A barra de abas é vidro, e no computador é uma pílula de 340px.** Era uma
+  faixa de 1040px fixa no topo, quase opaca. Com duas abas não há por que
+  ocupar a largura. A aba escolhida é chapada (`--azul` com `--sobre-azul` no
+  computador); o relevo antigo desenhava uma laje cinza embaixo dela.
+* **O medidor da Sobra é uma linha de 3px no pé da célula**, da esquerda para
+  a direita. A faixa encostada à direita da v12.1 virava uma lasca quando
+  sobrava pouco.
+* **A grade deixou de gritar**: verticais quase invisíveis, linhas de 42px,
+  cabeçalho em caixa normal. **O padrão se apaga e a exceção acende**:
+  `select.pl-padrao` ("Só eu", "Cartão") fica cinza; dividido, pai paga, Pix e
+  parcelado ficam em azul. A classe é posta em `renderPlanilha`, depois do
+  `innerHTML`.
+* **`.pl.pl-deve .pl-rot` era `display:flex` com altura fixa NO `<td>`**: célula
+  que vira flex deixa de ser célula e não acompanha a linha — sobrava uma caixa
+  solta quando a linha cresceu. *PDF* e *Enviar* viraram pílulas.
