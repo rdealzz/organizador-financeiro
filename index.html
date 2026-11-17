@@ -252,6 +252,22 @@ html[data-tema="escuro"] #splash{background:#000}
       <span><small>Gastos</small><b id="mareGastos">0,00</b></span>
     </div>
   </section>
+  <!-- A planilha em 3D (v12.3): a mesma conta de pé, uma coluna por linha. -->
+  <section class="pl3d" id="pl3d">
+    <div class="pl3d-topo">
+      <b>A planilha em 3D</b>
+      <span class="pl3d-dica">arraste para girar · toque numa coluna</span>
+      <button type="button" class="pl3d-x" id="pl3dEsconde" aria-expanded="true" aria-controls="pl3dTela">esconder</button>
+    </div>
+    <canvas class="pl3d-tela" id="pl3dTela" role="img"
+            aria-label="A sobra do mês em 3D: uma coluna por linha da planilha, descendo como uma escada a cada gasto. Os mesmos números estão na tabela abaixo."></canvas>
+    <div class="pl3d-leg">
+      <span><i class="pl3d-q pl3d-q-pil"></i>o que sobra depois da linha</span>
+      <span><i class="pl3d-q pl3d-q-cap"></i>o que a linha tirou</span>
+      <span><i class="pl3d-q pl3d-q-out"></i>parte que outra pessoa paga</span>
+    </div>
+    <p class="pl3d-diz" id="pl3dDiz" aria-live="polite"></p>
+  </section>
   <section class="pl-folha">
     <div class="pl-rola"><table class="pl" id="plTab"></table></div>
   </section>

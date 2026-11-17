@@ -3705,3 +3705,40 @@ body:not(.fundo-vivo)::before{content:''; position:fixed; inset:0; z-index:-1; p
 /* a aba escolhida é chapada nos dois tamanhos: o relevo antigo desenhava uma
    laje cinza embaixo dela, que no vidro lê-se como sujeira */
 .tb[aria-selected="true"]::before{box-shadow:none; transform:none}
+
+
+/* ══════════════════ A planilha em 3D (v12.3) ══════════════════
+   Cartão do TEMA, não escuro fixo como a maré: o desenho lê as cores do CSS
+   (texto, linhas, azul), então ele tem que estar sobre o fundo do tema em que
+   essas cores foram escolhidas. Opaco — com a esfera ligada nada atravessa. */
+.pl3d{position:relative; margin:0 0 14px; border-radius:22px; padding:14px 14px 10px;
+  background:
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--azul) 9%, transparent), transparent 70%),
+    var(--card);
+  box-shadow:inset 0 1px 0 var(--b3d-luz), 0 0 0 1px var(--sep), 0 22px 44px -32px var(--b3d-halo)}
+[data-tema="claro"] body.fundo-vivo .pl3d{background:#FFFFFF}
+[data-tema="escuro"] body.fundo-vivo .pl3d{background:#08131F}
+.pl3d-topo{display:flex; align-items:baseline; gap:6px 10px; flex-wrap:wrap; padding:0 4px}
+.pl3d-topo b{font-size:15px; letter-spacing:-.01em}
+.pl3d-dica{font-size:12.5px; color:var(--txt-3)}
+.pl3d-x{all:unset; margin-left:auto; cursor:pointer; font-size:13px; font-weight:600; color:var(--azul-txt);
+  padding:4px 10px; border-radius:999px}
+.pl3d-x:hover{background:var(--azul-fraco)}
+.pl3d-x:focus-visible{outline:2px solid var(--azul); outline-offset:2px}
+.pl3d-tela{display:block; width:100%; height:320px; margin-top:6px; touch-action:pan-y; cursor:grab; border-radius:14px}
+.pl3d-tela:active{cursor:grabbing}
+@media (min-width:900px){ .pl3d-tela{height:380px} }
+.pl3d-leg{display:flex; flex-wrap:wrap; gap:4px 16px; padding:6px 4px 0; font-size:12px; color:var(--txt-2)}
+.pl3d-leg span{display:inline-flex; align-items:center; gap:6px}
+.pl3d-q{width:11px; height:11px; border-radius:3px; display:inline-block}
+.pl3d-q-pil{background:color-mix(in srgb, var(--azul) 26%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--azul) 45%, transparent)}
+.pl3d-q-cap{background:linear-gradient(135deg, var(--c2) 0 50%, var(--crou) 50%)}
+.pl3d-q-out{background:color-mix(in srgb, var(--pes1, #36c) 42%, transparent); box-shadow:inset 0 0 0 1px var(--pes1, #36c)}
+.pl3d-diz{margin:6px 4px 2px; font-size:13.5px; line-height:1.45; color:var(--txt-2); min-height:0}
+.pl3d-diz:empty{display:none}
+.pl3d.fechado{padding-bottom:12px}
+.pl3d.fechado .pl3d-tela,.pl3d.fechado .pl3d-leg,.pl3d.fechado .pl3d-diz,.pl3d.fechado .pl3d-dica{display:none}
+
+/* a linha tocada no 3D acende na tabela */
+.pl tbody tr.pl-realce td{background-color:color-mix(in srgb, var(--azul) 12%, var(--card)) !important}
+.pl tbody tr.pl-realce .pl-n{color:var(--azul-txt); font-weight:700}

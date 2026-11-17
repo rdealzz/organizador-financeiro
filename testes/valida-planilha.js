@@ -85,6 +85,19 @@ const SHOT=process.env.SHOT;
    return {esperado:brl(c.disponivel-c.gasto), ult, fim, res:document.querySelector('#plResumo .pl-res b').textContent};
  });
  eh(pre+'sobra da última linha = posso gastar = disponível − gasto', [conta.ult,conta.fim,conta.res].every(x=>x.replace(/[^\d,−-]/g,'')===conta.esperado.replace(/[^\d,−-]/g,'')), conta);
+ // a planilha em 3D (v12.3) desenha os MESMOS números da coluna Sobra
+ const e3=await p.evaluate(()=>{
+   const c=calc(), t=document.querySelector('#pl3dTela');
+   const saldos=[...document.querySelectorAll('#plTab tbody .pl-gasto .pl-saldo')].map(td=>valorDe(td.textContent));
+   return {montada:!!pl3d, visivel:!!(t&&t.checkVisibility()), w:t?t.width:0, esperado:c.disponivel-c.gasto, saldos};
+ });
+ eh(pre+'3D: a cena está montada e na tela', e3.montada&&e3.visivel&&e3.w>0, e3);
+ const toque=await p.evaluate(()=>{ dizerPl3d({id:'x',nome:'Teste',tipo:'gasto',antes:500,depois:380,outros:0}); return document.querySelector('#pl3dDiz').textContent; });
+ eh(pre+'3D: a frase diz o que a coluna tirou e o que sobrou', /tirou R\$\s?120,00/.test(toque)&&/380,00/.test(toque), toque);
+ await p.evaluate(()=>{ try{localStorage.setItem('sobra:pl3d','0');}catch(e){} render(); });
+ eh(pre+'3D: esconder desmonta a cena e guarda a escolha', await p.evaluate(()=>!pl3d&&document.querySelector('#pl3d').classList.contains('fechado')));
+ await p.evaluate(()=>{ try{localStorage.removeItem('sobra:pl3d');}catch(e){} render(); });
+ eh(pre+'3D: mostrar de novo remonta', await p.evaluate(()=>!!pl3d));
  eh(pre+'parte do pai não desconta', await p.evaluate(()=>Math.abs((3000-500-300.5-0-1200-900)-(calc().disponivel-calc().gasto))<0.01));
 
  // render de fora no meio da digitação não apaga o que está escrito

@@ -343,6 +343,9 @@ let cena=null, capaSaindo=false;
    roda na partida, antes do fim deste arquivo, e um `let` lá embaixo estaria na
    zona morta temporal — ler a variável lançaria e derrubaria a abertura. */
 let viz3d=null, viz3dChave='';
+/* a planilha em 3D (v12.3): no topo pelo mesmo motivo do viz3d — render() roda
+   antes do fim do arquivo quando o app reabre com sessão salva. */
+let pl3d=null, pl3dTema='', pl3dSel=null;
 /* Como pagou, no formulário de lançamento. Volta pra 'cartao' a cada gasto: é
    o caso comum, e deixar grudado no Pix faria a fatura seguinte nascer errada.
    Mora AQUI no topo, junto de `cena`, porque renderFatura() o lê e render()
@@ -830,7 +833,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v12.2';
+const VERSAO_APP='v12.3';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -2630,7 +2633,8 @@ function aplicarTema(){
   const cor=esc?'#000000':'#F4F8FD';
   document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute('content',cor));
   document.documentElement.setAttribute('data-tema',esc?'escuro':'claro');
-  if(viz3d) viz3d.repintar();      // as cores das barras vêm do CSS: mudou o tema, mudaram elas
+  if(viz3d) viz3d.repintar();
+  if(pl3d) pl3d.repintar();      // as cores das barras vêm do CSS: mudou o tema, mudaram elas
   const rotulo=esc?'Mudar para o tema claro':'Mudar para o tema escuro';
   /* Esta função roda ANTES do resto do arquivo — é o que evita a abertura
      piscar no tema errado —, e nesse instante a tabela de ícones ainda não
@@ -4922,6 +4926,61 @@ function linhaPlanilha(l,n,saldo,proxima){
     <td class="pl-ac"><button type="button" data-pled="${esc(k)}" aria-label="Mais opções de ${esc(l.nome)}" title="Mais opções">✎</button><button type="button" data-plx="${esc(k)}" aria-label="Apagar ${esc(l.nome)}" title="Apagar">×</button></td>
   </tr>`;
 }
+/* ══════════════════ A PLANILHA EM 3D (v12.3) ══════════════════
+   Quem desenha é o `viz3d.js` (Viz3D.escada); daqui sai só o DADO — os mesmos
+   números da coluna Sobra, colhidos na MESMA passada que monta a tabela, para
+   que o desenho e a tabela não tenham como discordar.
+
+   A cena é montada uma vez e depois só recebe `atualizar()`: remontar a cada
+   tecla zeraria o giro e a animação do degrau descendo. O tema é a única
+   coisa que pede outra montagem (as cores vêm do CSS). */
+const pl3dLigado=()=>{ try{ return localStorage.getItem('sobra:pl3d')!=='0'; }catch(e){ return true; } };
+function renderPl3d(L3){
+  const caixa=$('#pl3d'), tela=$('#pl3dTela'); if(!caixa||!tela) return;
+  const ligado=pl3dLigado();
+  caixa.classList.toggle('fechado',!ligado);
+  const bt=$('#pl3dEsconde'); if(bt){ bt.textContent=ligado?'esconder':'mostrar'; bt.setAttribute('aria-expanded',String(ligado)); }
+  if(!window.Viz3D||!Viz3D.escada||!ligado){ if(pl3d){ pl3d.encerrar(); pl3d=null; } return; }
+  const tema=document.documentElement.dataset.tema||'';
+  if(pl3d&&pl3dTema!==tema){ pl3d.encerrar(); pl3d=null; }
+  if(!pl3d){
+    pl3dTema=tema;
+    pl3d=Viz3D.escada(tela,L3,{brl,aoSelecionar:l=>{ pl3dSel=l?l.id:null; dizerPl3d(l); }});
+  }else pl3d.atualizar(L3);
+  if(pl3dSel) pl3d.selecionar(pl3dSel);
+  dizerPl3d(pl3dSel?L3.find(l=>l.id===pl3dSel):null);
+}
+/* A frase embaixo e a linha acesa na tabela. Tocar no degrau é perguntar
+   "o que é isto?", e a resposta tem que apontar onde editar. */
+function dizerPl3d(l){
+  const el=$('#pl3dDiz'); if(!el) return;
+  document.querySelectorAll('#plTab tr.pl-realce').forEach(tr=>tr.classList.remove('pl-realce'));
+  if(!l){ el.innerHTML=''; return; }
+  const tr=document.querySelector(`#plTab [data-k="${CSS.escape(l.id)}|valor"]`);
+  if(tr&&tr.closest('tr')) tr.closest('tr').classList.add('pl-realce');
+  const ir=tr?` <button type="button" class="link" data-pl3d-ir="${esc(l.id)}">editar na planilha</button>`:'';
+  el.innerHTML=l.tipo==='fim'
+    ?`<b>${esc(l.nome)}: ${brl(l.depois)}</b> — é a última coluna da escada.`
+    :l.tipo==='renda'
+      ?`<b>${esc(l.nome)}</b> entra com ${brl(l.depois-l.antes)}.`
+      :(l.antes-l.depois<0.005&&l.outros>0)
+        ?`<b>${esc(l.nome)}</b> não tirou nada da sua sobra: os ${brl(l.outros)} são pagos por outra pessoa — é a coluna da fileira de trás.${ir}`
+        :`<b>${esc(l.nome)}</b> tirou ${brl(l.antes-l.depois)} e a sobra ficou em <b>${brl(l.depois)}</b>${l.outros>0?` — outros ${brl(l.outros)} são pagos por outra pessoa, na fileira de trás`:''}.${ir}`;
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-pl3d-ir]');
+  if(b){
+    const inp=document.querySelector(`#plTab [data-k="${CSS.escape(b.dataset.pl3dIr)}|valor"]`);
+    if(inp){ inp.scrollIntoView({block:'center',behavior:'smooth'}); setTimeout(()=>inp.focus({preventScroll:true}),350); }
+    return;
+  }
+  if(e.target.closest('#pl3dEsconde')){
+    const novo=!pl3dLigado();
+    try{ localStorage.setItem('sobra:pl3d',novo?'1':'0'); }catch(x){}
+    render();
+  }
+});
+
 /* ══════════════════ A MARÉ (v12.1) ══════════════════
    O topo da planilha é um tanque: o nível da água é quanto do dinheiro
    gastável ainda está livre, e ele desce quando um gasto entra. É a mesma
@@ -5029,17 +5088,22 @@ function renderPlanilha(c){
   const its=doCiclo(), prox=daProxima();
   const sal=+S.salario||0, ext=+S.extra||0;
   let saldo=0, n=0, linhas='';
+  const L3=[];
+  const em3d=(id,nome,tipo,antes,cor,extra)=>L3.push(Object.assign({id,nome,tipo,antes,depois:saldo,cor,outros:0},extra||{}));
   const linRenda=(rot,col,val,nota,cls)=>{ n++;
     return `<tr class="${cls}"><td class="pl-n">${n}</td><td class="pl-desc pl-rot">${rot}</td>
       <td class="pl-num"><input data-k="renda|${col}" data-orig="${esc(fmtCel(val))}" value="${esc(fmtCel(val))}" inputmode="decimal" autocomplete="off" placeholder="0,00" aria-label="${rot}"></td>
       <td class="pl-num pl-saldo${saldo<0?' neg':''}">${numCel(saldo)}</td><td class="pl-nota" colspan="4">${nota}</td></tr>`; };
   saldo+=sal;  linhas+=linRenda('Salário','salario',sal,'entra todo mês','pl-entra');
+  em3d('#sal','Salário','renda',saldo-sal,'var(--verde)');
   saldo+=ext;  linhas+=linRenda('Outra renda','extra',ext,'pensão, aluguel, freela fixo','pl-entra');
-  if(c.entrou>0){ n++; saldo+=c.entrou;
+  if(ext>0) em3d('#ext','Outra renda','renda',saldo-ext,'var(--verde)');
+  if(c.entrou>0){ n++; saldo+=c.entrou; em3d('#entrou','Extra do mês','renda',saldo-c.entrou,'var(--verde)');
     linhas+=`<tr class="pl-entra"><td class="pl-n">${n}</td><td class="pl-desc pl-rot">Extra do mês</td>
       <td class="pl-num">${numCel(c.entrou)}</td><td class="pl-num pl-saldo">${numCel(saldo)}</td>
       <td class="pl-nota" colspan="4">venda, 13º… <button type="button" class="link" data-ir="plano:entrou">ver</button></td></tr>`; }
   saldo-=c.metaMes;
+  if(c.metaMes>0) em3d('#guardar','Guardar','guardar',saldo+c.metaMes,'var(--azul)');
   const extraG=c.entrouGuardar>0?` · +${brl(c.entrouGuardar)} do extra`:'';
   linhas+=linRenda('Guardar','guardar',c.meta,
     c.ajustada
@@ -5048,7 +5112,10 @@ function renderPlanilha(c){
         ?`<b>seu fixo, todo mês</b> · apertou? mude aqui, vale só este mês${extraG} <button type="button" class="link" data-metafixo>mudar o fixo</button>`
         :`sai antes dos gastos${extraG} <button type="button" class="link" data-metafixo>definir um valor fixo por mês</button>`),'pl-guarda');
   linhas+=`<tr class="pl-sep"><td class="pl-n"></td><td colspan="7">Gastos do mês <small>· fatura fecha ${dataBR(iso(faturaAberta().fecha))}</small></td></tr>`;
-  its.forEach(l=>{ n++; saldo-=meuValor(l); linhas+=linhaPlanilha(l,n,saldo,false); });
+  its.forEach(l=>{ n++; const m=meuValor(l); saldo-=m; linhas+=linhaPlanilha(l,n,saldo,false);
+    em3d(String(l.id),l.nome||'Gasto','gasto',saldo+m,catDe(l.cat).c,
+      {outros:Math.max((+l.valor||0)-m,0), outrosCor:l.com?corPessoa(l.com):'var(--pai)'}); });
+  L3.push({id:'#fim',nome:saldo<0?'Passou do limite':'Posso gastar',tipo:'fim',antes:saldo,depois:saldo,outros:0});
   n++;
   const pNovo={valor:0,pai:0,com:''};
   linhas+=`<tr class="pl-novo"><td class="pl-n">${n}</td>
@@ -5093,6 +5160,7 @@ function renderPlanilha(c){
   /* A coluna Sobra ganha uma barra que encolhe linha a linha: é o "vai
      diminuindo" do pedido, visto sem ler número nenhum. */
   const topo=sal+ext+c.entrou;
+  renderPl3d(L3);
   /* "Só eu" e "Cartão" são o caso comum e ficam apagados; o que foge disso
      (dividido, pai paga, sem cartão) acende — a linha diferente se acha no olho. */
   tab.querySelectorAll('td select').forEach(se=>se.classList.toggle('pl-padrao',se.selectedIndex<=0));

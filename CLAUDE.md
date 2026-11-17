@@ -2446,3 +2446,43 @@ gastos, e a coluna Sobra tinha uma lasca azul que parecia defeito.
 * **`.pl.pl-deve .pl-rot` era `display:flex` com altura fixa NO `<td>`**: célula
   que vira flex deixa de ser célula e não acompanha a linha — sobrava uma caixa
   solta quando a linha cresceu. *PDF* e *Enviar* viraram pílulas.
+
+## A planilha em 3D (v12.3)
+
+O pedido: *"deixar em 3D essa parte, em forma de uma planilha, melhora muito
+a visualização"*. A tabela continua sendo onde se digita; em cima dela entrou
+a MESMA planilha de pé (`Viz3D.escada`, no `viz3d.js`):
+
+* **o chão é a grade da planilha** — uma faixa por linha, da esquerda para a
+  direita na ordem da tabela;
+* **altura = a Sobra depois da linha**, então as colunas formam uma escada
+  que desce — o "vai diminuindo" visto de uma vez;
+* **a tampa colorida é o que a linha tirou**, na cor da categoria (verde para
+  renda, azul para Guardar); a última coluna é o *Posso gastar*;
+* **a fileira de trás é a parte que outra pessoa paga**, translúcida e na cor
+  dela: está na fatura, mas não desce a escada.
+
+Decisões que custaram captura de tela:
+
+1. **Os números são colhidos na MESMA passada que monta a tabela** (`em3d()`
+   dentro de `renderPlanilha`). Uma segunda conta poderia discordar da coluna
+   Sobra; esta não tem como. `valida-planilha.js` confere a cena montada, a
+   frase, esconder e mostrar.
+2. **A cena não gira em volta, só balança.** Uma escada comprida dando a volta
+   desorienta. Arrastar gira dentro de um limite; o balanço para assim que a
+   pessoa mexe.
+3. **Montada uma vez, depois só `atualizar()`.** Remontar a cada tecla zeraria
+   o giro e a animação — o degrau novo DESCE na frente da pessoa, em vez de
+   aparecer pronto. Só a troca de tema remonta (as cores vêm do CSS).
+4. **Enquadrar pelo topo REAL das colunas**, não pela altura máxima em toda a
+   largura: isso deixava metade da caixa vazia. A altura cresce com o número
+   de linhas e com a proporção da caixa, e em tela estreita a cena é vista
+   mais de frente — senão, no celular, a escada era uma tira inclinada.
+5. **Tocar numa coluna acende a linha na tabela** (`tr.pl-realce`) e dá o
+   caminho *editar na planilha*. A frase de quem o pai paga inteiro diz "não
+   tirou nada da sua sobra", não "tirou R$ 0,00".
+
+O cartão usa a cor do TEMA, não o escuro fixo da maré: o desenho lê `--txt`,
+`--sep` e `--azul`, que foram escolhidos para o fundo do tema. Com a esfera
+ligada ele é opaco por tema, como a `.cal`. *esconder* fica guardado no
+aparelho (`sobra:pl3d`) e desmonta a cena — nada roda escondido.
