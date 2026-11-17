@@ -2578,3 +2578,27 @@ o mesmo risco com 30+ gastos.
 
 `mede-fps.js` mede também Resumo do dia e Gráficos: 60 fps na CPU normal,
 60 e 59,5 com a CPU 4x mais lenta.
+
+## A planilha mais bonita (v12.7)
+
+O que cada linha É passou a se ver antes de se ler, sem mudar onde se digita:
+
+* **A cor da categoria** corre num fio no número da linha (`--cc` no `<tr>`)
+  e acende a linha inteira no hover. **O ícone ao lado do nome** é um botão
+  (`.pl-ico`, `data-pled`) que abre a folha de edição — é lá que a categoria
+  se troca e que a troca ensina o app (`catManual`). Salário, Outra renda e
+  Guardar têm ícone próprio, sem botão.
+* **O medidor da Sobra muda de cor** (`--mt`): verde acima de 40% da renda,
+  laranja até 15%, vermelho abaixo.
+* **"Quem paga" veste a cor da pessoa** (`select.pl-pessoa`, `--pc` =
+  `corPessoa`), a mesma do quadro *Quem me deve*.
+* **"12x" e "fixo" são etiquetas** (a célula de Vezes é uma pílula quando tem
+  valor; no foco volta a ser campo).
+* **A faixa "Gastos do mês"** diz quantos e quanto. **O *Posso gastar*** é uma
+  faixa com a cor do resultado (verde, ou vermelho quando passa).
+
+Duas coisas que custaram captura: `position:sticky` num `<span>` dentro da
+célula da faixa (que já é sticky) deslocava o total para fora da borda e
+deixava uma caixa branca solta — saiu. E no celular o ícone encolhe para
+22px: o nome do gasto é a coluna que não pode sumir, e com 26px
+"Combustível" virava "Combustíve".

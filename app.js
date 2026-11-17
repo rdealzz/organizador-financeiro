@@ -836,7 +836,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v12.6';
+const VERSAO_APP='v12.7';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -4920,9 +4920,15 @@ function linhaPlanilha(l,n,saldo,proxima){
   const k=String(l.id), divide=+l.pai>0, varias=nDivisoes(l)>1;
   const cel=(col,html,cls)=>`<td class="${cls||''}">${html}</td>`;
   const inp=(col,val,extra)=>`<input data-k="${esc(k)}|${col}" data-orig="${esc(val)}" value="${esc(val)}" ${extra||''}>`;
-  return `<tr class="pl-gasto${proxima?' pl-prox':''}">
+  const ct=catDe(l.cat);
+  /* (v12.7) A linha veste a cor da categoria: um fio no número e o ícone ao
+     lado do nome. O ícone é o caminho de trocar a categoria — abre a mesma
+     folha de edição do ✎, que é onde a categoria se muda (e onde a troca
+     ensina o app, `catManual`). */
+  return `<tr class="pl-gasto${proxima?' pl-prox':''}" style="--cc:${ct.c}">
     ${cel('n',n,'pl-n')}
-    ${cel('nome',inp('nome',l.nome||'','aria-label="Descrição" autocomplete="off" maxlength="42"'),'pl-desc')}
+    ${cel('nome',`<button type="button" class="pl-ico" data-pled="${esc(k)}" title="${esc(ct.n)} — trocar categoria" aria-label="Categoria ${esc(ct.n)}: trocar">${icone(ICONE_CAT[l.cat]||'outros',14)}</button>`
+      +inp('nome',l.nome||'','aria-label="Descrição" autocomplete="off" maxlength="42"'),'pl-desc pl-desc-ico')}
     ${cel('valor',inp('valor',fmtCel(l.valor),'aria-label="Valor" inputmode="decimal" autocomplete="off" placeholder="0,00"')
       +(divide?`<small class="pl-seu">seu ${brl(meuValor(l))}</small>`:''),'pl-num')}
     ${cel('sobra',proxima?'<span class="pl-mudo">próx. fatura</span>':numCel(saldo),'pl-num pl-saldo'+(saldo<0&&!proxima?' neg':''))}
@@ -5229,8 +5235,9 @@ function renderPlanilha(c){
   let saldo=0, n=0, linhas='';
   const L3=[];
   const em3d=(id,nome,tipo,antes,cor,extra)=>L3.push(Object.assign({id,nome,tipo,antes,depois:saldo,cor,outros:0},extra||{}));
+  const ICO_RENDA={salario:'subindo',extra:'raio',guardar:'alvo'};
   const linRenda=(rot,col,val,nota,cls)=>{ n++;
-    return `<tr class="${cls}"><td class="pl-n">${n}</td><td class="pl-desc pl-rot">${rot}</td>
+    return `<tr class="${cls}"><td class="pl-n">${n}</td><td class="pl-desc pl-rot pl-desc-ico"><span class="pl-ico pl-ico-${col}" aria-hidden="true">${icone(ICO_RENDA[col]||'subindo',14)}</span>${rot}</td>
       <td class="pl-num"><input data-k="renda|${col}" data-orig="${esc(fmtCel(val))}" value="${esc(fmtCel(val))}" inputmode="decimal" autocomplete="off" placeholder="0,00" aria-label="${rot}"></td>
       <td class="pl-num pl-saldo${saldo<0?' neg':''}">${numCel(saldo)}</td><td class="pl-nota" colspan="4">${nota}</td></tr>`; };
   saldo+=sal;  linhas+=linRenda('Salário','salario',sal,'entra todo mês','pl-entra');
@@ -5250,7 +5257,8 @@ function renderPlanilha(c){
       :(+S.metaVal>0
         ?`<b>seu fixo, todo mês</b> · apertou? mude aqui, vale só este mês${extraG} <button type="button" class="link" data-metafixo>mudar o fixo</button>`
         :`sai antes dos gastos${extraG} <button type="button" class="link" data-metafixo>definir um valor fixo por mês</button>`),'pl-guarda');
-  linhas+=`<tr class="pl-sep"><td class="pl-n"></td><td colspan="7">Gastos do mês <small>· fatura fecha ${dataBR(iso(faturaAberta().fecha))}</small></td></tr>`;
+  const nG=its.length, totG=its.reduce((t,l)=>t+(+l.valor||0),0);
+  linhas+=`<tr class="pl-sep"><td class="pl-n"></td><td colspan="7"><span class="pl-sep-t">Gastos do mês <small>· fatura fecha ${dataBR(iso(faturaAberta().fecha))}</small></span>${nG?`<span class="pl-sep-tot">${nG} gasto${nG===1?'':'s'} · ${brl(totG)}</span>`:''}</td></tr>`;
   its.forEach(l=>{ n++; const m=meuValor(l); saldo-=m; linhas+=linhaPlanilha(l,n,saldo,false);
     em3d(String(l.id),l.nome||'Gasto','gasto',saldo+m,catDe(l.cat).c,
       {outros:Math.max((+l.valor||0)-m,0), outrosCor:l.com?corPessoa(l.com):'var(--pai)'}); });
@@ -5309,10 +5317,21 @@ function renderPlanilha(c){
   }
   /* "Só eu" e "Cartão" são o caso comum e ficam apagados; o que foge disso
      (dividido, pai paga, sem cartão) acende — a linha diferente se acha no olho. */
-  tab.querySelectorAll('td select').forEach(se=>se.classList.toggle('pl-padrao',se.selectedIndex<=0));
+  tab.querySelectorAll('td select').forEach(se=>{
+    se.classList.toggle('pl-padrao',se.selectedIndex<=0);
+    /* quem divide aparece na cor da pessoa — a mesma do quadro "Quem me deve" */
+    const id=/\|quem$/.test(se.dataset.k||'')&&se.selectedIndex>0?String(se.value).split(':')[1]:'';
+    se.classList.toggle('pl-pessoa',!!id);
+    if(id) se.style.setProperty('--pc',corPessoa(id));
+  });
   tab.querySelectorAll('tbody td.pl-saldo').forEach(td=>{
     const v=valorDe(td.textContent);
-    if(topo>0&&v>0&&!td.classList.contains('neg')) td.style.setProperty('--f',Math.min(v/topo,1).toFixed(3));
+    if(topo>0&&v>0&&!td.classList.contains('neg')){
+      const f=Math.min(v/topo,1);
+      td.style.setProperty('--f',f.toFixed(3));
+      /* (v12.7) o medidor muda de cor conforme a sobra baixa: folga, atenção, aperto */
+      td.style.setProperty('--mt',f>0.4?'var(--verde)':f>0.15?'var(--laranja)':'var(--vermelho)');
+    }
   });
   const d=$('#plDica');
   if(d) d.innerHTML=!sal?'Comece pelo <b>Salário</b> na primeira linha. Depois escreva cada gasto na última linha — ela está sempre vazia.'

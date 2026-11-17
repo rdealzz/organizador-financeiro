@@ -3614,7 +3614,7 @@ body[data-area="planilha"] .fab{display:none}
    uma lasca que parecia defeito de pintura. Agora é um medidor fino no pé da
    célula, da esquerda para a direita. */
 .pl tbody td.pl-saldo{
-  background-image:linear-gradient(90deg, color-mix(in srgb, var(--azul) 70%, transparent), color-mix(in srgb, var(--azul) 35%, transparent));
+  background-image:linear-gradient(90deg, color-mix(in srgb, var(--mt,var(--azul)) 80%, transparent), color-mix(in srgb, var(--mt,var(--azul)) 40%, transparent));
   background-repeat:no-repeat; background-position:left bottom; background-size:calc(var(--f,0)*100%) 3px}
 
 /* a folha da planilha deixa de ser uma caixa reta */
@@ -3858,3 +3858,63 @@ body:not(.fundo-vivo)::before{content:''; position:fixed; inset:0; z-index:-1; p
 /* o lado do prisma precisa de onde morar: sem isto, cada barra invadia a
    vizinha e a tira virava um muro só */
 .cal-tb i{width:calc(100% - 6px)}
+
+
+/* ══════════════════ A planilha mais bonita (v12.7) ══════════════════
+   O que cada linha É passou a se ver antes de se ler: a cor da categoria
+   corre num fio ao lado do número, o ícone fica ao lado do nome, o "quem
+   paga" veste a cor da pessoa, o "12x" vira etiqueta e a Sobra muda de cor
+   conforme aperta. Nada disso muda onde se digita: a célula continua sendo
+   o campo. */
+
+/* o fio da categoria */
+.pl tbody tr.pl-gasto td.pl-n{box-shadow:inset 3px 0 0 color-mix(in srgb, var(--cc) 70%, transparent)}
+@media (hover:hover){
+  .pl tbody tr.pl-gasto:hover td.pl-n{box-shadow:inset 5px 0 0 var(--cc); color:var(--txt)}
+  .pl tbody tr.pl-gasto:hover td{background-color:color-mix(in srgb, var(--cc) 6%, var(--card))}
+}
+
+/* o ícone ao lado do nome */
+.pl td.pl-desc-ico{position:sticky}
+.pl .pl-ico{all:unset; box-sizing:border-box; position:absolute; left:8px; top:50%; translate:0 -50%; z-index:1;
+  width:26px; height:26px; border-radius:9px; display:grid; place-items:center; cursor:pointer;
+  color:#fff; background:linear-gradient(160deg, color-mix(in srgb, var(--cc,var(--azul)) 82%, #fff), var(--cc,var(--azul)));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35), 0 3px 8px -4px var(--cc,var(--azul));
+  transition:transform .15s var(--elastico)}
+.pl .pl-ico svg{width:14px; height:14px}
+@media (hover:hover){ .pl button.pl-ico:hover{transform:scale(1.12) rotate(-6deg)} }
+.pl button.pl-ico:focus-visible{outline:2px solid var(--azul); outline-offset:2px}
+.pl td.pl-desc-ico input{padding-left:42px}
+.pl td.pl-rot.pl-desc-ico{padding-left:42px}
+.pl .pl-ico-salario,.pl .pl-ico-extra{--cc:var(--verde)}
+.pl .pl-ico-guardar{--cc:var(--azul)}
+
+/* "12x", "fixo": etiqueta, não texto solto */
+.pl td.pl-vez{padding:0 6px}
+.pl td.pl-vez input{min-height:28px; height:28px; margin:7px 0; border-radius:999px; text-align:center; padding:0 6px}
+.pl td.pl-vez input:not(:placeholder-shown){background:var(--azul-fraco)}
+.pl td.pl-vez input:focus{border-radius:8px}
+
+/* quem divide, na cor da pessoa */
+.pl select.pl-pessoa{color:var(--pc); font-weight:600}
+
+/* a faixa "Gastos do mês" diz quantos e quanto */
+.pl .pl-sep-tot{float:right; margin-right:12px; font-size:12.5px; font-weight:600; color:var(--txt-2); font-variant-numeric:tabular-nums}
+
+/* o fim da conta: uma faixa que respira a cor do resultado */
+.pl .pl-final td{height:62px;
+  background:linear-gradient(90deg, color-mix(in srgb, var(--verde) 9%, var(--card)), color-mix(in srgb, var(--verde) 3%, var(--card)))}
+.pl .pl-final.neg td{background:linear-gradient(90deg, color-mix(in srgb, var(--vermelho) 10%, var(--card)), color-mix(in srgb, var(--vermelho) 3%, var(--card)))}
+.pl .pl-final .pl-desc{font-size:15px}
+.pl .pl-final .pl-num{font-size:24px; letter-spacing:-.02em; font-weight:700}
+.pl .pl-final td:first-child{box-shadow:inset 3px 0 0 var(--verde)}
+.pl .pl-final.neg td:first-child{box-shadow:inset 3px 0 0 var(--vermelho)}
+
+/* no celular o ícone encolhe: o nome do gasto é a coluna que não pode sumir */
+@media (max-width:560px){
+  .pl .pl-ico{width:22px; height:22px; left:6px; border-radius:7px}
+  .pl .pl-ico svg{width:12px; height:12px}
+  .pl td.pl-desc-ico input{padding-left:33px; padding-right:4px}
+  .pl td.pl-rot.pl-desc-ico{padding-left:33px}
+}
+.pl td.pl-rot{white-space:nowrap}
