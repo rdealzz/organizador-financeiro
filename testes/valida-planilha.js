@@ -158,6 +158,22 @@ const SHOT=process.env.SHOT;
    eh(pre+'descrição presa é opaca com esfera ('+t+')', !/rgba\(.*,\s*0?\.\d+\)$/.test(op)&&op!=='rgba(0, 0, 0, 0)', op);
  }
  await p.evaluate(()=>{document.documentElement.dataset.tema='claro';});
+ // a linha de adicionar, viva (v12.4): prévia, atalho, a linha que nasce
+ await p.evaluate(()=>window.scrollTo(0,0));
+ await p.fill('[data-k="novo|nome"]','tenis'); await p.fill('[data-k="novo|valor"]','350');
+ const pv=await p.evaluate(()=>{ const b=document.querySelector('#plPrev'); const c=calc();
+   return {vis:!!b&&!b.hidden, txt:b?b.innerText:'', antes:brl(c.disponivel-c.gasto), depois:brl(c.disponivel-c.gasto-350)}; });
+ eh(pre+'prévia: categoria e sobra antes → depois', pv.vis&&/Roupa/.test(pv.txt)&&pv.txt.includes(pv.antes)&&pv.txt.includes(pv.depois), pv);
+ eh(pre+'prévia: o degrau fantasma entra no 3D', await p.evaluate(()=>!!pl3d&&!!pl3dBase));
+ const nPrev=await p.evaluate(()=>S.lanc.length);
+ await p.press('[data-k="novo|valor"]','Enter'); await p.waitForTimeout(120);
+ const nas=await p.evaluate(()=>({n:S.lanc.length, luz:document.querySelectorAll('#plTab tr.pl-nasceu').length, prev:document.querySelector('#plPrev').hidden}));
+ eh(pre+'Enter salva, a linha nova acende e a prévia some', nas.n===nPrev+1&&nas.luz===1&&nas.prev, nas);
+ await p.evaluate(()=>{ S.lanc.pop(); render(); });
+ const chip=await p.evaluate(()=>{ const b=document.querySelector('[data-plchip]'); if(!b) return null; b.click();
+   return {nome:document.querySelector('[data-k="novo|nome"]').value, foco:document.activeElement&&document.activeElement.dataset.k}; });
+ eh(pre+'atalho põe o nome e leva ao valor', !!chip&&!!chip.nome&&chip.foco==='novo|valor', chip);
+ await p.evaluate(()=>{ document.querySelectorAll('[data-k^="novo|"]').forEach(x=>{ if(x.tagName==='INPUT') x.value=''; }); atualizarPrevia(); });
  if(SHOT){ await p.evaluate(()=>{document.activeElement&&document.activeElement.blur(); scrollTo(0,0); document.querySelectorAll('.pl-rola').forEach(x=>x.scrollLeft=0); document.querySelector('#tabbar').hidden=true; const s=document.querySelector('#snack'); if(s) s.hidden=true;}); await p.screenshot({path:SHOT+'-'+larg+'.png',fullPage:true}); }
  eh(pre+'sem erro no console', errs.length===0, errs);
  await p.close();

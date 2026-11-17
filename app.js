@@ -345,7 +345,9 @@ let cena=null, capaSaindo=false;
 let viz3d=null, viz3dChave='';
 /* a planilha em 3D (v12.3): no topo pelo mesmo motivo do viz3d — render() roda
    antes do fim do arquivo quando o app reabre com sessão salva. */
-let pl3d=null, pl3dTema='', pl3dSel=null;
+let pl3d=null, pl3dTema='', pl3dSel=null, pl3dBase=null, plNasceu=null;
+var chipsAtuais=[];   // var: renderChips pode rodar antes desta linha na partida
+const M3D={};          // as matrizes 3D de Meses anteriores e Gastos por cartão (v12.4)
 /* Como pagou, no formulário de lançamento. Volta pra 'cartao' a cada gasto: é
    o caso comum, e deixar grudado no Pix faria a fatura seguinte nascer errada.
    Mora AQUI no topo, junto de `cena`, porque renderFatura() o lê e render()
@@ -833,7 +835,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v12.3';
+const VERSAO_APP='v12.5';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -1331,6 +1333,7 @@ function blocoCobrancas(x){
 }
 
 function renderHist(){
+  renderHist3D();
   const lc=$('#listaCiclos'), dc=$('#detalheCiclo');
   if(!S.hist.length){
     lc.innerHTML='<p class="vazio">Nenhuma fatura arquivada ainda. Na primeira virada de ciclo, o mês atual aparece aqui inteiro.</p>';
@@ -2634,7 +2637,8 @@ function aplicarTema(){
   document.querySelectorAll('meta[name="theme-color"]').forEach(m=>m.setAttribute('content',cor));
   document.documentElement.setAttribute('data-tema',esc?'escuro':'claro');
   if(viz3d) viz3d.repintar();
-  if(pl3d) pl3d.repintar();      // as cores das barras vêm do CSS: mudou o tema, mudaram elas
+  if(pl3d) pl3d.repintar();
+  Object.values(M3D).forEach(m=>m&&m.cena&&m.cena.repintar());      // as cores das barras vêm do CSS: mudou o tema, mudaram elas
   const rotulo=esc?'Mudar para o tema claro':'Mudar para o tema escuro';
   /* Esta função roda ANTES do resto do arquivo — é o que evita a abertura
      piscar no tema errado —, e nesse instante a tabela de ícones ainda não
@@ -4792,6 +4796,7 @@ function linhaGasto(l){
    há gasto dividido, a linha de baixo diz quanto disso é seu. */
 const ORDEM_TIPO={fixo:0,var:0,parc:1,unico:2};
 function renderListaGastos(c){
+  renderGastos3D();
   const r=$('#gResumo');
   if(r){
     const {folga,dias}=podeGastarHoje(c);
@@ -4926,6 +4931,78 @@ function linhaPlanilha(l,n,saldo,proxima){
     <td class="pl-ac"><button type="button" data-pled="${esc(k)}" aria-label="Mais opções de ${esc(l.nome)}" title="Mais opções">✎</button><button type="button" data-plx="${esc(k)}" aria-label="Apagar ${esc(l.nome)}" title="Apagar">×</button></td>
   </tr>`;
 }
+/* ══════════════════ MATRIZES 3D (v12.4) ══════════════════
+   Meses anteriores (mês × categoria) e Gastos por cartão (cartão × tipo).
+   Quem desenha é Viz3D.matriz; daqui sai só o dado, e cada cena é montada uma
+   vez e depois só recebe atualizar() — como a escada da planilha.
+   Menos de duas colunas com valor não é gráfico, é uma caixa: aí o cartão
+   some, e a lista embaixo diz tudo. */
+function montarMatriz(nome,dados,aoSel){
+  const box=$('#'+nome+'3dBox'), tela=$('#'+nome+'3dTela');
+  if(!box||!tela) return;
+  const cheias=dados.celulas.filter(c=>c.valor>0.004).length;
+  const m=M3D[nome]||(M3D[nome]={});
+  if(!window.Viz3D||!Viz3D.matriz||cheias<2){
+    box.hidden=true; if(m.cena){ m.cena.encerrar(); m.cena=null; } return;
+  }
+  box.hidden=false;
+  const tema=document.documentElement.dataset.tema||'';
+  if(m.cena&&m.tema!==tema){ m.cena.encerrar(); m.cena=null; }
+  if(!m.cena){ m.tema=tema; m.cena=Viz3D.matriz(tela,dados,{aoSelecionar:aoSel}); }
+  else m.cena.atualizar(dados);
+}
+const MES3D=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+function renderHist3D(){
+  const fat=S.hist.slice(0,8).reverse();            // da mais antiga para a mais nova
+  const tot={};
+  fat.forEach(x=>(x.itens||[]).forEach(it=>{ const k=CATS[it.cat]?it.cat:'outros';
+    tot[k]=(tot[k]||0)+Math.max((+it.valor||0)-(+it.pai||0),0); }));
+  const ordem=Object.keys(tot).sort((a,b)=>tot[b]-tot[a]);
+  const top=ordem.slice(0,4), resto=ordem.slice(4);
+  /* As maiores ficam ATRÁS: torre alta na frente esconde a baixa. */
+  const fil=(resto.length?['_resto']:[]).concat(top.slice().reverse());
+  const anos=new Set(fat.map(x=>String(x.data).slice(0,4)));
+  const rotMes=x=>{ const [a,m]=String(x.data).split('-'); return MES3D[(+m||1)-1]+(anos.size>1?'/'+a.slice(2):''); };
+  const celulas=[];
+  fat.forEach((x,i)=>{
+    const por={};
+    (x.itens||[]).forEach(it=>{ const k=CATS[it.cat]?it.cat:'outros', f=top.includes(k)?k:'_resto';
+      por[f]=(por[f]||0)+Math.max((+it.valor||0)-(+it.pai||0),0); });
+    fil.forEach((k,j)=>{ const v=por[k]||0;
+      celulas.push({c:i,f:j,valor:v,cor:k==='_resto'?'var(--cout)':catDe(k).c,
+        nome:k==='_resto'?'Outras categorias':catDe(k).n, sub:'fatura de '+rotMes(x)+' · '+brl(v), idx:S.hist.indexOf(x)}); });
+  });
+  montarMatriz('hist',{colunas:fat.map(x=>({nome:rotMes(x)})),
+    fileiras:fil.map(k=>({nome:k==='_resto'?'Outras':catDe(k).n})),celulas},
+    c=>{ const d=$('#hist3dDiz'); if(!d) return;
+      if(!c){ d.innerHTML=''; return; }
+      d.innerHTML=`<b>${esc(c.nome)}</b> na ${esc(c.sub.replace(' · ',': '))}. <button type="button" class="link" data-hist3d="${c.idx}">abrir esta fatura</button>`; });
+  const leg=$('#hist3dLeg');
+  if(leg) leg.innerHTML=fil.slice().reverse().map(k=>`<span><i class="pl3d-q" style="background:${k==='_resto'?'var(--cout)':catDe(k).c}"></i>${esc(k==='_resto'?'Outras':catDe(k).n)}</span>`).join('');
+}
+function renderGastos3D(){
+  const todos=doCiclo();
+  const ids=cartoes().map(x=>x.id);
+  todos.filter(naFatura).forEach(l=>{ if(!ids.includes(cartaoDe(l))) ids.push(cartaoDe(l)); });
+  const cols=ids.filter(id=>todos.some(l=>naFatura(l)&&cartaoDe(l)===id)).map(id=>({id,nome:nomeCartao(id)}));
+  if(todos.some(l=>!naFatura(l))) cols.push({id:'_fora',nome:'Sem cartão'});
+  const TIPOS=[{k:'unico',n:'Do mês',cor:'var(--pes3)'},{k:'parc',n:'Parcelados',cor:'var(--pes2)'},{k:'fixo',n:'Fixos',cor:'var(--azul)'}];
+  const tipoDe=l=>l.tipo==='parc'?'parc':(l.tipo==='fixo'||l.tipo==='var')?'fixo':'unico';
+  const celulas=[];
+  cols.forEach((col,i)=>TIPOS.forEach((t,j)=>{
+    const its=todos.filter(l=>(col.id==='_fora'?!naFatura(l):(naFatura(l)&&cartaoDe(l)===col.id))&&tipoDe(l)===t.k);
+    const v=its.reduce((a,l)=>a+(+l.valor||0),0);
+    celulas.push({c:i,f:j,valor:v,cor:t.cor,nome:t.n+' · '+col.nome,sub:brl(v)+' em '+its.length+' gasto'+(its.length===1?'':'s')});
+  }));
+  montarMatriz('gastos',{colunas:cols,fileiras:TIPOS.map(t=>({nome:t.n})),celulas},
+    c=>{ const d=$('#gastos3dDiz'); if(d) d.innerHTML=c?`<b>${esc(c.nome)}</b>: ${esc(c.sub)}.`:''; });
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-hist3d]'); if(!b) return;
+  histSel=+b.dataset.hist3d; render();
+  const d=$('#detalheCiclo'); if(d) d.scrollIntoView({block:'start',behavior:'smooth'});
+});
+
 /* ══════════════════ A PLANILHA EM 3D (v12.3) ══════════════════
    Quem desenha é o `viz3d.js` (Viz3D.escada); daqui sai só o DADO — os mesmos
    números da coluna Sobra, colhidos na MESMA passada que monta a tabela, para
@@ -4943,6 +5020,7 @@ function renderPl3d(L3){
   if(!window.Viz3D||!Viz3D.escada||!ligado){ if(pl3d){ pl3d.encerrar(); pl3d=null; } return; }
   const tema=document.documentElement.dataset.tema||'';
   if(pl3d&&pl3dTema!==tema){ pl3d.encerrar(); pl3d=null; }
+  pl3dBase=L3;
   if(!pl3d){
     pl3dTema=tema;
     pl3d=Viz3D.escada(tela,L3,{brl,aoSelecionar:l=>{ pl3dSel=l?l.id:null; dizerPl3d(l); }});
@@ -4999,7 +5077,10 @@ const Mare={
     const cv=$('#mareAgua'); if(!cv||!cv.getContext) return false;
     this.cv=cv; this.ctx=cv.getContext('2d');
     const medir=()=>{
-      const r=cv.getBoundingClientRect(), d=Math.min(window.devicePixelRatio||1,2);
+      /* Densidade 1x de propósito (v12.5): é água, borrada por natureza, e
+         em 2x o canvas tinha 4x os pixels — com a CPU 4x mais lenta era o que
+         derrubava a planilha de 60 para 52 fps. A olho, não muda nada. */
+      const r=cv.getBoundingClientRect(), d=1;
       if(!r.width) return;
       this.w=r.width; this.h=r.height; cv.width=Math.round(r.width*d); cv.height=Math.round(r.height*d);
       this.ctx.setTransform(d,0,0,d,0,0); this.desenhar();
@@ -5043,7 +5124,7 @@ const Mare={
     const y0=h*(1-this.nivel), amp=5+this.agito*11, t=this.t;
     const onda=(fase,vel,comp,a,dy)=>{
       c.beginPath(); c.moveTo(0,h);
-      for(let x=0;x<=w+6;x+=6){
+      for(let x=0;x<=w+8;x+=8){
         const k=x/w*Math.PI*2;
         c.lineTo(x,y0+dy+Math.sin(k*comp+t*vel+fase)*a+Math.sin(k*comp*2.3-t*vel*.7+fase)*a*.35);
       }
@@ -5069,7 +5150,13 @@ const Mare={
       const k=x/w*Math.PI*2, y=y0+Math.sin(k*1.25+t*1.15)*amp+Math.sin(k*1.25*2.3-t*1.15*.7)*amp*.35;
       x?c.lineTo(x,y):c.moveTo(x,y);
     }
-    c.strokeStyle='rgba(255,255,255,.6)'; c.lineWidth=1.3; c.shadowColor=`rgba(${cor},.9)`; c.shadowBlur=14; c.stroke(); c.shadowBlur=0;
+    /* (v12.5) O brilho era shadowBlur, o efeito mais caro do canvas: com a
+       CPU 4x mais lenta a planilha caía a 31 fps. Dois traços largos e
+       translúcidos por baixo do fio dão o mesmo halo por uma fração do custo. */
+    c.lineJoin='round';
+    c.strokeStyle=`rgba(${cor},.16)`; c.lineWidth=9; c.stroke();
+    c.strokeStyle=`rgba(${cor},.32)`; c.lineWidth=4; c.stroke();
+    c.strokeStyle='rgba(255,255,255,.65)'; c.lineWidth=1.3; c.stroke();
   }
 };
 
@@ -5118,7 +5205,7 @@ function renderPlanilha(c){
   L3.push({id:'#fim',nome:saldo<0?'Passou do limite':'Posso gastar',tipo:'fim',antes:saldo,depois:saldo,outros:0});
   n++;
   const pNovo={valor:0,pai:0,com:''};
-  linhas+=`<tr class="pl-novo"><td class="pl-n">${n}</td>
+  linhas+=`<tr class="pl-novo"><td class="pl-n"><span class="pl-mais" aria-label="linha ${n}">+</span></td>
     <td class="pl-desc"><input data-k="novo|nome" placeholder="escreva um gasto…" aria-label="Descrição do gasto novo" autocomplete="off" maxlength="60"></td>
     <td class="pl-num"><input data-k="novo|valor" placeholder="0,00" inputmode="decimal" autocomplete="off" aria-label="Valor do gasto novo"></td>
     <td class="pl-num pl-saldo"></td>
@@ -5161,6 +5248,13 @@ function renderPlanilha(c){
      diminuindo" do pedido, visto sem ler número nenhum. */
   const topo=sal+ext+c.entrou;
   renderPl3d(L3);
+  renderCompositor();
+  /* A marca dura 1,4 s e atravessa os redesenhos: salvar costuma redesenhar
+     duas vezes seguidas (o clique e o foco saindo), e a segunda apagava a luz. */
+  if(plNasceu&&Date.now()<plNasceu.ate){
+    const inp=tab.querySelector(`[data-k="${CSS.escape(plNasceu.id)}|valor"]`);
+    if(inp&&inp.closest('tr')) inp.closest('tr').classList.add('pl-nasceu');
+  }
   /* "Só eu" e "Cartão" são o caso comum e ficam apagados; o que foge disso
      (dividido, pai paga, sem cartão) acende — a linha diferente se acha no olho. */
   tab.querySelectorAll('td select').forEach(se=>se.classList.toggle('pl-padrao',se.selectedIndex<=0));
@@ -5212,6 +5306,96 @@ function plAtualizar(el){
 }
 /* Cria o gasto da linha vazia. Aceita também o jeito do campo rápido: tudo
    escrito no nome ("mercado 80", "tv 1200 12x", "uber 25 pix"). */
+/* ══════════════════ A LINHA DE ADICIONAR, viva (v12.4) ══════════════════
+   O pedido: "a parte de adicionar está básica — mais bonita, mais interativa".
+   Três coisas a tornam viva, e nenhuma muda COMO se lança (a célula continua
+   sendo campo, Enter continua salvando):
+
+   * **atalhos** embaixo da tabela, com o valor da última vez — um toque põe o
+     nome e o valor, e o foco cai no valor já selecionado;
+   * **a prévia**: enquanto se escreve, uma faixa diz a categoria que o app
+     entendeu e a sobra ANTES → DEPOIS, com o botão Salvar;
+   * **o degrau fantasma** no 3D: a escada mostra, tracejado, onde o gasto
+     vai cair, antes de ele existir.
+
+   A prévia usa as MESMAS regras do salvamento (lerRapido, lerVezes,
+   aplicarPagador num lançamento de mentira) — senão o número da prévia e o
+   da linha salva poderiam discordar. */
+function lerNovo(){
+  const tab=$('#plTab'); if(!tab) return null;
+  const g=k=>tab.querySelector(`[data-k="novo|${k}"]`);
+  if(!g('nome')) return null;
+  let nome=g('nome').value.trim(), valor=valorDe(g('valor').value);
+  if(!nome&&!(valor>0)) return null;
+  let meio=null;
+  const mp=meioDoTexto(nome); if(mp.meio==='avista'){ meio='avista'; nome=mp.nome; }
+  const mv=nome.match(/(?:^|\s)(\d{1,3}\s*\/\s*\d{1,3}|\d{1,3}\s?x)(?=\s|$)/i);
+  let vez=g('vezes').value;
+  if(mv){ if(!vez.trim()) vez=mv[1]; nome=(nome.slice(0,mv.index)+' '+nome.slice(mv.index+mv[0].length)).replace(/\s+/g,' ').trim(); }
+  if(!(valor>0)&&nome){ const r=lerRapido(nome); if(r&&!r.incompleto){ nome=r.nome; valor=r.valor; } }
+  const tmp={valor:valor||0,pai:0,com:''};
+  const q=g('quem').value; if(q&&q!=='eu'&&q!=='+') aplicarPagador(tmp,q);
+  const pg=nome?palpiteDoNome(nome):{cat:'outros'};
+  return {nome:nome?nome.charAt(0).toUpperCase()+nome.slice(1):'', valor:valor||0, meu:meuValor(tmp), outros:+tmp.pai||0,
+          cat:pg.cat, vz:lerVezes(vez), vez, meio:meio||(g('onde').value==='avista'?'avista':'cartao')};
+}
+function atualizarPrevia(){
+  const box=$('#plPrev'); const n=lerNovo();
+  /* o degrau fantasma */
+  if(pl3d&&pl3dBase){
+    if(n&&n.valor>0){
+      const fim=pl3dBase[pl3dBase.length-1], antes=fim.depois, depois=antes-n.meu;
+      pl3d.atualizar(pl3dBase.slice(0,-1).concat([
+        {id:'#previa',nome:n.nome||'Gasto novo',tipo:'previa',antes,depois,cor:catDe(n.cat).c,outros:n.outros,outrosCor:'var(--pai)'},
+        Object.assign({},fim,{antes:depois,depois,nome:depois<0?'Passou do limite':'Posso gastar'})]));
+    }else pl3d.atualizar(pl3dBase);
+  }
+  if(!box) return;
+  if(!n){ box.hidden=true; box.innerHTML=''; return; }
+  const c=calc(), antes=c.disponivel-c.gasto, depois=antes-n.meu, cat=catDe(n.cat);
+  const vz=n.vez.trim()&&!n.vz?'<span class="pv-erro">“'+esc(n.vez)+'” não é 12x, 3/12 nem fixo</span>'
+    :n.vz&&n.vz.tipo==='parc'?`<span class="pv-tag">${n.vz.pRest}x</span>`:n.vz&&n.vz.tipo!=='unico'?'<span class="pv-tag">todo mês</span>':'';
+  box.hidden=false;
+  box.innerHTML=`<span class="pv-cat" style="--c:${cat.c}">${icone(ICONE_CAT[n.cat]||'nota',15)}${esc(cat.n)}</span>
+    ${vz}${n.meio==='avista'?'<span class="pv-tag">sem cartão</span>':''}
+    ${n.valor>0
+      ?`<span class="pv-conta"><span>sobra</span><b>${brl(antes)}</b><i aria-hidden="true">→</i><b class="${depois<0?'neg':''}">${brl(depois)}</b>${n.outros>0?`<small>${brl(n.outros)} é de outra pessoa</small>`:''}</span>
+        <button type="button" class="btn mini pv-ok" id="plPrevOk">Salvar <kbd>↵</kbd></button>`
+      :'<span class="pv-falta">agora o valor</span>'}`;
+}
+function plSalvarNovo(){
+  const tab=$('#plTab');
+  const nm=tab.querySelector('[data-k="novo|nome"]');
+  if(!nm.value.trim()){ nm.focus(); return; }
+  const l=plCriar();
+  if(!l){ const v=tab.querySelector('[data-k="novo|valor"]'); v.focus(); toast('Falta o valor',true); return; }
+  plProx='novo|nome'; plAtualizar(); avisarCriado(l);
+}
+function renderCompositor(){
+  const el=$('#plComp'); if(!el) return;
+  if(!chipsAtuais.length&&typeof renderChips==='function') renderChips();
+  const lista=chipsAtuais.slice(0,8);
+  const html=lista.map(x=>{ const u=ultimoDoNome(x.nome);
+    return `<button type="button" class="pl-chip" data-plchip="${esc(x.nome)}" style="--c:${catDe(x.cat).c}">
+      <span class="pl-chip-ic">${icone(ICONE_CAT[x.cat]||'nota',14)}</span>${esc(x.nome)}${u?`<small>${esc(valorCurto(u.valor))}</small>`:''}</button>`; }).join('');
+  /* Só reescreve se mudou: trocar o botão que está sendo tocado é o defeito da v10.1. */
+  const novo=`<div class="pl-chips" role="list" aria-label="Atalhos para lançar">${html}</div><div class="pl-prev" id="plPrev" hidden aria-live="polite"></div>`;
+  if(el.dataset.h!==html){ el.dataset.h=html; el.innerHTML=novo; }
+  atualizarPrevia();
+}
+document.addEventListener('click',e=>{
+  if(e.target.closest('#plPrevOk')){ plSalvarNovo(); return; }
+  const b=e.target.closest('[data-plchip]'); if(!b) return;
+  const tab=$('#plTab'), nm=tab.querySelector('[data-k="novo|nome"]'), vl=tab.querySelector('[data-k="novo|valor"]');
+  if(!nm||!vl) return;
+  nm.value=b.dataset.plchip;
+  const u=ultimoDoNome(nm.value);
+  if(u&&!vl.value) vl.value=fmtCel(+u.valor);
+  b.classList.remove('pulou'); void b.offsetWidth; b.classList.add('pulou');
+  vl.focus(); try{ vl.select(); }catch(x){}
+  atualizarPrevia(); vibrar(8);
+});
+
 function plCriar(){
   const tab=$('#plTab');
   const g=k=>tab.querySelector(`[data-k="novo|${k}"]`);
@@ -5233,6 +5417,7 @@ function plCriar(){
   const q=g('quem').value;
   if(q&&q!=='eu'&&q!=='+') aplicarPagador(l,q);
   S.lanc.push(l);
+  plNasceu={id:String(l.id),ate:Date.now()+1400};   // todo caminho de criar passa aqui: Enter, Salvar, sair do valor
   if(l.meio==='cartao') cartaoForm=cartaoDe(l);
   // A linha nova volta a ficar vazia: o redesenho devolveria o que estava nela.
   tab.querySelectorAll('[data-k^="novo|"]').forEach(x=>{ if(x.tagName==='INPUT') x.value=''; });
@@ -5339,9 +5524,7 @@ function plMudarCelula(el){
     if(id==='novo'){
       const nm=tab.querySelector('[data-k="novo|nome"]');
       if(!nm.value.trim()){ nm.focus(); return; }
-      const l=plCriar();
-      if(!l){ const v=tab.querySelector('[data-k="novo|valor"]'); v.focus(); toast('Falta o valor',true); return; }
-      plProx='novo|nome'; plAtualizar(); avisarCriado(l);
+      plSalvarNovo();
       return;
     }
     /* Nas outras, desce para a mesma coluna da linha de baixo, como no Excel. */
@@ -5352,6 +5535,9 @@ function plMudarCelula(el){
     // Nada mudou na célula: não houve redesenho, e o foco desce daqui mesmo.
     if(plProx===alvo){ plProx=null; const x=alvo&&tab.querySelector(`[data-k="${CSS.escape(alvo)}"]`); if(x){ x.focus(); try{x.select();}catch(e){} } }
   });
+  /* A prévia acompanha cada tecla da linha nova (v12.4). */
+  tab.addEventListener('input',e=>{ if(e.target.dataset&&/^novo\|/.test(e.target.dataset.k||'')) atualizarPrevia(); });
+  tab.addEventListener('change',e=>{ if(e.target.dataset&&/^novo\|/.test(e.target.dataset.k||'')) atualizarPrevia(); });
   tab.addEventListener('click',e=>{
     const ed=e.target.closest('[data-pled]'); if(ed){ abrirEdicao(ed.dataset.pled); return; }
     const x=e.target.closest('[data-plx]'); if(!x) return;
@@ -5885,6 +6071,7 @@ function renderChips(){
   }
   /* O atalho mostra o valor da última vez (v10.22): é o número que vai entrar
      no campo ao tocar, e vê-lo antes evita a surpresa. */
+  chipsAtuais=its.slice();
   el.innerHTML=its.map(x=>{ const u=ultimoDoNome(x.nome);
     return `<button type="button" class="chip-s" data-chip="${esc(x.nome)}">
     <i style="background:${catDe(x.cat).c}"></i>${esc(x.nome)}${u?` <small>${esc(valorCurto(u.valor))}</small>`:''}</button>`; }).join('');

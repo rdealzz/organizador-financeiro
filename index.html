@@ -270,6 +270,8 @@ html[data-tema="escuro"] #splash{background:#000}
   </section>
   <section class="pl-folha">
     <div class="pl-rola"><table class="pl" id="plTab"></table></div>
+    <!-- A linha de adicionar, viva (v12.4): atalhos e a prévia do que vai entrar. -->
+    <div class="pl-comp" id="plComp"></div>
   </section>
   <p class="pl-dica" id="plDica"></p>
   <!-- Quanto cada pessoa que divide gasto ainda me deve, com o extrato. -->
@@ -330,6 +332,12 @@ html[data-tema="escuro"] #splash{background:#000}
      gasto abre a folha de edição, que é onde se muda ou se apaga. -->
 <div class="area" id="a-gastos" hidden>
   <section class="hero g-resumo" id="gResumo"></section>
+  <section class="pl3d m3d" id="gastos3dBox" hidden>
+    <div class="pl3d-topo"><b>Seus cartões em 3D</b><span class="pl3d-dica">arraste para girar · toque numa coluna</span></div>
+    <canvas class="pl3d-tela" id="gastos3dTela" role="img" aria-label="Gastos do mês em 3D: uma coluna para cada cartão e para o que foi pago fora do cartão, com fixos, parcelados e gastos do mês em fileiras. Os mesmos números estão na lista abaixo."></canvas>
+    <div class="pl3d-leg" id="gastos3dLeg"><span><i class="pl3d-q" style="background:var(--azul)"></i>Fixos</span><span><i class="pl3d-q" style="background:var(--pes2)"></i>Parcelados</span><span><i class="pl3d-q" style="background:var(--pes3)"></i>Do mês</span></div>
+    <p class="pl3d-diz" id="gastos3dDiz" aria-live="polite"></p>
+  </section>
   <section class="bloco" id="blocoLista">
     <div class="bloco-topo"><h2>Gastos do mês</h2>
       <button class="link so-completo" id="verTabela">ver em tabela</button></div>
@@ -604,6 +612,12 @@ html[data-tema="escuro"] #splash{background:#000}
   <section class="bloco" id="t-hist" hidden>
     <h2>Faturas arquivadas</h2>
     <p class="ajuda">Toda vez que chega o dia do fechamento, a fatura do mês é arquivada inteira aqui. O que era parcelado continua na fatura seguinte com uma parcela a menos; o que era de uma vez só sai.</p>
+  <section class="pl3d m3d" id="hist3dBox" hidden>
+    <div class="pl3d-topo"><b>Seus meses em 3D</b><span class="pl3d-dica">cada coluna é uma fatura · cada fileira, uma categoria</span></div>
+    <canvas class="pl3d-tela" id="hist3dTela" role="img" aria-label="As últimas faturas em 3D: uma coluna por mês e uma fileira por categoria, com a altura do quanto foi seu. Os mesmos números estão na tabela abaixo."></canvas>
+    <div class="pl3d-leg" id="hist3dLeg"></div>
+    <p class="pl3d-diz" id="hist3dDiz" aria-live="polite"></p>
+  </section>
     <div id="listaCiclos"></div>
     <div style="margin:16px 0"><button class="btn sec" id="fecharAgora">Fechar a fatura agora</button></div>
     <div id="detalheCiclo"></div>

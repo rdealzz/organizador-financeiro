@@ -67,6 +67,19 @@ function rgbDe(expr){
   const m=s.match(/(\d+(?:\.\d+)?)/g);
   return m?[+m[0],+m[1],+m[2]]:[120,120,120];
 }
+/* Está na tela? (v12.5) Perguntar `checkVisibility()` a cada quadro força o
+   navegador a recalcular estilo — medido: com a CPU 4x mais lenta, a planilha
+   caía para 31 fps. O IntersectionObserver avisa só quando MUDA. */
+function vigia(el){
+  const v={na:true};
+  if('IntersectionObserver' in window){ v.na=false;
+    v.io=new IntersectionObserver(es=>{ v.na=es[es.length-1].isIntersecting; }); v.io.observe(el); }
+  return v;
+}
+/* O balanço assenta: forte no começo, some em ~9 s. Uma cena parada não é
+   redesenhada — só quando algo muda —, e isso é bateria e quadro livre para
+   o resto da tela. */
+const balanco=t=>Math.max(0,1-t/9);
 const sombra=(c,f)=>`rgb(${Math.round(c[0]*f)},${Math.round(c[1]*f)},${Math.round(c[2]*f)})`;
 const comAlfa=(c,a)=>`rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
@@ -77,7 +90,7 @@ function montar(canvas, barras, opcoes){
   if(!ctx) return null;
   const op=opcoes||{};
   const quieto=menosMovimento();
-  const dpr=Math.min(window.devicePixelRatio||1, 2);
+  const dpr=Math.min(window.devicePixelRatio||1, 1.5);   // 1.5: texto nítido, metade dos pixels de 2x (v12.5)
 
   let L=1,A=1, giro=-0.55, giroVel=0, inclina=CONFIG.inclinacao;
   let arrastando=false, arrastou=false, x0=0, giro0=0, ultimo=0, vivo=true;
@@ -366,13 +379,14 @@ function escada(canvas, linhas, opcoes){
   if(!ctx) return null;
   const op=opcoes||{};
   const quieto=menosMovimento();
-  const dpr=Math.min(window.devicePixelRatio||1, 2);
+  const dpr=Math.min(window.devicePixelRatio||1, 1.5);   // 1.5: texto nítido, metade dos pixels de 2x (v12.5)
   const brl=op.brl||(v=>v.toFixed(2));
   let BASE=-0.36;
   const C={inclinacao:-22*GRAUS, distancia:9, fov:3.1, passoX:1, largura:0.66, fundoZ:1.05, alturaMax:3.2};
 
-  let L=1,A=1, giro=BASE, giroVel=0, mexeu=false, t0=0;
+  let L=1,A=1, giro=BASE, giroVel=0, mexeu=false, t0=0, sujo=true;
   let arrastando=false, arrastou=false, x0=0, giro0=0, ultimo=0, vivo=true;
+  const ve=vigia(canvas);
   let lin=[], atual=new Map(), alvoMax=1, maxAtual=1;
   let selecionada=null, sobre=null;
   let cor={};
@@ -396,7 +410,7 @@ function escada(canvas, linhas, opcoes){
     for(const k of [...atual.keys()]) if(!vivos.has(k)) atual.delete(k);
     if(selecionada) selecionada=lin.find(l=>l.id===selecionada.id)||null;
     if(maxAtual<=1) maxAtual=alvoMax;
-    lerCores();
+    lerCores(); sujo=true;
   }
   function medir(){
     const r=canvas.getBoundingClientRect();
@@ -407,6 +421,7 @@ function escada(canvas, linhas, opcoes){
        ela ocupava uma faixa inclinada e deixava os dois cantos vazios. */
     BASE=(A/L>0.6)?-0.17:-0.36;
     if(!mexeu) giro=BASE;
+    sujo=true;
   }
 
   let escala=1, cx=0, cy=0;
@@ -480,6 +495,15 @@ function escada(canvas, linhas, opcoes){
         if(chave==='tampa'||chave==='fim'||(!cap&&chave==='pilar')||(chave==='pilar'&&!(cap&&cap[1]>cap[0]))) l._topo={x:(p[4].x+p[6].x)/2,y:Math.min(p[4].y,p[5].y,p[6].y,p[7].y)};
       };
       const realce=foco?'rgba(255,255,255,.95)':null;
+      /* A prévia do gasto que está sendo digitado: o degrau em vidro, com
+         contorno tracejado — ainda não é dinheiro que saiu. */
+      if(l.tipo==='previa'){
+        const pul=quieto?.55:.42+.18*Math.sin(t0*4);
+        bloco(pil[0],pil[1],cor.azul,.18,0,w,null,'pilar');
+        if(cap[1]>cap[0]){ const n0=polis.length; bloco(cap[0],cap[1],l._rgb||cor.azul,pul,0,w,comAlfa(cor.txt,.85),'tampa');
+          for(let q=n0;q<polis.length;q++) polis[q].tracejado=true; }
+        return;
+      }
       if(l.tipo==='fim'){
         const c=v.d<0?cor.verm:cor.verde;
         bloco(pil[0],pil[1],c,1,0,w*1.08,realce||comAlfa(c,1),'fim');
@@ -496,7 +520,8 @@ function escada(canvas, linhas, opcoes){
       ctx.beginPath(); ctx.moveTo(q.pts[0].x,q.pts[0].y);
       for(let i=1;i<4;i++) ctx.lineTo(q.pts[i].x,q.pts[i].y);
       ctx.closePath(); ctx.fillStyle=q.cor; ctx.fill();
-      if(q.borda){ ctx.globalAlpha=Math.max(q.alfa,.8); ctx.strokeStyle=q.borda; ctx.lineWidth=q.topo?1.5:1; ctx.stroke(); }
+      if(q.borda){ ctx.globalAlpha=Math.max(q.alfa,.8); ctx.strokeStyle=q.borda; ctx.lineWidth=q.topo?1.5:1;
+        if(q.tracejado) ctx.setLineDash([4,3]); ctx.stroke(); if(q.tracejado) ctx.setLineDash([]); }
       ctx.globalAlpha=1;
     });
     rotulos();
@@ -541,10 +566,12 @@ function escada(canvas, linhas, opcoes){
      e o resto aparece ao tocar ou passar o mouse. */
   function rotulos(){
     const fim=lin.find(l=>l.tipo==='fim');
-    const alvo=sobre||selecionada;
+    const previa=lin.find(l=>l.tipo==='previa');
+    const alvo=sobre||selecionada||previa;
     if(fim&&fim._topo&&!alvo) etiqueta(brl(fim.depois),fim.nome,fim._topo,true);
     if(alvo&&alvo._topo){
-      const sub=alvo.tipo==='fim'?'é o que dá para gastar'
+      const sub=alvo.tipo==='previa'?'prévia · a sobra iria para '+brl(alvo.depois)
+        :alvo.tipo==='fim'?'é o que dá para gastar'
         :alvo.tipo==='renda'?'entrou · sobra '+brl(alvo.depois)
         :'−'+brl(alvo.antes-alvo.depois)+' · sobra '+brl(alvo.depois)+(alvo.outros>0?' · outros pagam '+brl(alvo.outros):'');
       etiqueta(alvo.tipo==='fim'?brl(alvo.depois):alvo.nome, sub, alvo._topo, true);
@@ -553,20 +580,25 @@ function escada(canvas, linhas, opcoes){
 
   function quadro(t){
     if(!vivo) return;
-    if(document.hidden||L<2||A<2||!canvas.isConnected||!canvas.checkVisibility||!canvas.checkVisibility()){
+    if(document.hidden||!ve.na||L<2||A<2||!canvas.isConnected){
       ultimo=t; requestAnimationFrame(quadro); return;
     }
     const dt=Math.min((t-(ultimo||t))/1000,0.05); ultimo=t; t0+=dt;
     /* Os números andam até o alvo: o degrau desce na frente da pessoa. */
     const k=quieto?1:Math.min(1,dt*6);
+    let andou=Math.abs(alvoMax-maxAtual)>1e-3;
     maxAtual+=(alvoMax-maxAtual)*k;
     lin.forEach(l=>{ const v=atual.get(l.id); if(!v) return;
+      if(Math.abs(l.antes-v.a)+Math.abs(l.depois-v.d)+Math.abs((l.outros||0)-v.o)>1e-3) andou=true;
       v.a+=(l.antes-v.a)*k; v.d+=(l.depois-v.d)*k; v.o+=((l.outros||0)-v.o)*k; });
     if(!arrastando){
-      giro+=giroVel*dt; giroVel*=Math.pow(0.02,dt);
-      if(!quieto&&!mexeu) giro=BASE+Math.sin(t0*0.32)*0.13;    // só balança: não dá a volta
+      if(Math.abs(giroVel)>1e-3){ giro+=giroVel*dt; giroVel*=Math.pow(0.02,dt); andou=true; }
+      const b=balanco(t0);
+      if(!quieto&&!mexeu&&b>0){ giro=BASE+Math.sin(t0*0.32)*0.13*b; andou=true; }   // só balança, e assenta
     }
-    desenhar();
+    /* a prévia pulsa: enquanto ela existe, a cena está viva */
+    if(lin.some(l=>l.tipo==='previa')&&!quieto) andou=true;
+    if(andou||sujo||arrastando){ desenhar(); sujo=false; }
     requestAnimationFrame(quadro);
   }
 
@@ -591,7 +623,7 @@ function escada(canvas, linhas, opcoes){
   });
   canvas.addEventListener('pointermove',ev=>{
     if(!arrastando){
-      if(ev.pointerType==='mouse'){ const s=achar(onde(ev)); if(s!==sobre){ sobre=s; canvas.style.cursor=s?'pointer':'grab'; } }
+      if(ev.pointerType==='mouse'){ const s=achar(onde(ev)); if(s!==sobre){ sobre=s; sujo=true; canvas.style.cursor=s?'pointer':'grab'; } }
       return;
     }
     const d=ev.clientX-x0;
@@ -599,12 +631,12 @@ function escada(canvas, linhas, opcoes){
     const novo=Math.max(-1.25,Math.min(0.55,giro0+d*0.006));
     giroVel=(novo-giro)*12; giro=novo;
   });
-  canvas.addEventListener('pointerleave',()=>{ sobre=null; });
+  canvas.addEventListener('pointerleave',()=>{ sobre=null; sujo=true; });
   canvas.addEventListener('pointerup',ev=>{
     if(!arrastando) return; arrastando=false;
     if(!arrastou){
       const s=achar(onde(ev));
-      selecionada=(s===selecionada)?null:s;
+      selecionada=(s===selecionada)?null:s; sujo=true;
       if(op.aoSelecionar) op.aoSelecionar(selecionada);
     }
   });
@@ -616,12 +648,233 @@ function escada(canvas, linhas, opcoes){
   requestAnimationFrame(quadro);
   return {
     atualizar:definir,
-    encerrar(){ vivo=false; if(ro) ro.disconnect(); else window.removeEventListener('resize',medir); },
-    repintar(){ lerCores(); },
-    selecionar(id){ selecionada=lin.find(l=>l.id===id)||null; },
+    encerrar(){ vivo=false; if(ve.io) ve.io.disconnect(); if(ro) ro.disconnect(); else window.removeEventListener('resize',medir); },
+    repintar(){ lerCores(); sujo=true; },
+    selecionar(id){ selecionada=lin.find(l=>l.id===id)||null; sujo=true; },
     centralizar(){ mexeu=false; giroVel=0; }
   };
 }
 
-window.Viz3D={montar, escada};
+/* ══════════════════ MATRIZ 3D (v12.4) ══════════════════
+
+   Uma grade de colunas para as telas que cruzam DUAS coisas:
+
+   * Meses anteriores — mês (da esquerda, o mais antigo, para a direita) ×
+     categoria (fileiras). Uma "cidade": dá para ver numa olhada em que mês e
+     em que categoria o dinheiro foi, o que nenhuma lista de faturas mostra;
+   * Gastos por cartão — cartão × tipo (fixo, parcelado, do mês).
+
+   dados = {colunas:[{nome}], fileiras:[{nome}], celulas:[{c,f,valor,cor,nome,sub}]}
+   A primeira fileira fica na FRENTE.
+
+   Mesmo motor e mesmas regras da escada: só balança, arrasto com limite, as
+   colunas crescem do chão ao montar e andam até o valor novo ao atualizar, e
+   nada é desenhado com a cena fora da tela. */
+function matriz(canvas, dados, opcoes){
+  const ctx=canvas.getContext('2d');
+  if(!ctx) return null;
+  const op=opcoes||{};
+  const quieto=menosMovimento();
+  const dpr=Math.min(window.devicePixelRatio||1, 1.5);   // 1.5: texto nítido, metade dos pixels de 2x (v12.5)
+  const C={inclinacao:-24*GRAUS, distancia:9, fov:3.1, passoX:1.15, passoZ:1.05, largura:0.62};
+  let BASE=-0.42;
+  let L=1,A=1, giro=BASE, giroVel=0, mexeu=false, t0=0;
+  let arrastando=false, arrastou=false, x0=0, giro0=0, ultimo=0, vivo=true;
+  let D={colunas:[],fileiras:[],celulas:[]}, maxAlvo=1, maxAtual=1, atual=new Map();
+  let selecionada=null, sobre=null, cor={};
+  const ve=vigia(canvas);
+
+  function lerCores(){
+    cor={txt:rgbDe('var(--txt)'), txt2:rgbDe('var(--txt-2)'), sep:rgbDe('var(--sep)'), card:rgbDe('var(--card)'), azul:rgbDe('var(--azul)')};
+    D.celulas.forEach(c=>{ c._rgb=rgbDe(c.cor||'var(--azul)'); });
+  }
+  const chave=c=>c.c+'|'+c.f;
+  function definir(novo){
+    D={colunas:(novo.colunas||[]).slice(), fileiras:(novo.fileiras||[]).slice(),
+       celulas:(novo.celulas||[]).map(c=>Object.assign({},c))};
+    maxAlvo=D.celulas.reduce((m,c)=>Math.max(m,c.valor||0),0)||1;
+    const vivos=new Set();
+    D.celulas.forEach(c=>{ const k=chave(c); vivos.add(k); if(!atual.has(k)) atual.set(k, quieto?c.valor:0); });
+    for(const k of [...atual.keys()]) if(!vivos.has(k)) atual.delete(k);
+    if(selecionada) selecionada=D.celulas.find(c=>chave(c)===chave(selecionada))||null;
+    if(maxAtual<=1) maxAtual=maxAlvo;
+    lerCores();
+  }
+  function medir(){
+    const r=canvas.getBoundingClientRect();
+    L=Math.max(1,r.width); A=Math.max(1,r.height);
+    canvas.width=Math.round(L*dpr); canvas.height=Math.round(A*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    BASE=(A/L>0.6)?-0.24:-0.42;
+    if(!mexeu) giro=BASE;
+  }
+  let escala=1, cx=0, cy=0;
+  function bruta(x,y,z){
+    const cs=Math.cos(giro), sn=Math.sin(giro);
+    const X=x*cs - z*sn, Z=x*sn + z*cs;
+    const ci=Math.cos(C.inclinacao), si=Math.sin(C.inclinacao);
+    const Y2=y*ci - Z*si, Z2=y*si + Z*ci;
+    const prof=Z2+C.distancia, f=C.fov/Math.max(prof,0.1);
+    return {x:X*f, y:-Y2*f, prof};
+  }
+  const proj=(x,y,z)=>{ const p=bruta(x,y,z); return {x:cx+p.x*escala, y:cy+p.y*escala, prof:p.prof}; };
+  const nC=()=>Math.max(D.colunas.length,1), nF=()=>Math.max(D.fileiras.length,1);
+  const xDe=i=>(i-(nC()-1)/2)*C.passoX, zDe=j=>(j-(nF()-1)/2)*C.passoZ;
+  /* Altura proporcional ao tamanho da grade e à proporção da caixa, como na
+     escada: grade larga com altura fixa vira um tapete. */
+  const alturaMax=()=>Math.max(2.4, Math.max(nC()*C.passoX, nF()*C.passoZ)*0.62*Math.min(Math.max((A/L)/0.4,1),1.5));
+  const H=v=>Math.max(v,0)/maxAtual*alturaMax();
+
+  function enquadrar(){
+    const pts=[], mx=nC()/2*C.passoX, mz=nF()/2*C.passoZ;
+    for(const x of [-mx,mx]) for(const z of [-mz,mz]) pts.push(bruta(x,0,z));
+    D.celulas.forEach(c=>{ const h=H(atual.get(chave(c))||0), x=xDe(c.c), z=zDe(c.f), w=C.largura/2;
+      for(const dx of [-w,w]) for(const dz of [-w,w]) pts.push(bruta(x+dx,h,z+dz)); });
+    let a=1e9,b=-1e9,c=1e9,d=-1e9;
+    pts.forEach(p=>{ if(p.x<a)a=p.x; if(p.x>b)b=p.x; if(p.y<c)c=p.y; if(p.y>d)d=p.y; });
+    const padX=16, padTop=48, padBase=34;     // embaixo, os nomes das colunas
+    escala=Math.min((L-padX*2)/Math.max(b-a,.001),(A-padTop-padBase)/Math.max(d-c,.001));
+    cx=L/2-((a+b)/2)*escala;
+    cy=padTop+(A-padTop-padBase)/2-((c+d)/2)*escala;
+  }
+  const FACES=[[4,5,6,7],[0,1,5,4],[1,2,6,5],[2,3,7,6],[3,0,4,7]];
+  const BRILHO=[1.16,0.80,0.95,0.64,0.86];
+
+  function desenhar(){
+    ctx.clearRect(0,0,L,A);
+    enquadrar();
+    // o chão é uma grade de verdade: uma casa por cruzamento
+    const mx=nC()/2*C.passoX, mz=nF()/2*C.passoZ;
+    ctx.strokeStyle=comAlfa(cor.sep,.95); ctx.lineWidth=1;
+    for(let i=0;i<=nC();i++){ const x=-mx+i*C.passoX, p=proj(x,0,-mz), q=proj(x,0,mz); ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke(); }
+    for(let j=0;j<=nF();j++){ const z=-mz+j*C.passoZ, p=proj(-mx,0,z), q=proj(mx,0,z); ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke(); }
+    const polis=[], w=C.largura/2;
+    D.celulas.forEach(c=>{
+      const h=H(atual.get(chave(c))||0); c._faces=null; c._topo=null;
+      if(h<0.004) return;
+      const x=xDe(c.c), z=zDe(c.f), foco=(c===selecionada||c===sobre);
+      const p=[];
+      [[-w,0,-w],[w,0,-w],[w,0,w],[-w,0,w],[-w,h,-w],[w,h,-w],[w,h,w],[-w,h,w]].forEach(([dx,y,dz])=>p.push(proj(x+dx,y,z+dz)));
+      FACES.forEach((f,j)=>{
+        const m=(p[f[0]].prof+p[f[1]].prof+p[f[2]].prof+p[f[3]].prof)/4;
+        polis.push({pts:f.map(k=>p[k]),prof:m,cor:sombra(c._rgb,BRILHO[j]),borda:foco?'rgba(255,255,255,.95)':null,topo:j===0,
+          alfa:(selecionada&&!foco)?.45:1});
+      });
+      c._faces=FACES.map(f=>f.map(k=>p[k]));
+      c._topo={x:(p[4].x+p[6].x)/2, y:Math.min(p[4].y,p[5].y,p[6].y,p[7].y)};
+      c._prof=(p[4].prof+p[6].prof)/2;
+    });
+    polis.sort((a,b)=>b.prof-a.prof);
+    polis.forEach(q=>{
+      ctx.globalAlpha=q.alfa;
+      ctx.beginPath(); ctx.moveTo(q.pts[0].x,q.pts[0].y);
+      for(let i=1;i<4;i++) ctx.lineTo(q.pts[i].x,q.pts[i].y);
+      ctx.closePath(); ctx.fillStyle=q.cor; ctx.fill();
+      if(q.borda){ ctx.strokeStyle=q.borda; ctx.lineWidth=q.topo?1.6:1; ctx.stroke(); }
+    });
+    ctx.globalAlpha=1;
+    rotulos(mx,mz);
+  }
+
+  /* Nomes das colunas na borda da frente, das fileiras na lateral. Quando não
+     cabem todos, escreve-se um sim, um não: nome sobreposto é pior que nome
+     faltando, e o toque mostra o resto. */
+  function rotulos(mx,mz){
+    /* Cada nome só é escrito se não encostar no último que foi escrito — a
+       conta é feita com a caixa REAL do texto na tela, não com um palpite de
+       espaçamento. Nome sobreposto é pior que nome faltando, e o toque mostra
+       o resto. A última coluna (o mês mais novo) é escrita primeiro: é ela
+       que importa. */
+    ctx.font='600 11px system-ui,-apple-system,sans-serif';
+    ctx.textBaseline='top'; ctx.textAlign='center';
+    ctx.fillStyle=comAlfa(cor.txt2,1);
+    const feitas=[];
+    const cabe=(x0,x1,y0,y1)=>!feitas.some(r=>x0<r[1]+6&&x1>r[0]-6&&y0<r[3]+2&&y1>r[2]-2);
+    for(let i=D.colunas.length-1;i>=0;i--){
+      const t=D.colunas[i].nome, p=proj(xDe(i),0,-mz-0.32), w=ctx.measureText(t).width;
+      const x=Math.max(w/2+2,Math.min(L-w/2-2,p.x)), y=Math.min(A-14,p.y+2);
+      if(!cabe(x-w/2,x+w/2,y,y+13)) continue;
+      feitas.push([x-w/2,x+w/2,y,y+13]); ctx.fillText(t,x,y);
+    }
+    ctx.textBaseline='middle';
+    for(let j=D.fileiras.length-1;j>=0;j--){
+      const t=D.fileiras[j].nome, p=proj(mx+0.25,0,zDe(j)), w=ctx.measureText(t).width;
+      const dir=p.x+w+6>L, x0=dir?L-6-w:p.x+4;
+      if(!cabe(x0,x0+w,p.y-7,p.y+7)) continue;
+      feitas.push([x0,x0+w,p.y-7,p.y+7]);
+      ctx.textAlign='left'; ctx.fillStyle=comAlfa(cor.txt2,.9); ctx.fillText(t,x0,p.y);
+    }
+    const alvo=sobre||selecionada;
+    if(alvo&&alvo._topo) etiqueta(alvo.nome, alvo.sub, alvo._topo);
+  }
+  function etiqueta(txt,sub,p){
+    ctx.font='700 13px system-ui,-apple-system,sans-serif';
+    const w1=ctx.measureText(txt).width;
+    ctx.font='500 11px system-ui,-apple-system,sans-serif';
+    const w2=sub?ctx.measureText(sub).width:0;
+    const w=Math.max(w1,w2)+18, h=sub?38:24;
+    const x=Math.max(4,Math.min(L-w-4,p.x-w/2)), y=Math.max(2,p.y-h-10);
+    ctx.fillStyle=comAlfa(cor.card,.95); ctx.strokeStyle=comAlfa(cor.sep,1); ctx.lineWidth=1;
+    ctx.beginPath(); if(ctx.roundRect) ctx.roundRect(x,y,w,h,9); else ctx.rect(x,y,w,h); ctx.fill(); ctx.stroke();
+    ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.font='700 13px system-ui,-apple-system,sans-serif'; ctx.fillStyle=comAlfa(cor.txt,1); ctx.fillText(txt,x+9,y+6);
+    if(sub){ ctx.font='500 11px system-ui,-apple-system,sans-serif'; ctx.fillStyle=comAlfa(cor.txt2,1); ctx.fillText(sub,x+9,y+22); }
+  }
+
+  /* Parado é parado: depois que as colunas assentam e com o movimento
+     reduzido ligado, a cena não é redesenhada a cada quadro — só quando algo
+     muda. Com o balanço ligado ela desenha, mas só enquanto está na tela. */
+  let sujo=true;
+  function quadro(t){
+    if(!vivo) return;
+    if(document.hidden||!ve.na||L<2||A<2||!canvas.isConnected){
+      ultimo=t; requestAnimationFrame(quadro); return;
+    }
+    const dt=Math.min((t-(ultimo||t))/1000,0.05); ultimo=t; t0+=dt;
+    const k=quieto?1:Math.min(1,dt*5);
+    let andou=Math.abs(maxAlvo-maxAtual)>1e-3;
+    maxAtual+=(maxAlvo-maxAtual)*k;
+    D.celulas.forEach(c=>{ const kk=chave(c), v=atual.get(kk)||0; if(Math.abs(c.valor-v)>1e-3) andou=true; atual.set(kk, v+(c.valor-v)*k); });
+    if(!arrastando){
+      if(Math.abs(giroVel)>1e-3){ giro+=giroVel*dt; giroVel*=Math.pow(0.02,dt); andou=true; }
+      const b=balanco(t0);
+      if(!quieto&&!mexeu&&b>0){ giro=BASE+Math.sin(t0*0.3)*0.12*b; andou=true; }
+    }
+    if(andou||sujo||arrastando){ desenhar(); sujo=false; }
+    requestAnimationFrame(quadro);
+  }
+  function onde(ev){ const r=canvas.getBoundingClientRect(); return {x:ev.clientX-r.left, y:ev.clientY-r.top}; }
+  function dentro(pt,poli){ let d=false;
+    for(let i=0,j=poli.length-1;i<poli.length;j=i++){ const a=poli[i], b=poli[j];
+      if(((a.y>pt.y)!==(b.y>pt.y)) && (pt.x<(b.x-a.x)*(pt.y-a.y)/((b.y-a.y)||1e-9)+a.x)) d=!d; }
+    return d; }
+  function achar(pt){
+    const ord=D.celulas.filter(c=>c._faces).sort((a,b)=>a._prof-b._prof);
+    for(const c of ord) if(c._faces.some(f=>dentro(pt,f))) return c;
+    return null;
+  }
+  canvas.addEventListener('pointerdown',ev=>{ arrastando=true; arrastou=false; x0=ev.clientX; giro0=giro; giroVel=0;
+    canvas.setPointerCapture&&canvas.setPointerCapture(ev.pointerId); });
+  canvas.addEventListener('pointermove',ev=>{
+    if(!arrastando){ if(ev.pointerType==='mouse'){ const s=achar(onde(ev)); if(s!==sobre){ sobre=s; sujo=true; canvas.style.cursor=s?'pointer':'grab'; } } return; }
+    const d=ev.clientX-x0; if(Math.abs(d)>4){ arrastou=true; mexeu=true; }
+    const novo=Math.max(-1.3,Math.min(0.5,giro0+d*0.006)); giroVel=(novo-giro)*12; giro=novo;
+  });
+  canvas.addEventListener('pointerleave',()=>{ if(sobre){ sobre=null; sujo=true; } });
+  canvas.addEventListener('pointerup',ev=>{ if(!arrastando) return; arrastando=false;
+    if(!arrastou){ const s=achar(onde(ev)); selecionada=(s===selecionada)?null:s; sujo=true; if(op.aoSelecionar) op.aoSelecionar(selecionada); } });
+  canvas.addEventListener('pointercancel',()=>{ arrastando=false; });
+
+  definir(dados); medir();
+  const ro=('ResizeObserver' in window)?new ResizeObserver(()=>{ medir(); sujo=true; }):null;
+  if(ro) ro.observe(canvas);
+  requestAnimationFrame(quadro);
+  return {
+    atualizar(n){ definir(n); sujo=true; },
+    encerrar(){ vivo=false; if(ve.io) ve.io.disconnect(); if(ro) ro.disconnect(); },
+    repintar(){ lerCores(); sujo=true; }
+  };
+}
+
+window.Viz3D={montar, escada, matriz};
 })();

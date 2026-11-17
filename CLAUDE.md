@@ -2486,3 +2486,65 @@ O cartão usa a cor do TEMA, não o escuro fixo da maré: o desenho lê `--txt`,
 `--sep` e `--azul`, que foram escolhidos para o fundo do tema. Com a esfera
 ligada ele é opaco por tema, como a `.cal`. *esconder* fica guardado no
 aparelho (`sobra:pl3d`) e desmonta a cena — nada roda escondido.
+
+## 3D em mais telas, a linha de adicionar viva e os 60 fps (v12.4–v12.5)
+
+### Matrizes 3D (`Viz3D.matriz`)
+
+Um motor de grade para as telas que cruzam DUAS coisas — a regra de sempre:
+duas dimensões de dado justificam a terceira de tela.
+
+* **Meses anteriores** (`renderHist3D`): mês × categoria. As 4 categorias
+  mais pesadas e "Outras"; **as maiores ficam atrás**, senão a torre alta da
+  frente esconde as baixas. Tocar numa coluna dá o caminho *abrir esta
+  fatura* (`histSel`).
+* **Gastos por cartão** (`renderGastos3D`): cartão (e Sem cartão) × tipo
+  (fixos, parcelados, do mês), com o valor CHEIO — o que vem na fatura, como
+  a lista embaixo.
+
+Menos de duas colunas com valor não é gráfico: o cartão some (`hidden`).
+Montadas uma vez, depois `atualizar()`; o tema remonta. Os nomes das colunas
+e fileiras só são escritos se a caixa REAL do texto não encosta na anterior —
+o espaçamento chutado sobrepunha "Casa e contas" e "Mercado" e engolia "Itaú".
+
+### A linha de adicionar (pedido: "está básica")
+
+`renderCompositor()` monta embaixo da tabela os **atalhos** (com ícone e o
+valor da última vez — um toque põe nome e valor e o foco cai no valor) e a
+**prévia** (`atualizarPrevia`): a categoria que o app entendeu e a sobra
+ANTES → DEPOIS, com *Salvar*. A escada 3D ganha um **degrau fantasma**
+tracejado (`tipo:'previa'`) enquanto se digita.
+
+* **A prévia usa as regras do salvamento** (`lerNovo()` passa por
+  `meioDoTexto`, `lerRapido`, `lerVezes` e `aplicarPagador` num lançamento de
+  mentira). Uma conta separada poderia discordar da linha salva.
+* **A linha recém-criada acende** (`tr.pl-nasceu`). A marca é posta em
+  `plCriar()`, não no botão: sair do campo de valor já cria o gasto (v11), e o
+  clique em *Salvar* chegava depois, num botão que o redesenho já tinha
+  trocado. E ela vale por 1,4 s (`plNasceu.ate`) e atravessa os redesenhos —
+  salvar redesenha duas vezes seguidas, e a segunda apagava a luz.
+* `chipsAtuais` é `var`, não `let`: `renderChips` pode rodar antes da linha
+  na partida (a armadilha de zona morta de sempre).
+
+### 60 fps — medido, não suposto
+
+`testes/mede-fps.js` mede cada tela com animação como celular (390px, 2x),
+com a CPU normal e 4x mais lenta. Não é passa/falha: é para comparar antes e
+depois. Na CPU normal tudo fica em 60. Na 4x, antes desta versão, a planilha
+caía a **31 fps** e Meses anteriores a 50. Três causas, medidas uma a uma:
+
+1. **`shadowBlur` no brilho da água** — o efeito mais caro do canvas. Virou
+   dois traços largos e translúcidos.
+2. **A água em densidade 2x.** É borrada por natureza; em 1x tem 1/4 dos
+   pixels e a olho não muda. As cenas 3D ficaram em 1,5x (texto nítido).
+3. **`checkVisibility()` a cada quadro** força recálculo de estilo. As cenas
+   usam `IntersectionObserver` (`vigia()`), que avisa só quando muda.
+
+E **o balanço das cenas 3D assenta** em ~9 s (`balanco()`); parada, a cena só
+redesenha quando algo muda (`sujo`). Depois: na CPU 4x, Gastos, Meses e Mais
+em 60; a planilha em ~52 nos primeiros segundos e 59,7 depois que assenta;
+rolando, ~50.
+
+**A regra que fica:** animação nova entra com uma medição do `mede-fps.js`
+na CPU 4x. Sem `shadowBlur` em quadro animado, sem pergunta de layout por
+quadro, e cena parada não redesenha.

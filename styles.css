@@ -3742,3 +3742,71 @@ body:not(.fundo-vivo)::before{content:''; position:fixed; inset:0; z-index:-1; p
 /* a linha tocada no 3D acende na tabela */
 .pl tbody tr.pl-realce td{background-color:color-mix(in srgb, var(--azul) 12%, var(--card)) !important}
 .pl tbody tr.pl-realce .pl-n{color:var(--azul-txt); font-weight:700}
+
+/* as matrizes 3D (v12.4) vestem o mesmo cartão da planilha em 3D */
+.m3d{margin:0 0 16px}
+.m3d .pl3d-tela{height:300px}
+@media (min-width:900px){ .m3d .pl3d-tela{height:340px} }
+#t-hist .m3d{margin-top:4px}
+
+
+/* ══════════════════ A linha de adicionar, viva (v12.4) ══════════════════ */
+/* a linha nova é um campo convidando: fio de luz azul à esquerda, um "+" no
+   lugar do número, e o foco acende a linha inteira */
+.pl .pl-novo td{background:linear-gradient(90deg, color-mix(in srgb, var(--azul) 9%, var(--card)), color-mix(in srgb, var(--azul) 3%, var(--card)) 60%)}
+.pl .pl-novo td:first-child{box-shadow:inset 3px 0 0 var(--azul)}
+.pl .pl-novo:focus-within td{background:color-mix(in srgb, var(--azul) 11%, var(--card))}
+.pl .pl-novo:focus-within td:first-child{box-shadow:inset 3px 0 0 var(--azul), inset 0 0 18px -6px var(--azul)}
+.pl-mais{display:inline-grid; place-items:center; width:22px; height:22px; border-radius:50%;
+  background:var(--azul); color:var(--sobre-azul); font-weight:700; font-size:16px; line-height:1;
+  box-shadow:0 0 0 4px color-mix(in srgb, var(--azul) 18%, transparent)}
+.pl-novo:not(:focus-within) .pl-mais{animation:plMaisPulsa 2.6s ease-in-out infinite}
+@keyframes plMaisPulsa{50%{box-shadow:0 0 0 7px color-mix(in srgb, var(--azul) 6%, transparent)}}
+.pl .pl-novo .pl-desc input::placeholder{color:var(--azul-txt); opacity:.75; font-weight:500}
+
+/* o compositor embaixo da tabela */
+.pl-comp{border-top:1px solid var(--sep); padding:10px 10px 12px;
+  background:linear-gradient(180deg, color-mix(in srgb, var(--azul) 4%, var(--card)), var(--card))}
+.pl-chips{display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; padding:2px; -webkit-overflow-scrolling:touch}
+.pl-chips::-webkit-scrollbar{display:none}
+.pl-chip{all:unset; box-sizing:border-box; flex:none; display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+  height:36px; padding:0 13px 0 6px; border-radius:999px; font-size:14px; font-weight:600; color:var(--txt);
+  background:color-mix(in srgb, var(--c) 9%, var(--card));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--c) 28%, transparent);
+  transition:transform .12s, box-shadow .15s, background .15s}
+.pl-chip small{font-weight:500; color:var(--txt-3); font-variant-numeric:tabular-nums}
+.pl-chip-ic{display:grid; place-items:center; width:26px; height:26px; border-radius:50%;
+  background:var(--c); color:#fff}
+.pl-chip-ic svg{width:14px; height:14px}
+@media (hover:hover){ .pl-chip:hover{background:color-mix(in srgb, var(--c) 16%, var(--card)); transform:translateY(-1px)} }
+.pl-chip:active{transform:scale(.95)}
+.pl-chip:focus-visible{box-shadow:inset 0 0 0 2px var(--azul)}
+.pl-chip.pulou{animation:plChip .38s var(--elastico)}
+@keyframes plChip{40%{transform:scale(1.08)}}
+
+.pl-prev{display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; margin-top:10px; padding:10px 12px;
+  border-radius:14px; background:var(--card); box-shadow:0 0 0 1px var(--sep), 0 10px 24px -18px var(--b3d-halo);
+  animation:plPrevEntra .22s var(--suave)}
+@keyframes plPrevEntra{from{opacity:0; transform:translateY(-4px)}}
+.pv-cat{display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 10px 0 8px; border-radius:999px;
+  font-size:13px; font-weight:600; color:var(--txt); background:color-mix(in srgb, var(--c) 14%, transparent)}
+.pv-cat svg{width:15px; height:15px; color:var(--c)}
+.pv-tag{font-size:12.5px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--azul-fraco); color:var(--azul-txt)}
+.pv-erro{font-size:12.5px; color:var(--vermelho-txt)}
+.pv-falta{font-size:13px; color:var(--txt-3)}
+.pv-conta{display:inline-flex; align-items:baseline; gap:7px; flex-wrap:wrap; font-size:13.5px; font-variant-numeric:tabular-nums}
+.pv-conta>span{color:var(--txt-3)}
+.pv-conta i{font-style:normal; color:var(--azul-txt); font-weight:700; animation:pvSeta 1.4s ease-in-out infinite}
+@keyframes pvSeta{50%{transform:translateX(3px)}}
+.pv-conta b.neg{color:var(--vermelho-txt)}
+.pv-conta small{flex-basis:100%; color:var(--txt-3); font-size:12px}
+.pv-ok{margin-left:auto}
+.pv-ok kbd{font:inherit; opacity:.7; margin-left:4px}
+@media (hover:none){ .pv-ok kbd{display:none} }
+
+/* a linha que acabou de nascer acende e assenta */
+.pl tbody tr.pl-nasceu td{animation:plNasceu 1.4s var(--suave)}
+@keyframes plNasceu{0%{background-color:color-mix(in srgb, var(--verde) 30%, var(--card))} 100%{}}
+@media (prefers-reduced-motion:reduce){
+  .pl-mais,.pv-conta i,.pl-chip.pulou,.pl-prev,.pl tbody tr.pl-nasceu td{animation:none}
+}
