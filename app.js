@@ -346,6 +346,7 @@ let viz3d=null, viz3dChave='';
 /* a planilha em 3D (v12.3): no topo pelo mesmo motivo do viz3d — render() roda
    antes do fim do arquivo quando o app reabre com sessão salva. */
 let pl3d=null, pl3dTema='', pl3dSel=null, pl3dBase=null, plNasceu=null;
+let graf3d=null, graf3dChave='';
 var chipsAtuais=[];   // var: renderChips pode rodar antes desta linha na partida
 const M3D={};          // as matrizes 3D de Meses anteriores e Gastos por cartão (v12.4)
 /* Como pagou, no formulário de lançamento. Volta pra 'cartao' a cada gasto: é
@@ -835,7 +836,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v12.5';
+const VERSAO_APP='v12.6';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -2638,6 +2639,7 @@ function aplicarTema(){
   document.documentElement.setAttribute('data-tema',esc?'escuro':'claro');
   if(viz3d) viz3d.repintar();
   if(pl3d) pl3d.repintar();
+  if(graf3d) graf3d.repintar();
   Object.values(M3D).forEach(m=>m&&m.cena&&m.cena.repintar());      // as cores das barras vêm do CSS: mudou o tema, mudaram elas
   const rotulo=esc?'Mudar para o tema claro':'Mudar para o tema escuro';
   /* Esta função roda ANTES do resto do arquivo — é o que evita a abertura
@@ -3381,6 +3383,7 @@ function dobrarFig(id, padraoAberto){
 }
 
 function renderGraficos(c){
+  renderGraf3D();
   ['figDonut','figEvol','figTeto','figProj'].forEach(id=>{
     const f=$('#'+id); if(f){ delete f.dataset.dobrada; f.hidden=false; }
   });
@@ -4980,6 +4983,55 @@ function renderHist3D(){
   const leg=$('#hist3dLeg');
   if(leg) leg.innerHTML=fil.slice().reverse().map(k=>`<span><i class="pl3d-q" style="background:${k==='_resto'?'var(--cout)':catDe(k).c}"></i>${esc(k==='_resto'?'Outras':catDe(k).n)}</span>`).join('');
 }
+/* O RITMO DO MÊS (v12.6), em Resumo do dia: dia do ciclo × (o que gastei,
+   o que dava por dia). A pergunta da tela é "quanto posso gastar hoje", e a
+   resposta só se entende vendo os dias de antes: a fileira da frente é o que
+   saiu em cada dia, a de trás é a cota diária. Dia em que a da frente passa a
+   de trás fica vermelho.
+
+   Só entram as compras do mês (`tipo:'unico'`), pela data em que foram
+   lançadas. Fixos e parcelas não são gasto "do dia": entram todos no dia 1 do
+   ciclo e fariam uma torre que não diz nada. Por isso a cota também é a do
+   que sobra DEPOIS deles: (disponível − fixos − parcelas) ÷ dias do ciclo. */
+function renderHoje3D(c){
+  const ini=ultimoFechPassado(), fim=proximoFech(), hoje=hojeD();
+  const n=Math.max(Math.round((fim-ini)/86400000),1);
+  const its=doCiclo();
+  const fixo=its.filter(l=>l.tipo!=='unico').reduce((t,l)=>t+meuValor(l),0);
+  const cota=Math.max(c.disponivel-fixo,0)/n;
+  const dia=[]; for(let i=0;i<n;i++) dia.push(0);
+  its.filter(l=>l.tipo==='unico').forEach(l=>{
+    const d=l.criadoEm?new Date(l.criadoEm):hoje;
+    const i=Math.floor((new Date(d.getFullYear(),d.getMonth(),d.getDate())-ini)/86400000);
+    dia[Math.max(0,Math.min(n-1,i))]+=meuValor(l);
+  });
+  const hojeI=Math.max(0,Math.min(n-1,Math.floor((hoje-ini)/86400000)));
+  const colunas=[], celulas=[];
+  for(let i=0;i<n;i++){
+    const d=new Date(ini.getFullYear(),ini.getMonth(),ini.getDate()+i);
+    colunas.push({nome:i===hojeI?'hoje':String(d.getDate()),forte:i===hojeI});
+    const rot=d.getDate()+'/'+(d.getMonth()+1);
+    if(i<=hojeI) celulas.push({c:i,f:0,valor:dia[i],cor:dia[i]>cota+0.005?'var(--vermelho)':'var(--verde)',
+      nome:i===hojeI?'Hoje':rot, sub:'gastou '+brl(dia[i])+' · a cota é '+brl(cota)});
+    celulas.push({c:i,f:1,valor:cota,cor:'var(--txt-3)',nome:'Cota de '+rot,sub:brl(cota)+' por dia para compras do mês'});
+  }
+  montarMatriz('hoje',{colunas,fileiras:[{nome:'Gastou'},{nome:'Cota'}],celulas},
+    x=>{ const d=$('#hoje3dDiz'); if(d) d.innerHTML=x?`<b>${esc(x.nome)}</b>: ${esc(x.sub)}.`:''; });
+}
+function renderGraf3D(){
+  const caixa=$('#graf3dBox'), tela=$('#graf3dTela'); if(!caixa||!tela) return;
+  const barras=barras3D();
+  if(!window.Viz3D||barras.length<2){ caixa.hidden=true; if(graf3d){ graf3d.encerrar(); graf3d=null; graf3dChave=''; } return; }
+  caixa.hidden=false;
+  const chave=barras.map(b=>b.cat+b.tier+Math.round(b.valor)).join('|')+'#'+temaAtual();
+  if(chave===graf3dChave) return;
+  graf3dChave=chave;
+  if(graf3d) graf3d.encerrar();
+  graf3d=Viz3D.montar(tela,barras,{aoSelecionar:b=>{ const d=$('#graf3dDiz'); if(!d) return;
+    d.innerHTML=b?`<b>${esc(b.nome)}</b> · ${tierDe(b.tier).n} · <b>${brl(b.valor)}</b> neste ciclo`:''; }});
+  const vistas=[]; barras.forEach(b=>{ if(!vistas.includes(b.cat)) vistas.push(b.cat); });
+  $('#graf3dLeg').innerHTML=vistas.map(k=>`<span><i class="pl3d-q" style="background:${catDe(k).c}"></i>${esc(catDe(k).n)}</span>`).join('');
+}
 function renderGastos3D(){
   const todos=doCiclo();
   const ids=cartoes().map(x=>x.id);
@@ -5663,6 +5715,7 @@ function podeGastarHoje(c){
 }
 function renderHero(c){
   const {porDia,dias,folga}=podeGastarHoje(c);
+  renderHoje3D(c);
   const v=$('#hoje-valor');
   if(!c.renda){
     v.textContent='Vamos começar'; v.className='hero-v num zero peq';
@@ -8107,7 +8160,7 @@ $('#swFundo').onclick=()=>{
 /* Cartões E teclas. O laço é o mesmo — quatro números por quadro, escritos
    como variáveis CSS — então incluir os botões não custa um segundo laço nem
    um segundo listener: custa o mesmo quadro que já estava rodando. */
-const ALVOS_TILT = '.carta, .card, .hero, .corte, .re-card, .tecla, .btn, .sub, .fab, .tb';
+const ALVOS_TILT = '.carta, .card, .hero, .corte, .re-card, .tecla, .btn, .sub, .fab, .tb, .mais-item, .g-grupo';
 
 function ligarFisica(){
   let fino=false, quieto=false;

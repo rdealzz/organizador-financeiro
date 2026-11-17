@@ -439,19 +439,25 @@ function escada(canvas, linhas, opcoes){
      larga, e uma altura fixa a deixava achatada como uma régua. */
   /* E com a PROPORÇÃO da caixa: no celular ela é quase quadrada, e a escada
      desenhada com a altura do computador virava uma tira no meio do vazio. */
-  const alturaMax=()=>Math.max(C.alturaMax, lin.length*0.36*Math.min(Math.max((A/L)/0.345,1),1.6));
+  /* (v12.6) O mundo encolhe para caber diante da câmera: com 30 linhas a
+     escada tinha 30 unidades de largura e a câmera está a 9 — as pontas
+     passavam POR TRÁS dela e a perspectiva virava uma linha. O passo é o que
+     faz a escada inteira medir no máximo ~12 unidades. */
+  const PX=()=>Math.min(C.passoX, 12/Math.max(lin.length,1));
+  const LG=()=>C.largura*PX()/C.passoX;
+  const alturaMax=()=>Math.max(C.alturaMax, lin.length*PX()*0.36*Math.min(Math.max((A/L)/0.345,1),1.6));
   const H=v=>v/maxAtual*alturaMax();
-  const xDe=i=>(i-(lin.length-1)/2)*C.passoX;
+  const xDe=i=>(i-(lin.length-1)/2)*PX();
   const temFundo=()=>lin.some(l=>(l.outros||0)>0);
 
   function enquadrar(){
-    const n=Math.max(lin.length,1), meio=n/2*C.passoX, zf=temFundo()?C.fundoZ+0.5:0.5;
+    const n=Math.max(lin.length,1), meio=n/2*PX(), zf=temFundo()?C.fundoZ+0.5:0.5;
     const pts=[];
     /* Só o que existe: o chão e o topo REAL de cada coluna. Reservar a altura
        cheia até o fim da escada deixava metade da caixa vazia. */
     for(const z of [-0.5,zf]) for(const x of [-meio,meio]) pts.push(bruta(x,0,z));
     lin.forEach((l,i)=>{ const v=atual.get(l.id); if(!v) return;
-      const x=xDe(i), w=C.largura/2, top=H(Math.max(v.a,v.d,v.o,0)), bot=H(Math.min(v.d,0));
+      const x=xDe(i), w=LG()/2, top=H(Math.max(v.a,v.d,v.o,0)), bot=H(Math.min(v.d,0));
       for(const dx of [-w,w]) for(const dz of [-w,w]){ pts.push(bruta(x+dx,top,dz)); if(bot<0) pts.push(bruta(x+dx,bot,dz)); }
       if(v.o>0) pts.push(bruta(x,H(v.o),C.fundoZ)); });
     let a=1e9,b=-1e9,c=1e9,d=-1e9;
@@ -475,7 +481,7 @@ function escada(canvas, linhas, opcoes){
     ctx.clearRect(0,0,L,A);
     enquadrar();
     chao();
-    const polis=[], w=C.largura/2;
+    const polis=[], w=LG()/2;
     lin.forEach((l,i)=>{
       const v=atual.get(l.id); if(!v) return;
       const x=xDe(i), foco=(l===selecionada||l===sobre);
@@ -530,7 +536,7 @@ function escada(canvas, linhas, opcoes){
   /* O chão é a planilha deitada: uma faixa por linha e, quando alguém divide
      gasto, uma segunda faixa atrás — a "coluna" de quem paga a parte dele. */
   function chao(){
-    const n=Math.max(lin.length,1), x0=-n/2*C.passoX, x1=n/2*C.passoX;
+    const n=Math.max(lin.length,1), x0=-n/2*PX(), x1=n/2*PX();
     const zs=temFundo()?[-0.5,0.5,C.fundoZ+0.5]:[-0.5,0.5];
     const a=proj(x0,0,zs[0]), b=proj(x1,0,zs[0]), c=proj(x1,0,zs[zs.length-1]), d=proj(x0,0,zs[zs.length-1]);
     ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.lineTo(c.x,c.y); ctx.lineTo(d.x,d.y); ctx.closePath();
@@ -538,7 +544,7 @@ function escada(canvas, linhas, opcoes){
     ctx.strokeStyle=comAlfa(cor.sep,.9); ctx.lineWidth=1;
     zs.forEach(z=>{ const p=proj(x0,0,z), q=proj(x1,0,z); ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke(); });
     for(let i=0;i<=n;i++){
-      const x=x0+i*C.passoX, p=proj(x,0,zs[0]), q=proj(x,0,zs[zs.length-1]);
+      const x=x0+i*PX(), p=proj(x,0,zs[0]), q=proj(x,0,zs[zs.length-1]);
       ctx.globalAlpha=(i===0||i===n)?1:.55;
       ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke();
     }
@@ -676,7 +682,7 @@ function matriz(canvas, dados, opcoes){
   const op=opcoes||{};
   const quieto=menosMovimento();
   const dpr=Math.min(window.devicePixelRatio||1, 1.5);   // 1.5: texto nítido, metade dos pixels de 2x (v12.5)
-  const C={inclinacao:-24*GRAUS, distancia:9, fov:3.1, passoX:1.15, passoZ:1.05, largura:0.62};
+  const C={inclinacao:-24*GRAUS, distancia:9, fov:3.1};
   let BASE=-0.42;
   let L=1,A=1, giro=BASE, giroVel=0, mexeu=false, t0=0;
   let arrastando=false, arrastou=false, x0=0, giro0=0, ultimo=0, vivo=true;
@@ -719,16 +725,21 @@ function matriz(canvas, dados, opcoes){
   }
   const proj=(x,y,z)=>{ const p=bruta(x,y,z); return {x:cx+p.x*escala, y:cy+p.y*escala, prof:p.prof}; };
   const nC=()=>Math.max(D.colunas.length,1), nF=()=>Math.max(D.fileiras.length,1);
-  const xDe=i=>(i-(nC()-1)/2)*C.passoX, zDe=j=>(j-(nF()-1)/2)*C.passoZ;
+  /* (v12.6) O mesmo cuidado da escada: 30 dias do ciclo davam 34 unidades de
+     largura com a câmera a 9, e a cena colapsava numa linha. A grade inteira
+     cabe em ~8 × 5 unidades, qualquer que seja o número de colunas. */
+  const KM=()=>Math.min(1, 8/(nC()*1.15), 5/(nF()*1.05));
+  const PX=()=>1.15*KM(), PZ=()=>1.05*KM(), LG=()=>0.62*Math.min(1,KM()*1.25);
+  const xDe=i=>(i-(nC()-1)/2)*PX(), zDe=j=>(j-(nF()-1)/2)*PZ();
   /* Altura proporcional ao tamanho da grade e à proporção da caixa, como na
      escada: grade larga com altura fixa vira um tapete. */
-  const alturaMax=()=>Math.max(2.4, Math.max(nC()*C.passoX, nF()*C.passoZ)*0.62*Math.min(Math.max((A/L)/0.4,1),1.5));
+  const alturaMax=()=>Math.max(2.4, Math.max(nC()*PX(), nF()*PZ())*0.62*Math.min(Math.max((A/L)/0.4,1),1.5));
   const H=v=>Math.max(v,0)/maxAtual*alturaMax();
 
   function enquadrar(){
-    const pts=[], mx=nC()/2*C.passoX, mz=nF()/2*C.passoZ;
+    const pts=[], mx=nC()/2*PX(), mz=nF()/2*PZ();
     for(const x of [-mx,mx]) for(const z of [-mz,mz]) pts.push(bruta(x,0,z));
-    D.celulas.forEach(c=>{ const h=H(atual.get(chave(c))||0), x=xDe(c.c), z=zDe(c.f), w=C.largura/2;
+    D.celulas.forEach(c=>{ const h=H(atual.get(chave(c))||0), x=xDe(c.c), z=zDe(c.f), w=LG()/2;
       for(const dx of [-w,w]) for(const dz of [-w,w]) pts.push(bruta(x+dx,h,z+dz)); });
     let a=1e9,b=-1e9,c=1e9,d=-1e9;
     pts.forEach(p=>{ if(p.x<a)a=p.x; if(p.x>b)b=p.x; if(p.y<c)c=p.y; if(p.y>d)d=p.y; });
@@ -744,11 +755,11 @@ function matriz(canvas, dados, opcoes){
     ctx.clearRect(0,0,L,A);
     enquadrar();
     // o chão é uma grade de verdade: uma casa por cruzamento
-    const mx=nC()/2*C.passoX, mz=nF()/2*C.passoZ;
+    const mx=nC()/2*PX(), mz=nF()/2*PZ();
     ctx.strokeStyle=comAlfa(cor.sep,.95); ctx.lineWidth=1;
-    for(let i=0;i<=nC();i++){ const x=-mx+i*C.passoX, p=proj(x,0,-mz), q=proj(x,0,mz); ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke(); }
-    for(let j=0;j<=nF();j++){ const z=-mz+j*C.passoZ, p=proj(-mx,0,z), q=proj(mx,0,z); ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke(); }
-    const polis=[], w=C.largura/2;
+    for(let i=0;i<=nC();i++){ const x=-mx+i*PX(), p=proj(x,0,-mz), q=proj(x,0,mz); ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke(); }
+    for(let j=0;j<=nF();j++){ const z=-mz+j*PZ(), p=proj(-mx,0,z), q=proj(mx,0,z); ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); ctx.stroke(); }
+    const polis=[], w=LG()/2;
     D.celulas.forEach(c=>{
       const h=H(atual.get(chave(c))||0); c._faces=null; c._topo=null;
       if(h<0.004) return;
@@ -790,8 +801,11 @@ function matriz(canvas, dados, opcoes){
     ctx.fillStyle=comAlfa(cor.txt2,1);
     const feitas=[];
     const cabe=(x0,x1,y0,y1)=>!feitas.some(r=>x0<r[1]+6&&x1>r[0]-6&&y0<r[3]+2&&y1>r[2]-2);
-    for(let i=D.colunas.length-1;i>=0;i--){
+    /* a coluna marcada `forte` (o "hoje") é escrita antes de todas */
+    const ordemC=D.colunas.map((c,i)=>i).sort((a,b)=>(D.colunas[b].forte?1:0)-(D.colunas[a].forte?1:0)||b-a);
+    for(const i of ordemC){
       const t=D.colunas[i].nome, p=proj(xDe(i),0,-mz-0.32), w=ctx.measureText(t).width;
+      ctx.fillStyle=comAlfa(D.colunas[i].forte?cor.txt:cor.txt2,1);
       const x=Math.max(w/2+2,Math.min(L-w/2-2,p.x)), y=Math.min(A-14,p.y+2);
       if(!cabe(x-w/2,x+w/2,y,y+13)) continue;
       feitas.push([x-w/2,x+w/2,y,y+13]); ctx.fillText(t,x,y);

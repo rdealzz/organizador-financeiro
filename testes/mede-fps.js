@@ -24,7 +24,7 @@ for(const lento of [1,4]){
  const p=await b.newPage({viewport:{width:390,height:844},deviceScaleFactor:2});
  const cdp=await p.context().newCDPSession(p); await cdp.send('Emulation.setCPUThrottlingRate',{rate:lento});
  await p.goto('http://localhost:8765/index.html');await p.waitForTimeout(1500);await semear(p);
- for(const [nome,ir,rola] of [['planilha (maré+3D)','planilha','#pl3d'],['planilha rolando','planilha',null],['gastos por cartão','gastos','#gastos3dBox'],['meses anteriores','analise:hist','#hist3dBox'],['mais (sem 3D)','mais',null]]){
+ for(const [nome,ir,rola] of [['planilha (maré+3D)','planilha','#pl3d'],['planilha rolando','planilha',null],['gastos por cartão','gastos','#gastos3dBox'],['meses anteriores','analise:hist','#hist3dBox'],['resumo do dia','hoje','#hoje3dBox'],['gráficos','analise:graficos','#graf3dBox'],['mais (lista)','mais',null]]){
   await p.evaluate(([ir,rola])=>{ irPara(ir); window.scrollTo(0,0); if(rola) document.querySelector(rola).scrollIntoView({block:'center'}); },[ir,rola]);
   await p.waitForTimeout(1200);
   const r=await p.evaluate(async(rolar)=>{

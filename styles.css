@@ -3810,3 +3810,51 @@ body:not(.fundo-vivo)::before{content:''; position:fixed; inset:0; z-index:-1; p
 @media (prefers-reduced-motion:reduce){
   .pl-mais,.pv-conta i,.pl-chip.pulou,.pl-prev,.pl tbody tr.pl-nasceu td{animation:none}
 }
+
+
+/* ══════════════════ 3D em tudo (v12.6) ══════════════════
+   O app inteiro ganhou profundidade, mas só onde ela não atrapalha:
+   * as telas ENTRAM no espaço (inclinadas e de longe, assentando);
+   * cartões, itens de Mais e grupos de cartão inclinam com o mouse (o motor
+     de inclinação que já existia, `ALVOS_TILT`);
+   * barras e ícones viram objetos com faces (prisma, brilho);
+   Onde se digita nada inclina: campo torto é campo difícil. */
+@keyframes entra3d{
+  from{opacity:0; transform:perspective(1400px) rotateX(7deg) translateY(18px) scale(.985); transform-origin:50% 0}
+}
+.area{animation:entra3d .42s var(--suave) both}
+@media (prefers-reduced-motion:reduce){ .area{animation:none} }
+
+/* os itens de Mais: ícone como peça de vidro, com volume */
+.mi-ic{background:linear-gradient(160deg, color-mix(in srgb, var(--azul) 26%, var(--card)), color-mix(in srgb, var(--azul) 8%, var(--card)));
+  box-shadow:inset 0 1px 0 var(--b3d-luz), inset 0 -2px 0 color-mix(in srgb, var(--azul) 22%, transparent),
+             0 6px 14px -8px var(--b3d-halo)}
+.mais-item{border-radius:var(--r-sm); transition:transform .18s var(--suave), background .15s}
+.mais-item.tilt-ativo:not(:active){transform:perspective(700px) rotateX(calc(var(--ry,0) * -4deg)) rotateY(calc(var(--rx,0) * 5deg)) translateZ(6px);
+  background:color-mix(in srgb, var(--azul) 4%, transparent)}
+.g-grupo.tilt-ativo:not(:active){transform:perspective(1100px) rotateX(calc(var(--ry,0) * -2deg)) rotateY(calc(var(--rx,0) * 2.5deg))}
+.g-grupo{transition:transform .2s var(--suave)}
+
+/* a tira dos 12 meses do calendário: cada barra é um prisma com tampa e lado */
+.cal-tira{padding-top:6px}
+.cal-tb i{position:relative; border-radius:2px 2px 0 0; overflow:visible;
+  background:linear-gradient(90deg, color-mix(in srgb, var(--azul) 34%, var(--fill-2)), color-mix(in srgb, var(--azul) 18%, var(--fill-2)))}
+.cal-tb i::before{content:''; position:absolute; left:0; right:-4px; top:-4px; height:4px;
+  background:color-mix(in srgb, var(--azul) 52%, var(--fill-2)); transform:skewX(-45deg); transform-origin:0 100%}
+.cal-tb i::after{content:''; position:absolute; top:0; bottom:0; right:-4px; width:4px;
+  background:color-mix(in srgb, var(--azul) 10%, var(--fill-2)); transform:skewY(-45deg); transform-origin:0 0}
+.cal-tb.on i{background:linear-gradient(90deg, var(--azul), color-mix(in srgb, var(--azul) 78%, #000))}
+.cal-tb.on i::before{background:color-mix(in srgb, var(--azul) 70%, #fff)}
+.cal-tb.on i::after{background:color-mix(in srgb, var(--azul) 60%, #000)}
+
+/* a pista do "posso gastar hoje" vira um tubo: luz em cima, sombra embaixo */
+.hero-pista{height:9px; box-shadow:inset 0 2px 3px rgba(0,0,0,.18)}
+.hero-pista i{background:linear-gradient(180deg, color-mix(in srgb, var(--azul) 62%, #fff), var(--azul) 55%, color-mix(in srgb, var(--azul) 80%, #000));
+  box-shadow:0 0 10px -2px color-mix(in srgb, var(--azul) 70%, transparent)}
+
+/* as cenas 3D das telas de Hoje e Gráficos: o mesmo cartão das outras */
+#hoje3dBox{margin:14px 0}
+#graf3dBox{margin:14px 0 18px}
+/* o lado do prisma precisa de onde morar: sem isto, cada barra invadia a
+   vizinha e a tira virava um muro só */
+.cal-tb i{width:calc(100% - 6px)}

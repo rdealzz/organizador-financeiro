@@ -2548,3 +2548,33 @@ rolando, ~50.
 **A regra que fica:** animação nova entra com uma medição do `mede-fps.js`
 na CPU 4x. Sem `shadowBlur` em quadro animado, sem pergunta de layout por
 quadro, e cena parada não redesenha.
+
+## 3D em tudo — onde ajuda (v12.6)
+
+O pedido foi "3D em tudo". O que entrou, e o que ficou de fora de propósito:
+
+* **Resumo do dia — o ritmo do mês** (`renderHoje3D`, `Viz3D.matriz`): dia do
+  ciclo × (o que gastei, a cota do dia). Só compras do mês, pela data de
+  lançamento (`criadoEm`); fixos e parcelas fariam uma torre no dia 1 que não
+  diz nada, e por isso a cota é `(disponível − fixos − parcelas) ÷ dias`. Dia
+  acima da cota fica vermelho. A coluna de hoje é `forte` e o nome dela é
+  escrito antes dos outros.
+* **Gráficos** (`renderGraf3D`): a mesma cena categoria × peso de *O que
+  cortar*, agora também no modo simples, antes dos gráficos 2D.
+* **O app inteiro**: telas entram no espaço (`entra3d`), itens de Mais e
+  grupos de cartão inclinam com o mouse (entraram em `ALVOS_TILT`), ícones de
+  Mais são peças de vidro, a tira de 12 meses do calendário virou prismas em
+  CSS (tampa e lado por `::before`/`::after`) e a pista do *posso gastar*
+  virou tubo.
+* **Fora, de propósito**: campos e células onde se digita. Campo torto é
+  campo difícil, e a planilha é onde mais se digita.
+
+**A armadilha que apareceu:** cena larga demais para a câmera. O ritmo do
+mês tem ~30 colunas — 34 unidades de largura com a câmera a 9 —, e as pontas
+passavam por trás dela: a cena virava uma linha diagonal. Agora o mundo
+encolhe para caber (`KM()` na matriz, `PX()` na escada: no máximo ~8 e ~12
+unidades), qualquer que seja o número de colunas. A escada da planilha tinha
+o mesmo risco com 30+ gastos.
+
+`mede-fps.js` mede também Resumo do dia e Gráficos: 60 fps na CPU normal,
+60 e 59,5 com a CPU 4x mais lenta.

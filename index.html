@@ -300,6 +300,12 @@ html[data-tema="escuro"] #splash{background:#000}
   </section>
 
 
+  <section class="pl3d m3d" id="hoje3dBox" hidden>
+    <div class="pl3d-topo"><b>O ritmo do mês em 3D</b><span class="pl3d-dica">um dia por coluna · na frente o que saiu, atrás a cota</span></div>
+    <canvas class="pl3d-tela" id="hoje3dTela" role="img" aria-label="Gasto de cada dia do ciclo em 3D: na fileira da frente o que você gastou em compras do mês, atrás a cota diária. Dia acima da cota fica vermelho."></canvas>
+    <div class="pl3d-leg" id="hoje3dLeg"><span><i class="pl3d-q" style="background:var(--verde)"></i>dentro da cota</span><span><i class="pl3d-q" style="background:var(--vermelho)"></i>passou da cota</span><span><i class="pl3d-q" style="background:var(--txt-3)"></i>cota do dia</span></div>
+    <p class="pl3d-diz" id="hoje3dDiz" aria-live="polite"></p>
+  </section>
   <div id="pedirNome" hidden></div>
   <div id="cAviso"></div>
   <div id="insights"></div>
@@ -586,6 +592,13 @@ html[data-tema="escuro"] #splash{background:#000}
          Antes eram quatro gráficos abertos e um parágrafo de explicação em
          cada um, e o número que importava ficava no meio do terceiro. -->
     <div id="resumoAnalise"></div>
+  <section class="pl3d m3d" id="graf3dBox" hidden>
+    <div class="pl3d-topo"><b>Para onde foi, em 3D</b><span class="pl3d-dica">altura é quanto · na frente o que dá para cortar</span></div>
+    <canvas class="pl3d-tela" id="graf3dTela" role="img" aria-label="Gastos do ciclo em 3D por categoria e peso: altura é quanto você gastou, a fileira da frente é o que você marcou como cortável. A mesma informação está nos gráficos abaixo."></canvas>
+    <div class="pl3d-leg" id="graf3dLeg"></div>
+    <p class="pl3d-diz" id="graf3dDiz" aria-live="polite"></p>
+  </section>
+
     <div class="viz">
       <figure class="viz-fig" id="figDonut"></figure>
       <figure class="viz-fig" id="figEvol"></figure>
