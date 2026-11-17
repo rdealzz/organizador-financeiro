@@ -158,6 +158,28 @@ const SHOT=process.env.SHOT;
    eh(pre+'descrição presa é opaca com esfera ('+t+')', !/rgba\(.*,\s*0?\.\d+\)$/.test(op)&&op!=='rgba(0, 0, 0, 0)', op);
  }
  await p.evaluate(()=>{document.documentElement.dataset.tema='claro';});
+ // dicas (v12.8): só a SUA parte entra em qualquer conta
+ const dc=await p.evaluate(()=>{
+   const c=calc(), sobra=c.disponivel-c.gasto;
+   const outro=dicaDoGasto({valor:300,meu:0,outros:300,cat:'mercado',tipo:'unico',pRest:0},sobra,c);
+   const parc=dicaDoGasto({valor:100,meu:100,outros:0,cat:'outros',tipo:'parc',pRest:6},sobra,c);
+   const estoura=dicaDoGasto({valor:sobra+50,meu:sobra+50,outros:0,cat:'outros',tipo:'unico',pRest:0},sobra,c);
+   // simulador: uma parcelada dividida — só a minha parte sobe a sobra
+   const l={id:'tq1',criadoEm:Date.now(),nome:'TV',valor:400,cat:'casa',tier:2,tipo:'parc',pRest:5,pai:100,com:'pai',ref:0,venc:0,prox:0,meio:'cartao'};
+   S.lanc.push(l); render();
+   const q=parcelasQuitaveis().find(x=>x.l.id==='tq1');
+   const antes=calc().rendaBase-calc().metaPadrao-comprometidoProximo();
+   quitarSel=new Set(['tq1']); resultadoQuitar();
+   const res=document.querySelector('#dcRes').textContent;
+   S.lanc=S.lanc.filter(x=>x.id!=='tq1'); quitarSel=new Set(); render();
+   return {outro,parc,estoura,mes:q&&q.mes,saldo:q&&q.saldo,res,depois:brl(antes+300),painel:!!document.querySelector('#plDicas h2')};
+ });
+ eh(pre+'dica: quando outra pessoa paga, a sobra não muda', /não muda/.test(dc.outro), dc.outro);
+ eh(pre+'dica: parcelado diz quanto por mês e até quando', /por mês/.test(dc.parc)&&/até/.test(dc.parc), dc.parc);
+ eh(pre+'dica: gasto maior que a sobra avisa que passa', /passa/.test(dc.estoura), dc.estoura);
+ eh(pre+'quitar: só a minha parte (300 de 400) e o saldo das parcelas que faltam', dc.mes===300&&dc.saldo===1200, [dc.mes,dc.saldo]);
+ eh(pre+'quitar: o mês que vem sobra +300 por mês', dc.res.includes(dc.depois)&&/\+R\$\s?300,00 por mês/.test(dc.res), dc.res);
+ eh(pre+'o painel de dicas aparece', dc.painel);
  // a linha de adicionar, viva (v12.4): prévia, atalho, a linha que nasce
  await p.evaluate(()=>window.scrollTo(0,0));
  await p.fill('[data-k="novo|nome"]','tenis'); await p.fill('[data-k="novo|valor"]','350');
@@ -167,8 +189,8 @@ const SHOT=process.env.SHOT;
  eh(pre+'prévia: o degrau fantasma entra no 3D', await p.evaluate(()=>!!pl3d&&!!pl3dBase));
  const nPrev=await p.evaluate(()=>S.lanc.length);
  await p.press('[data-k="novo|valor"]','Enter'); await p.waitForTimeout(120);
- const nas=await p.evaluate(()=>({n:S.lanc.length, luz:document.querySelectorAll('#plTab tr.pl-nasceu').length, prev:document.querySelector('#plPrev').hidden}));
- eh(pre+'Enter salva, a linha nova acende e a prévia some', nas.n===nPrev+1&&nas.luz===1&&nas.prev, nas);
+ const nas=await p.evaluate(()=>{ const pv=document.querySelector('#plPrev'); return {n:S.lanc.length, luz:document.querySelectorAll('#plTab tr.pl-nasceu').length, prev:!pv.hidden&&/salvo/.test(pv.textContent)&&!pv.querySelector('#plPrevOk')}; });
+ eh(pre+'Enter salva, a linha nova acende e a prévia vira "salvo" com a dica', nas.n===nPrev+1&&nas.luz===1&&nas.prev, nas);
  await p.evaluate(()=>{ S.lanc.pop(); render(); });
  const chip=await p.evaluate(()=>{ const b=document.querySelector('[data-plchip]'); if(!b) return null; b.click();
    return {nome:document.querySelector('[data-k="novo|nome"]').value, foco:document.activeElement&&document.activeElement.dataset.k}; });

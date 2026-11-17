@@ -2602,3 +2602,45 @@ célula da faixa (que já é sticky) deslocava o total para fora da borda e
 deixava uma caixa branca solta — saiu. E no celular o ícone encolhe para
 22px: o nome do gasto é a coluna que não pode sumir, e com 26px
 "Combustível" virava "Combustíve".
+
+## Dicas do mês e o "e se eu quitar?" (v12.8)
+
+O pedido: *"dar dicas ao final ou ao registrar um gasto — se eu quitar as
+parceladas, quanto vai sobrar; contas relacionadas a mim, porque gasto de
+outras pessoas não muda nada"*.
+
+**A regra que sustenta tudo: toda conta usa `meuValor()`.** A parte que outra
+pessoa paga não desce a sobra hoje e não sobe a sobra se for quitada — ela só
+aparece como nota ("isso não muda a sua sobra"), nunca dentro de um número.
+Há teste: uma TV de R$ 400 com R$ 100 do pai entra no simulador como
+R$ 300/mês.
+
+**Nenhuma dica tem conta própria.** O ritmo é a projeção de
+`montarInsights`; a média por categoria é `mediaHist` (que lê
+`hist[].porCat`, a parte sua gravada no fechamento); o fim da parcela
+(`mesDaUltima`) usa a régua do calendário. Dica que discorda de outra tela é
+pior que dica nenhuma.
+
+### Ao final da planilha (`renderDicas`, `#plDicas`)
+
+Cada uma só aparece quando tem o que dizer: o ritmo do mês (fecha acima ou
+abaixo do que cabe), a categoria cortável acima da média, a parcela que acaba
+no mês que vem, assinaturas × 12, **o mês que vem** (`comprometidoProximo`:
+fixos + parcelas que continuam, só a sua parte, e o que sobra depois de
+guardar) e quanto dos gastos é de outras pessoas.
+
+**"E se eu quitar?"** lista as parceladas com mais de uma parcela pela frente
+(`parcelasQuitaveis`): quanto sobe a sobra por mês (`mes`), quanto custa
+quitar (`saldo` = parcelas depois desta) e em quantos meses o adiantado volta.
+Marcar só reescreve a frase do resultado (`resultadoQuitar`) — a caixa marcada
+nunca é trocada no meio do evento (v10.1). Parcela paga inteira por outra
+pessoa aparece desabilitada, com "quem paga é outra pessoa".
+
+### Ao registrar (`dicaDoGasto`)
+
+Uma frase só, na ordem do que mais importa: outra pessoa paga (sobra não
+muda) → estoura o mês → parcelado (por mês, até quando, total) → fixo (por
+ano) → categoria acima da média → leva mais de 25% do que sobrava → quanto
+fica por dia. Aparece na prévia enquanto se digita e, depois de salvar, fica
+8 s no mesmo lugar como "**X** salvo. …" (`dicaPos`). A marca é posta em
+`plCriar()`, pelo motivo da v12.4: sair do campo de valor já cria o gasto.

@@ -836,7 +836,7 @@ async function copiaDeSeguranca(txt){
    A cópia é gravada com o nome da versão ANTIGA, que é o que se quer procurar
    ("me devolve como estava na v10.13"), e `_versaoApp` mora no META justamente
    para não carimbar `_ts` e não virar uma gravação com cara de edição. */
-const VERSAO_APP='v12.7';
+const VERSAO_APP='v12.8';
 async function copiaDeVersao(){
   try{
     if(S._versaoApp===VERSAO_APP) return;
@@ -5309,6 +5309,7 @@ function renderPlanilha(c){
   const topo=sal+ext+c.entrou;
   renderPl3d(L3);
   renderCompositor();
+  renderDicas(c);
   /* A marca dura 1,4 s e atravessa os redesenhos: salvar costuma redesenhar
      duas vezes seguidas (o clique e o foco saindo), e a segunda apagava a luz. */
   if(plNasceu&&Date.now()<plNasceu.ate){
@@ -5422,7 +5423,14 @@ function atualizarPrevia(){
     }else pl3d.atualizar(pl3dBase);
   }
   if(!box) return;
-  if(!n){ box.hidden=true; box.innerHTML=''; return; }
+  if(!n){
+    if(dicaPos&&Date.now()<dicaPos.ate){
+      box.hidden=false;
+      box.innerHTML=`<p class="pv-dica pv-salvo">${icone('certo',14)}<span><b>${esc(dicaPos.nome)}</b> salvo. ${dicaPos.txt}</span></p>`;
+      return;
+    }
+    box.hidden=true; box.innerHTML=''; return;
+  }
   const c=calc(), antes=c.disponivel-c.gasto, depois=antes-n.meu, cat=catDe(n.cat);
   const vz=n.vez.trim()&&!n.vz?'<span class="pv-erro">“'+esc(n.vez)+'” não é 12x, 3/12 nem fixo</span>'
     :n.vz&&n.vz.tipo==='parc'?`<span class="pv-tag">${n.vz.pRest}x</span>`:n.vz&&n.vz.tipo!=='unico'?'<span class="pv-tag">todo mês</span>':'';
@@ -5432,7 +5440,8 @@ function atualizarPrevia(){
     ${n.valor>0
       ?`<span class="pv-conta"><span>sobra</span><b>${brl(antes)}</b><i aria-hidden="true">→</i><b class="${depois<0?'neg':''}">${brl(depois)}</b>${n.outros>0?`<small>${brl(n.outros)} é de outra pessoa</small>`:''}</span>
         <button type="button" class="btn mini pv-ok" id="plPrevOk">Salvar <kbd>↵</kbd></button>`
-      :'<span class="pv-falta">agora o valor</span>'}`;
+      :'<span class="pv-falta">agora o valor</span>'}
+    ${n.valor>0?`<p class="pv-dica">${icone('raio',14)}<span>${dicaDoGasto({valor:n.valor,meu:n.meu,outros:n.outros,cat:n.cat,tipo:n.vz?n.vz.tipo:'unico',pRest:n.vz?n.vz.pRest:0},antes,c)}</span></p>`:''}`;
 }
 function plSalvarNovo(){
   const tab=$('#plTab');
@@ -5467,6 +5476,137 @@ document.addEventListener('click',e=>{
   atualizarPrevia(); vibrar(8);
 });
 
+/* ══════════════════ DICAS DA PLANILHA (v12.8) ══════════════════
+   O pedido: "dar dicas ao final e ao registrar um gasto — se eu quitar as
+   parceladas, quanto vai sobrar; contas relacionadas a MIM, porque gasto de
+   outras pessoas não muda nada".
+
+   A regra que sustenta tudo: **toda conta aqui usa `meuValor()`**, a mesma
+   parte que o orçamento conta. A parte que o pai paga não desce a sobra hoje
+   e não sobe a sobra se for quitada — por isso ela aparece só como uma nota
+   ("isso não muda a sua sobra"), nunca dentro de um número.
+
+   E nenhuma dica tem conta própria: o ritmo é o mesmo de `montarInsights`, a
+   média por categoria é `mediaHist` (que lê `hist[].porCat`, a parte SUA
+   gravada no fechamento), o fim da parcela é o mesmo do calendário. Dica que
+   discorda de outra tela é pior que dica nenhuma.
+
+   Cada dica só aparece quando tem o que dizer — a lição do calendário
+   (v10.4): observação genérica em toda tela vira ruído. */
+const MESES_NOME=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+/* O mês da ÚLTIMA parcela, contando a desta fatura como a primeira das que
+   faltam (`pRest` sempre foi assim). Com dia de vencimento, a régua é a do
+   calendário; sem, é a da fatura — a parcela cai na fatura de cada mês. */
+function mesDaUltima(l){
+  const k=Math.max(+l.pRest||1,1);
+  const b=+l.venc>0?proximoVenc(+l.venc):faturaAberta().vence;
+  const d=new Date(b.getFullYear(),b.getMonth()+k-1,1);
+  return MESES_NOME[d.getMonth()]+(d.getFullYear()!==hojeD().getFullYear()?' de '+d.getFullYear():'');
+}
+/* O que o mês que vem já traz, só a SUA parte: fixos (e os "valor muda",
+   estimados pelo valor deste mês) e as parcelas que ainda não acabaram. */
+function comprometidoProximo(semIds){
+  const fora=semIds||new Set();
+  return doCiclo().concat(daProxima()).reduce((t,l)=>{
+    if(fora.has(String(l.id))) return t;
+    if(l.tipo==='fixo'||l.tipo==='var') return t+meuValor(l);
+    if(l.tipo==='parc'&&(+l.pRest||0)-(+l.prox>0?0:1)>0) return t+meuValor(l);
+    return t;
+  },0);
+}
+function parcelasQuitaveis(){
+  return doCiclo().filter(l=>l.tipo==='parc'&&(+l.pRest||0)>1).map(l=>{
+    const mes=meuValor(l), faltamDepois=(+l.pRest||0)-1;
+    return {l, mes, faltamDepois, saldo:mes*faltamDepois, outros:Math.max((+l.valor||0)-mes,0), fim:mesDaUltima(l)};
+  }).sort((a,b)=>b.saldo-a.saldo);
+}
+
+/* A dica de UM gasto, enquanto ele é escrito e logo depois de salvo.
+   g = {nome, valor, meu, outros, cat, tipo, pRest}; antes = a sobra antes dele. */
+function dicaDoGasto(g,antes,c){
+  if(!g||!(g.valor>0)) return '';
+  const depois=antes-g.meu, dias=Math.max(diasRestantes(),1), cat=catDe(g.cat);
+  if(g.meu<0.005&&g.outros>0) return `Quem paga é outra pessoa: <b>sua sobra não muda</b>. Os ${brl(g.outros)} entram no <b>Quem me deve</b>.`;
+  if(depois<0) return `Com esse gasto passa <b>${brl(-depois)}</b> do que dava para gastar no mês.`;
+  if(g.tipo==='parc'&&(+g.pRest||0)>1){
+    const fim=mesDaUltima({pRest:g.pRest,venc:0});
+    return `Em ${g.pRest}x: <b>${brl(g.meu)} por mês</b> até ${fim} — ${brl(g.meu*g.pRest)} no total${g.outros>0?` (a parte da outra pessoa fica fora)`:''}.`;
+  }
+  if(g.tipo==='fixo'||g.tipo==='var') return `Todo mês: <b>${brl(g.meu)}</b> por mês são <b>${brl(g.meu*12)} por ano</b>.`;
+  const med=mediaHist(g.cat);
+  if(med){
+    const ja=doCiclo().filter(l=>l.cat===g.cat).reduce((t,l)=>t+meuValor(l),0)+g.meu;
+    if(ja>med*1.1&&ja-med>=20) return `Com esse, <b>${esc(cat.n)}</b> vai a ${brl(ja)} neste mês — <b>${brl(ja-med)} acima</b> da sua média (${brl(med)}).`;
+  }
+  if(antes>0&&g.meu>=antes*0.25) return `Esse gasto leva <b>${Math.round(g.meu/antes*100)}%</b> do que ainda sobrava. Depois dele: ${brl(depois/dias)} por dia.`;
+  return `Depois dele, dá <b>${brl(depois/dias)} por dia</b> até a fatura fechar.`;
+}
+let dicaPos=null;          // a dica do gasto que acabou de ser salvo: {txt, ate}
+let quitarSel=new Set();   // o que está marcado no simulador "e se eu quitar?"
+
+function renderDicas(c){
+  const el=$('#plDicas'); if(!el) return;
+  if(!c.renda){ el.innerHTML=''; return; }
+  const dias=Math.max(diasRestantes(),1), sobra=c.disponivel-c.gasto, out=[];
+  const decorridos=Math.max(Math.round((hojeD()-ultimoFechPassado())/86400000),1);
+  /* 1. o ritmo do mês — a mesma projeção de montarInsights */
+  const its=doCiclo();
+  if(its.length&&decorridos>=5){
+    const variavel=its.filter(l=>l.tipo==='var'||l.tipo==='unico').reduce((t,l)=>t+meuValor(l),0);
+    const proj=(c.gasto-variavel)+variavel/decorridos*(decorridos+dias);
+    if(proj>c.disponivel*1.03) out.push({t:'ruim',ico:'subindo',txt:`No ritmo de agora o mês fecha <b>${brl(proj-c.disponivel)} acima</b> do que cabe. Gastar <b>até ${brl(Math.max(sobra,0)/dias)} por dia</b> daqui ao fechamento resolve.`});
+    else if(proj<c.disponivel*0.95) out.push({t:'bom',ico:'raio',txt:`No ritmo de agora o mês fecha com <b>${brl(c.disponivel-proj)} sobrando</b> além da meta de guardar.`});
+  }
+  /* 2. a categoria cortável que passou da média */
+  const porCat={}; its.forEach(l=>{ if(tierDe(l.tier)&&+l.tier===3) porCat[l.cat]=(porCat[l.cat]||0)+meuValor(l); });
+  const pior=Object.entries(porCat).map(([k,v])=>({k,v,m:mediaHist(k)})).filter(x=>x.m&&x.v>x.m*1.15&&x.v-x.m>=30).sort((a,b)=>(b.v-b.m)-(a.v-a.m))[0];
+  if(pior) out.push({t:'ruim',ico:'tesoura',txt:`<b>${esc(catDe(pior.k).n)}</b> já está em ${brl(pior.v)} — <b>${brl(pior.v-pior.m)} acima</b> da sua média. É gasto que você marcou como cortável.`});
+  /* 3. parcela que acaba logo */
+  const acaba=its.filter(l=>l.tipo==='parc'&&+l.pRest===2&&meuValor(l)>0).sort((a,b)=>meuValor(b)-meuValor(a))[0];
+  if(acaba) out.push({t:'bom',ico:'certo',txt:`<b>${esc(acaba.nome)}</b> acaba no mês que vem: depois disso sobram <b>+${brl(meuValor(acaba))} por mês</b>.`});
+  /* 4. assinaturas por ano */
+  const ass=its.filter(l=>l.cat==='assinatura'&&(l.tipo==='fixo'||l.tipo==='var')).reduce((t,l)=>t+meuValor(l),0);
+  if(ass>=30) out.push({t:'',ico:'assinatura',txt:`Assinaturas: ${brl(ass)} por mês são <b>${brl(ass*12)} por ano</b>. Vale conferir se todas ainda se usam.`});
+  /* 5. o mês que vem */
+  const comp=comprometidoProximo(), livre=c.rendaBase-c.metaPadrao-comp;
+  if(comp>0&&c.rendaBase>0) out.push({t:livre<0?'ruim':'',ico:'calendario',txt:`O mês que vem já começa com <b>${brl(comp)}</b> comprometidos (fixos e parcelas, só a sua parte). Depois de guardar, sobram <b>${brl(livre)}</b> para o resto.`});
+  /* 6. o dinheiro dos outros */
+  if(c.pai>0) out.push({t:'',ico:'nota',txt:`${brl(c.pai)} dos gastos deste mês são de outras pessoas: <b>não mexem na sua sobra</b> — é reembolso. A cobrança está no quadro abaixo.`});
+
+  const parc=parcelasQuitaveis();
+  quitarSel=new Set([...quitarSel].filter(id=>parc.some(p=>String(p.l.id)===id)));
+  const simul=parc.length?`<div class="dc-sim">
+      <div class="dc-sim-t">${icone('alvo',16)}<b>E se eu quitar?</b><small>marque as parceladas que você pagaria de uma vez</small></div>
+      <div class="dc-parc">${parc.map(p=>`<label class="dc-p${p.mes<0.005?' dc-p-outro':''}">
+        <input type="checkbox" data-quitar="${esc(String(p.l.id))}"${quitarSel.has(String(p.l.id))?' checked':''}${p.mes<0.005?' disabled':''}>
+        <span class="dc-p-n"><b>${esc(p.l.nome)}</b><small>${p.faltamDepois} parcela${p.faltamDepois===1?'':'s'} depois desta · acaba em ${p.fim}</small></span>
+        <span class="dc-p-v">${p.mes<0.005?'<small>quem paga é outra pessoa</small>':`<b>+${brl(p.mes)}</b><small>por mês · ${brl(p.saldo)} para quitar</small>`}</span>
+      </label>`).join('')}</div>
+      <p class="dc-res" id="dcRes" aria-live="polite"></p>
+      ${parc.some(p=>p.outros>0)?'<p class="dc-nota">Só a SUA parte entra na conta: a parte que outra pessoa paga não sobe nem desce a sua sobra.</p>':''}
+    </div>`:'';
+  el.innerHTML=(out.length||simul)?`<h2 class="pl-tit">${icone('raio',18)} Dicas para o seu mês</h2>
+    <div class="dc-lista">${out.map(d=>`<div class="dc ${d.t}"><span class="dc-ic">${icone(d.ico,16)}</span><p>${d.txt}</p></div>`).join('')}</div>${simul}`:'';
+  resultadoQuitar(c);
+}
+function resultadoQuitar(c){
+  const r=$('#dcRes'); if(!r) return;
+  c=c||calc();
+  const parc=parcelasQuitaveis().filter(p=>quitarSel.has(String(p.l.id)));
+  const base=c.rendaBase-c.metaPadrao-comprometidoProximo();
+  if(!parc.length){ r.innerHTML=`Hoje o mês que vem sobra <b>${brl(base)}</b> depois de guardar e pagar fixos e parcelas.`; return; }
+  const ganho=parc.reduce((t,p)=>t+p.mes,0), custo=parc.reduce((t,p)=>t+p.saldo,0);
+  const meses=custo>0&&ganho>0?Math.ceil(custo/ganho):0;
+  r.innerHTML=`Quitando ${parc.length===1?esc(parc[0].l.nome):parc.length+' parceladas'} (<b>${brl(custo)}</b> de uma vez), o mês que vem sobra <b>${brl(base+ganho)}</b> em vez de ${brl(base)} — <b>+${brl(ganho)} por mês</b>. `
+    +`Em ${meses} ${meses===1?'mês':'meses'} o que você pagou adiantado volta como sobra. O banco costuma dar desconto para quitar antes: pergunte o valor exato.`;
+}
+document.addEventListener('change',e=>{
+  const x=e.target.closest&&e.target.closest('[data-quitar]'); if(!x) return;
+  /* Só o resultado é reescrito: a caixa marcada continua a mesma (a lição da v10.1). */
+  if(x.checked) quitarSel.add(x.dataset.quitar); else quitarSel.delete(x.dataset.quitar);
+  resultadoQuitar();
+});
+
 function plCriar(){
   const tab=$('#plTab');
   const g=k=>tab.querySelector(`[data-k="novo|${k}"]`);
@@ -5488,7 +5628,11 @@ function plCriar(){
   const q=g('quem').value;
   if(q&&q!=='eu'&&q!=='+') aplicarPagador(l,q);
   S.lanc.push(l);
-  plNasceu={id:String(l.id),ate:Date.now()+1400};   // todo caminho de criar passa aqui: Enter, Salvar, sair do valor
+  plNasceu={id:String(l.id),ate:Date.now()+1400};
+  { const cc=calc(), m=meuValor(l);
+    dicaPos={nome:l.nome, ate:Date.now()+8000,
+      txt:dicaDoGasto({valor:+l.valor,meu:m,outros:Math.max((+l.valor||0)-m,0),cat:l.cat,tipo:l.tipo,pRest:l.pRest},cc.disponivel-cc.gasto+m,cc)};
+    setTimeout(()=>{ if(dicaPos&&Date.now()>=dicaPos.ate) atualizarPrevia(); },8100); }   // todo caminho de criar passa aqui: Enter, Salvar, sair do valor
   if(l.meio==='cartao') cartaoForm=cartaoDe(l);
   // A linha nova volta a ficar vazia: o redesenho devolveria o que estava nela.
   tab.querySelectorAll('[data-k^="novo|"]').forEach(x=>{ if(x.tagName==='INPUT') x.value=''; });

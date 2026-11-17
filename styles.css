@@ -3918,3 +3918,49 @@ body:not(.fundo-vivo)::before{content:''; position:fixed; inset:0; z-index:-1; p
   .pl td.pl-rot.pl-desc-ico{padding-left:33px}
 }
 .pl td.pl-rot{white-space:nowrap}
+
+
+/* ══════════════════ Dicas da planilha (v12.8) ══════════════════ */
+.pv-dica{flex-basis:100%; display:flex; gap:8px; align-items:flex-start; margin:2px 0 0; padding:9px 11px; border-radius:11px;
+  font-size:13.5px; line-height:1.45; color:var(--txt-2); background:color-mix(in srgb, var(--azul) 7%, transparent)}
+.pv-dica svg{flex:none; margin-top:2px; color:var(--azul-txt)}
+.pv-dica b{color:var(--txt)}
+.pv-salvo{background:color-mix(in srgb, var(--verde) 10%, transparent)}
+.pv-salvo svg{color:var(--verde-txt)}
+
+.pl-dicas .pl-tit{display:flex; align-items:center; gap:8px}
+.pl-dicas .pl-tit svg{color:var(--azul-txt)}
+.dc-lista{display:grid; gap:8px}
+@media (min-width:760px){ .dc-lista{grid-template-columns:1fr 1fr} }
+.dc{display:flex; gap:11px; align-items:flex-start; padding:12px 14px; border-radius:16px; background:var(--card);
+  box-shadow:0 0 0 1px var(--sep), 0 10px 24px -20px var(--b3d-halo)}
+.dc p{margin:0; font-size:14px; line-height:1.5; color:var(--txt-2)}
+.dc p b{color:var(--txt)}
+.dc-ic{flex:none; width:30px; height:30px; border-radius:10px; display:grid; place-items:center;
+  color:var(--azul-txt); background:var(--azul-fraco)}
+.dc.bom .dc-ic{color:var(--verde-txt); background:var(--verde-fraco)}
+.dc.ruim .dc-ic{color:var(--vermelho-txt); background:var(--vermelho-fraco)}
+
+.dc-sim{margin-top:12px; padding:14px; border-radius:18px; background:var(--card);
+  box-shadow:0 0 0 1px var(--sep), 0 18px 36px -26px var(--b3d-halo)}
+.dc-sim-t{display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin-bottom:10px}
+.dc-sim-t svg{color:var(--azul-txt)}
+.dc-sim-t small{flex-basis:100%; color:var(--txt-3); font-size:12.5px}
+.dc-parc{display:grid; gap:6px}
+.dc-p{display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:13px; cursor:pointer;
+  background:var(--fill); transition:background .15s, box-shadow .15s}
+.dc-p:has(input:checked){background:color-mix(in srgb, var(--verde) 11%, var(--card)); box-shadow:inset 0 0 0 1.5px color-mix(in srgb, var(--verde) 55%, transparent)}
+.dc-p input{-webkit-appearance:none; appearance:none; flex:none; width:22px; height:22px; min-height:0; margin:0; padding:0; border-radius:7px;
+  border:1.5px solid var(--txt-3); background:var(--card); display:grid; place-items:center; cursor:pointer}
+.dc-p input::after{content:''; width:11px; height:6px; margin-top:-2px; border:solid #fff; border-width:0 0 2.2px 2.2px; transform:rotate(-45deg) scale(0); transition:transform .15s var(--elastico)}
+.dc-p input:checked{background:var(--verde); border-color:var(--verde)}
+.dc-p input:checked::after{transform:rotate(-45deg) scale(1)}
+.dc-p input:focus-visible{outline:2px solid var(--azul); outline-offset:2px}
+.dc-p-outro{opacity:.6; cursor:default}
+.dc-p-n{flex:1; min-width:0; display:flex; flex-direction:column}
+.dc-p-n small,.dc-p-v small{font-size:12px; color:var(--txt-3)}
+.dc-p-v{display:flex; flex-direction:column; align-items:flex-end; text-align:right; font-variant-numeric:tabular-nums}
+.dc-p-v b{color:var(--verde-txt)}
+.dc-res{margin:12px 2px 0; font-size:14px; line-height:1.55; color:var(--txt-2)}
+.dc-res b{color:var(--txt)}
+.dc-nota{margin:8px 2px 0; font-size:12.5px; color:var(--txt-3)}
